@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use handlebars::Handlebars;
 use k8s_openapi::api::core::v1::ConfigMap;
 use kube::{Api, Client};
-use kube::api::ListParams;
 use kubelet::pod::Pod;
 use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
@@ -14,11 +13,9 @@ use log::{debug, error, info, trace, warn};
 
 use crate::fail_fatal;
 use crate::provider::error::StackableError;
-use crate::provider::error::StackableError::{PodValidationError, RuntimeError};
+use crate::provider::error::StackableError::PodValidationError;
 use crate::provider::PodState;
 use crate::provider::states::create_service::CreatingService;
-use crate::provider::states::failed::Failed;
-use crate::provider::states::running::Running;
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::states::waiting_config::WaitingConfigMap;
 
@@ -84,7 +81,7 @@ impl CreatingConfig {
             match result {
                 Ok(configmap) => {}
                 Err(e) => {
-                    debug!("ConfigMap {} not found", &map);
+                    debug!("ConfigMap {} not found due to error {:?}", &map, e);
                     missing_configmaps.push(String::from(map));
                 }
             }

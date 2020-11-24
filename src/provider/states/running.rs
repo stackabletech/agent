@@ -1,15 +1,10 @@
 use std::process::Child;
-use std::sync::Arc;
-use std::time::Duration;
 
-use kubelet::container::ContainerKey;
 use kubelet::pod::Pod;
 use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
-use log::{debug, error, info, warn};
-use tokio::time::timeout;
+use log::{debug, error};
 
-use crate::provider::error::StackableError;
 use crate::provider::PodState;
 use crate::provider::states::failed::Failed;
 use crate::provider::states::install_package::Installing;
@@ -52,11 +47,6 @@ impl State<PodState> for Running {
 
             }
         }
-        Transition::next(self, Installing{
-            download_directory: pod_state.download_directory.clone(),
-            parcel_directory: pod_state.parcel_directory.clone(),
-            package: pod_state.package.clone()
-        })
    }
 
     async fn json_status(

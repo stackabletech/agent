@@ -32,8 +32,3 @@ async fn main() -> anyhow::Result<()> {
     let kubelet = Kubelet::new(provider, kubeconfig, config).await?;
     kubelet.start().await
 }
-
-
-fn notify_bootstrap(message: String) {
-    println!("BOOTSTRAP: {}", message);
-}

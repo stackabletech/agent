@@ -26,10 +26,9 @@ pub struct StackableProvider {
 
 pub const CRDS: &'static [&'static str] = &["repositories.stable.stackable.de"];
 
-
-mod states;
-mod repository;
 mod error;
+mod repository;
+mod states;
 
 pub struct PodState {
     client: Client,
@@ -41,16 +40,12 @@ pub struct PodState {
     process_handle: Option<Child>,
 }
 
-impl PodState {
-    pub fn take_handle(mut self) -> Option<Child> {
-        let result = self.process_handle;
-        self.process_handle = None;
-        result
-    }
-}
-
 impl StackableProvider {
-    pub async fn new(client: Client, parcel_directory: PathBuf, config_directory: PathBuf) -> Result<Self, StackableError> {
+    pub async fn new(
+        client: Client,
+        parcel_directory: PathBuf,
+        config_directory: PathBuf,
+    ) -> Result<Self, StackableError> {
         let provider = StackableProvider {
             client,
             parcel_directory,
@@ -68,15 +63,19 @@ impl StackableProvider {
 
     fn get_package(&self, pod: &Pod) -> Result<Package, StackableError> {
         let containers = pod.containers();
-        if (containers.len().ne(&1)) {
-            let e = PodValidationError { msg: String::from("Size of containers list in PodSpec has to be exactly 1") };
+        if containers.len().ne(&1) {
+            let e = PodValidationError {
+                msg: String::from("Size of containers list in PodSpec has to be exactly 1"),
+            };
             return Err(e);
         } else {
             // List has exactly one value, try to parse this
             if let Ok(Some(reference)) = containers[0].image() {
                 return Package::try_from(reference);
             } else {
-                let e = PodValidationError { msg: String::from("Unable to get package reference from pod") };
+                let e = PodValidationError {
+                    msg: String::from("Unable to get package reference from pod"),
+                };
                 return Err(e);
             }
         }
@@ -94,9 +93,7 @@ impl StackableProvider {
                     error!("Missing required CRD: \"{}\"", crd);
                     missing_crds.push(String::from(*crd))
                 }
-                _ => {
-                    debug!("Found registered crd: {}", crd)
-                }
+                _ => debug!("Found registered crd: {}", crd),
             }
         }
         missing_crds
@@ -114,7 +111,6 @@ impl Provider for StackableProvider {
     type PodState = PodState;
     type InitialState = Downloading;
     type TerminatedState = Terminated;
-
 
     const ARCH: &'static str = "stackable-linux";
 
@@ -149,7 +145,13 @@ impl Provider for StackableProvider {
         })
     }
 
-    async fn logs(&self, namespace: String, pod: String, container: String, sender: Sender) -> anyhow::Result<()> {
+    async fn logs(
+        &self,
+        namespace: String,
+        pod: String,
+        container: String,
+        sender: Sender,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }

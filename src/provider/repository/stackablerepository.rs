@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
@@ -7,9 +7,9 @@ use std::io::{copy, Cursor};
 use std::path::PathBuf;
 
 use kube::api::Meta;
-use log::{debug, error, info, trace};
+use log::{debug, trace};
 use serde::{Deserialize, Serialize};
-use url::{ParseError, Url};
+use url::Url;
 
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::PackageNotFound;
@@ -92,7 +92,7 @@ impl StackableRepoProvider {
 
         let stackable_package = self.get_package(package.clone()).await?;
         let download_link = Url::parse(&stackable_package.link)?;
-        let mut response = reqwest::get(download_link).await?;
+        let response = reqwest::get(download_link).await?;
 
         let mut content =  Cursor::new(response.bytes().await?);
 

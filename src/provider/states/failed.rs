@@ -1,5 +1,5 @@
 use kubelet::state::prelude::*;
-use log::{debug, error, info, trace, warn};
+use log::{debug, info};
 
 use crate::provider::PodState;
 use crate::provider::states::install_package::Installing;

@@ -3,9 +3,7 @@ use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
 
 use crate::provider::PodState;
-use crate::provider::states::failed::Failed;
 use crate::provider::states::starting::Starting;
-use crate::provider::states::stopping::Stopping;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Starting)]

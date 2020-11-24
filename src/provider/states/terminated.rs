@@ -1,7 +1,6 @@
 use kubelet::state::prelude::*;
 
 use crate::provider::PodState;
-use crate::provider::states::install_package::Installing;
 
 #[derive(Default, Debug)]
 /// The Pod failed to run.

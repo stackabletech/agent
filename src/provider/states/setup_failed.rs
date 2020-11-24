@@ -1,5 +1,5 @@
 use kubelet::state::prelude::*;
-use log::{debug, error, info};
+use log::{error, info};
 
 use crate::provider::PodState;
 use crate::provider::states::download_package::Downloading;

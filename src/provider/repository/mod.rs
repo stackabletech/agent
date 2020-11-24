@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use kube::{Api, Client};
 use kube::api::ListParams;
-use log::{debug, error, info, trace};
+use log::{debug, trace};
 
 use crate::provider::error::StackableError;
 use crate::provider::repository::package::Package;

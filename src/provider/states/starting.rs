@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 use kubelet::pod::Pod;
 use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, trace};
 use tokio::time::Duration;
 
 use crate::provider::PodState;

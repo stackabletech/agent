@@ -1,12 +1,9 @@
 use kubelet::backoff::BackoffStrategy;
 use kubelet::state::prelude::*;
-use log::{debug, error, info};
+use log::info;
 
 use crate::provider::PodState;
-use crate::provider::repository::package::Package;
 use crate::provider::states::create_config::CreatingConfig;
-use crate::provider::states::download_package::Downloading;
-use crate::provider::states::install_package::Installing;
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(CreatingConfig)]
