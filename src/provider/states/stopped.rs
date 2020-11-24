@@ -1,22 +1,26 @@
 use kubelet::pod::Pod;
-use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
+use kubelet::state::{State, Transition};
+use log::info;
+use tokio::time::Duration;
 
-use crate::provider::PodState;
 use crate::provider::states::starting::Starting;
+use crate::provider::PodState;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Starting)]
 pub struct Stopped;
 
-
 #[async_trait::async_trait]
 impl State<PodState> for Stopped {
     async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
-        for i in 1..8 {
-            tokio::time::delay_for(std::time::Duration::from_secs(2)).await;
-            println!("stopped");
-        }
+        let delay = Duration::from_secs(2);
+        info!(
+            "Service {} stopped, waiting {} seconds before restart.",
+            pod_state.service_name,
+            delay.as_secs()
+        );
+        tokio::time::delay_for(delay).await;
         Transition::next(self, Starting)
     }
 

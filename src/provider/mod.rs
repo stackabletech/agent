@@ -36,6 +36,7 @@ pub struct PodState {
     download_directory: PathBuf,
     config_directory: PathBuf,
     package_download_backoff_strategy: ExponentialBackoffStrategy,
+    service_name: String,
     package: Package,
     process_handle: Option<Child>,
 }
@@ -122,6 +123,7 @@ impl Provider for StackableProvider {
     }
 
     async fn initialize_pod_state(&self, pod: &Pod) -> anyhow::Result<Self::PodState> {
+        let service_name = pod.name();
         let parcel_directory = self.parcel_directory.clone();
         let download_directory = parcel_directory.join("_download");
         let config_directory = self.config_directory.clone();
@@ -140,6 +142,7 @@ impl Provider for StackableProvider {
             download_directory,
             config_directory: self.config_directory.clone(),
             package_download_backoff_strategy: ExponentialBackoffStrategy::default(),
+            service_name: String::from(service_name),
             package,
             process_handle: None,
         })

@@ -1,14 +1,14 @@
 use std::process::Child;
 
 use kubelet::pod::Pod;
-use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
-use log::{debug, error};
+use kubelet::state::{State, Transition};
+use log::{debug, error, trace};
 
-use crate::provider::PodState;
 use crate::provider::states::failed::Failed;
 use crate::provider::states::install_package::Installing;
 use crate::provider::states::stopping::Stopping;
+use crate::provider::PodState;
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(Stopping, Failed, Running, Installing)]
@@ -18,36 +18,45 @@ pub struct Running {
 
 #[async_trait::async_trait]
 impl State<PodState> for Running {
-    async fn next(mut self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
-
+    async fn next(
+        mut self: Box<Self>,
+        pod_state: &mut PodState,
+        _pod: &Pod,
+    ) -> Transition<PodState> {
         debug!("waiting");
         let mut handle = std::mem::replace(&mut self.process_handle, None).unwrap();
         /*while let Ok(_) = timeout(Duration::from_millis(100), changed.notified()).await {
             debug!("drained a waiting notification");
         }*/
-       // debug!("done draining");
+        // debug!("done draining");
 
         loop {
-            println!("running");
             tokio::select! {
                 /*_ = changed.notified() => {
                     debug!("pod changed");
                     break;
                 },*/
                 _ = tokio::time::delay_for(std::time::Duration::from_secs(1))  => {
-                    debug!("timer expired");
+                    trace!("Checking if service {} is still running.", &pod_state.service_name);
                 }
             }
             match handle.try_wait() {
-                Ok(None) => debug!("Still running"),
+                Ok(None) => debug!("Service {} is still running", &pod_state.service_name),
                 _ => {
-                    error!("died");
-                    return Transition::next(self, Failed { message: "process died".to_string() })
+                    error!(
+                        "Service {} died unexpectedly, moving to failed state",
+                        pod_state.service_name
+                    );
+                    return Transition::next(
+                        self,
+                        Failed {
+                            message: "Process died unexpectedly!".to_string(),
+                        },
+                    );
                 }
-
             }
         }
-   }
+    }
 
     async fn json_status(
         &self,

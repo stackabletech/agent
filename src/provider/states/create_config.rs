@@ -7,17 +7,17 @@ use handlebars::Handlebars;
 use k8s_openapi::api::core::v1::ConfigMap;
 use kube::{Api, Client};
 use kubelet::pod::Pod;
-use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
+use kubelet::state::{State, Transition};
 use log::{debug, error, info, trace, warn};
 
 use crate::fail_fatal;
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::PodValidationError;
-use crate::provider::PodState;
 use crate::provider::states::create_service::CreatingService;
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::states::waiting_config::WaitingConfigMap;
+use crate::provider::PodState;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(CreatingService, SetupFailed, WaitingConfigMap)]
@@ -243,11 +243,23 @@ impl State<PodState> for CreatingConfig {
                                         .await
                                     {
                                         debug!("found config map: {:?} - applying", config_map);
-                                        self.apply_config_map(
+                                        match self.apply_config_map(
                                             map,
                                             target_dir,
                                             &CreatingConfig::create_render_data(pod_state),
-                                        );
+                                        ) {
+                                            Err(e) => {
+                                                return Transition::next(
+                                                    self,
+                                                    SetupFailed {
+                                                        message:
+                                                            "Failed to create file from config map!"
+                                                                .to_string(),
+                                                    },
+                                                );
+                                            }
+                                            _ => {}
+                                        }
                                     }
                                 }
                             } else {

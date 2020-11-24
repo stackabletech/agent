@@ -23,8 +23,8 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Failed to create Kubernetes Client!");
 
-    let parcel_directory = PathBuf::from("/home/sliebau/IdeaProjects/krustlet/work/parcels");
-    let config_directory = PathBuf::from("/home/sliebau/IdeaProjects/krustlet/work/config");
+    let parcel_directory = PathBuf::from("/home/sliebau/IdeaProjects/agent/work/parcels");
+    let config_directory = PathBuf::from("/home/sliebau/IdeaProjects/agent/work/config");
     let provider = StackableProvider::new(kube::Client::new(kubeconfig.clone()), parcel_directory, config_directory)
         .await
         .expect("Error initializing provider.");

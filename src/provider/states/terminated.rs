@@ -1,4 +1,5 @@
 use kubelet::state::prelude::*;
+use log::info;
 
 use crate::provider::PodState;
 
@@ -12,7 +13,7 @@ pub struct Terminated {
 #[async_trait::async_trait]
 impl State<PodState> for Terminated {
     async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
-        println!("terminated");
+        info!("Service {} was terminated!", &pod_state.service_name);
         Transition::Complete(Ok(()))
     }
 

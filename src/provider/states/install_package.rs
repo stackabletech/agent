@@ -3,16 +3,16 @@ use std::path::{Path, PathBuf};
 
 use flate2::read::GzDecoder;
 use kubelet::pod::Pod;
-use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
+use kubelet::state::{State, Transition};
 use log::{debug, info};
 use tar::Archive;
 
 use crate::provider::error::StackableError;
-use crate::provider::PodState;
 use crate::provider::repository::package::Package;
 use crate::provider::states::create_config::CreatingConfig;
 use crate::provider::states::setup_failed::SetupFailed;
+use crate::provider::PodState;
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(CreatingConfig, SetupFailed)]
@@ -27,7 +27,10 @@ impl Installing {
         let package = package.into();
 
         let package_file_name = self.parcel_directory.join(package.get_directory_name());
-        debug!("Checking if package {:?} has already been installed to {:?}", package, package_file_name);
+        debug!(
+            "Checking if package {:?} has already been installed to {:?}",
+            package, package_file_name
+        );
         Path::new(&package_file_name).exists()
     }
 
@@ -46,7 +49,10 @@ impl Installing {
 
         let target_directory = self.get_target_directory(package.clone());
 
-        println!("Installing package: {:?} from {:?} into {:?}", package, archive_path, target_directory);
+        info!(
+            "Installing package: {:?} from {:?} into {:?}",
+            package, archive_path, target_directory
+        );
         archive.unpack(self.parcel_directory.join(package.get_directory_name()))?;
         Ok(())
     }
@@ -58,15 +64,34 @@ impl State<PodState> for Installing {
         let package = self.package.clone();
         if self.package_installed(package.clone()) {
             info!("Package {} has already been installed", package);
-            return Transition::next(self, CreatingConfig{ target_directory: None });
+            return Transition::next(
+                self,
+                CreatingConfig {
+                    target_directory: None,
+                },
+            );
         } else {
             info!("Installing package {}", package);
-            self.install_package(package.clone());
+            match self.install_package(package.clone()) {
+                Ok(()) => {}
+                Err(e) => {
+                    return Transition::next(
+                        self,
+                        SetupFailed {
+                            message: "".to_string(),
+                        },
+                    );
+                }
+            }
         }
 
-
         debug!("installing package");
-        Transition::next(self, CreatingConfig{ target_directory: None })
+        Transition::next(
+            self,
+            CreatingConfig {
+                target_directory: None,
+            },
+        )
     }
 
     async fn json_status(
