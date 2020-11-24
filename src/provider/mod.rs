@@ -1,24 +1,22 @@
-use kubelet::provider::Provider;
-use kubelet::log::Sender;
-use kubelet::pod::Pod;
-
-use crate::provider::states::failed::Failed;
-use kubelet::backoff::ExponentialBackoffStrategy;
-use kubelet::node::Builder;
-use crate::provider::states::terminated::Terminated;
-use crate::provider::states::download_package::Downloading;
-use kube::{Client, Api};
-use crate::provider::error::StackableError;
-use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-use crate::provider::error::StackableError::{CrdMissing, PodValidationError};
-use log::{debug, info, error};
-use std::path::PathBuf;
-use std::fs;
-use crate::provider::repository::package::Package;
 use std::convert::TryFrom;
-use std::sync::Arc;
-use tokio::sync::Notify;
-use oci_distribution::Reference;
+use std::fs;
+use std::path::PathBuf;
+use std::process::Child;
+
+use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+use kube::{Api, Client};
+use kubelet::backoff::ExponentialBackoffStrategy;
+use kubelet::log::Sender;
+use kubelet::node::Builder;
+use kubelet::pod::Pod;
+use kubelet::provider::Provider;
+use log::{debug, error};
+
+use crate::provider::error::StackableError;
+use crate::provider::error::StackableError::{CrdMissing, PodValidationError};
+use crate::provider::repository::package::Package;
+use crate::provider::states::download_package::Downloading;
+use crate::provider::states::terminated::Terminated;
 
 pub struct StackableProvider {
     client: Client,
@@ -40,6 +38,15 @@ pub struct PodState {
     config_directory: PathBuf,
     package_download_backoff_strategy: ExponentialBackoffStrategy,
     package: Package,
+    process_handle: Option<Child>,
+}
+
+impl PodState {
+    pub fn take_handle(mut self) -> Option<Child> {
+        let result = self.process_handle;
+        self.process_handle = None;
+        result
+    }
 }
 
 impl StackableProvider {
@@ -138,6 +145,7 @@ impl Provider for StackableProvider {
             config_directory: self.config_directory.clone(),
             package_download_backoff_strategy: ExponentialBackoffStrategy::default(),
             package,
+            process_handle: None,
         })
     }
 

@@ -2420,6 +2420,7 @@ dependencies = [
  "tar",
  "thiserror",
  "tokio",
+ "url 2.2.0",
 ]
 
 [[package]]

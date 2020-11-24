@@ -1,11 +1,13 @@
-use crate::provider::repository::package::Package;
-use crate::provider::repository::stackablerepository::StackableRepoProvider;
-use kube::{Client, Api};
-use crate::provider::error::StackableError;
-use kube::api::ListParams;
 use std::convert::TryFrom;
-use log::{trace, debug, info, error};
+
+use kube::{Api, Client};
+use kube::api::ListParams;
+use log::{debug, error, info, trace};
+
+use crate::provider::error::StackableError;
+use crate::provider::repository::package::Package;
 use crate::provider::repository::repository::Repository;
+use crate::provider::repository::stackablerepository::StackableRepoProvider;
 
 pub mod package;
 pub mod repository;

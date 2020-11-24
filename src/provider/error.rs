@@ -1,8 +1,8 @@
-use thiserror::Error;
-use k8s_openapi::url;
-use crate::provider::repository::package::Package;
 use handlebars::{RenderError, TemplateError};
+use k8s_openapi::url;
+use thiserror::Error;
 
+use crate::provider::repository::package::Package;
 
 #[derive(Error, Debug)]
 pub enum StackableError {

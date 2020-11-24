@@ -1,11 +1,11 @@
+use kubelet::backoff::BackoffStrategy;
 use kubelet::state::prelude::*;
+use log::{debug, error, info};
 
 use crate::provider::PodState;
-use crate::provider::states::install_package::Installing;
-use crate::provider::states::download_package::Downloading;
-use kubelet::backoff::BackoffStrategy;
 use crate::provider::repository::package::Package;
-use log::{debug, info, error};
+use crate::provider::states::download_package::Downloading;
+use crate::provider::states::install_package::Installing;
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(Downloading)]

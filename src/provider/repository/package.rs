@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use k8s_openapi::serde_value::DeserializerError;
-use serde::{Deserialize, Serialize};
-use crate::provider::error::StackableError::PackageParseError;
-use oci_distribution::Reference;
-use crate::provider::error::StackableError;
 use std::fmt;
 
+use k8s_openapi::serde_value::DeserializerError;
+use oci_distribution::Reference;
+use serde::{Deserialize, Serialize};
+
+use crate::provider::error::StackableError;
+use crate::provider::error::StackableError::PackageParseError;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Package {

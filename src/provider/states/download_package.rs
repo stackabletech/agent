@@ -1,23 +1,15 @@
-use kubelet::state::{State, Transition};
-use kubelet::pod::Pod;
-use kubelet::state::prelude::*;
-use crate::provider::PodState;
-use crate::provider::states::running::Running;
-use crate::provider::states::failed::Failed;
-use crate::provider::states::install_package::Installing;
-use crate::provider::states::setup_failed::SetupFailed;
-use crate::provider::error::StackableError::PodValidationError;
-use crate::fail_fatal;
-use kube::api::Meta;
-use k8s_openapi::api::core::v1::PodSpec;
-use crate::provider::repository::package::Package;
-use crate::provider::error::StackableError;
-use kubelet::container::Container;
-use std::convert::TryFrom;
-use log::{debug, info, warn, error};
-use crate::provider::repository::find_repository;
-use crate::provider::states::download_package_backoff::DownloadingBackoff;
 use std::path::{Path, PathBuf};
+
+use kubelet::pod::Pod;
+use kubelet::state::{State, Transition};
+use kubelet::state::prelude::*;
+use log::{debug, error, info, warn};
+
+use crate::provider::PodState;
+use crate::provider::repository::find_repository;
+use crate::provider::repository::package::Package;
+use crate::provider::states::download_package_backoff::DownloadingBackoff;
+use crate::provider::states::install_package::Installing;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Installing, DownloadingBackoff)]

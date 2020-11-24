@@ -1,20 +1,18 @@
-use kubelet::state::{State, Transition};
+use std::fs::File;
+use std::path::{Path, PathBuf};
+
+use flate2::read::GzDecoder;
 use kubelet::pod::Pod;
+use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
+use log::{debug, info};
+use tar::Archive;
+
+use crate::provider::error::StackableError;
 use crate::provider::PodState;
-use crate::provider::states::running::Running;
-use crate::provider::states::failed::Failed;
+use crate::provider::repository::package::Package;
 use crate::provider::states::create_config::CreatingConfig;
 use crate::provider::states::setup_failed::SetupFailed;
-use log::{debug, info};
-use kube::api::Meta;
-use k8s_openapi::api::core::v1::PodSpec;
-use crate::provider::repository::package::Package;
-use std::path::{Path, PathBuf};
-use crate::provider::error::StackableError;
-use std::fs::File;
-use flate2::read::GzDecoder;
-use tar::Archive;
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(CreatingConfig, SetupFailed)]

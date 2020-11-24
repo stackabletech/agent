@@ -1,12 +1,11 @@
-use kubelet::config::Config;
-use kubelet::store::composite::ComposableStore;
-use kubelet::store::oci::FileStore;
-use kubelet::Kubelet;
-use std::sync::Arc;
-use crate::provider::StackableProvider;
-use kube::config::KubeConfigOptions;
-use kube::config::Config as KubeConfig;
 use std::path::PathBuf;
+
+use kube::config::Config as KubeConfig;
+use kube::config::KubeConfigOptions;
+use kubelet::config::Config;
+use kubelet::Kubelet;
+
+use crate::provider::StackableProvider;
 
 mod provider;
 

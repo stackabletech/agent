@@ -1,23 +1,25 @@
+use std::collections::BTreeMap;
+use std::fs;
+use std::fs::read_to_string;
+use std::path::PathBuf;
+
+use handlebars::Handlebars;
+use k8s_openapi::api::core::v1::ConfigMap;
+use kube::{Api, Client};
+use kube::api::ListParams;
+use kubelet::pod::Pod;
+use kubelet::state::{State, Transition};
+use kubelet::state::prelude::*;
+use log::{debug, error, info, trace, warn};
+
+use crate::fail_fatal;
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::{PodValidationError, RuntimeError};
-use crate::fail_fatal;
+use crate::provider::PodState;
 use crate::provider::states::create_service::CreatingService;
 use crate::provider::states::failed::Failed;
 use crate::provider::states::running::Running;
 use crate::provider::states::setup_failed::SetupFailed;
-use crate::provider::PodState;
-use handlebars::{Handlebars, RenderError};
-use k8s_openapi::api::core::v1::{ConfigMap, Volume, VolumeMount};
-use kube::api::ListParams;
-use kube::{Api, Client};
-use kubelet::pod::Pod;
-use kubelet::state::prelude::*;
-use kubelet::state::{State, Transition};
-use log::{trace, debug, error, info, warn};
-use std::collections::{BTreeMap, HashMap};
-use std::fs;
-use std::path::{PathBuf, Path};
-use std::fs::read_to_string;
 use crate::provider::states::waiting_config::WaitingConfigMap;
 
 #[derive(Default, Debug, TransitionTo)]
@@ -27,7 +29,7 @@ pub struct CreatingConfig {
 }
 
 impl CreatingConfig {
-    fn render_config_template(
+    pub fn render_config_template(
         data: BTreeMap<String, String>,
         template: String,
     ) -> Result<String, StackableError> {
@@ -44,24 +46,28 @@ impl CreatingConfig {
         Ok(handlebars.render("t1", &data)?)
     }
 
-    fn create_render_data(pod_state: &PodState) -> BTreeMap<String, String> {
+    pub fn create_render_data(pod_state: &PodState) -> BTreeMap<String, String> {
         let mut render_data = BTreeMap::new();
         let directory_name = pod_state.package.get_directory_name();
 
-        if let Ok(package_dir) = &pod_state.parcel_directory.join(&directory_name).into_os_string().into_string() {
-            render_data.insert(
-                String::from("packageroot"),
-                String::from(package_dir),
-            );
+        if let Ok(package_dir) = &pod_state
+            .parcel_directory
+            .join(&directory_name)
+            .into_os_string()
+            .into_string()
+        {
+            render_data.insert(String::from("packageroot"), String::from(package_dir));
         } else {
             warn!("Unable to parse value for package directory as UTF8")
         }
 
-        if let Ok(conf_dir) = &pod_state.config_directory.join(&directory_name).into_os_string().into_string() {
-            render_data.insert(
-                String::from("configroot"),
-                String::from(conf_dir),
-            );
+        if let Ok(conf_dir) = &pod_state
+            .config_directory
+            .join(&directory_name)
+            .into_os_string()
+            .into_string()
+        {
+            render_data.insert(String::from("configroot"), String::from(conf_dir));
         } else {
             warn!("Unable to parse value for config directory as UTF8");
         }
@@ -121,26 +127,28 @@ impl CreatingConfig {
         map: ConfigMap,
         target_directory: PathBuf,
         template_data: &BTreeMap<String, String>,
-    ) -> Result<(), StackableError>
-    {
+    ) -> Result<(), StackableError> {
+        let config_map_name = map.metadata.name.unwrap_or(String::from("undefined"));
         debug!(
             "applying configmap {} to directory {:?}",
-            map.metadata.name.unwrap_or(String::from("undefined")),
-            target_directory
+            &config_map_name, target_directory
         );
         if !(&target_directory.is_dir()) {
             info!("creating config directory {:?}", target_directory);
             fs::create_dir_all(&target_directory)?;
         }
         if let Some(data) = map.data {
+            debug!("Map contained keys: {:?}", &data.keys());
             for key in data.keys() {
-                debug!("found key: {} in configmap", key);
+                debug!("found key: {} in configmap {}", key, &config_map_name);
                 if let Some(content) = data.get(key) {
                     trace!("content of key: {}", &content);
+                    debug!("rendering");
                     let rendered_content = CreatingConfig::render_config_template(
                         template_data.clone(),
                         content.clone(),
                     )?;
+                    debug!("done rendering");
                     let target_file = target_directory.join(&key);
 
                     // TODO: compare existing file with intended state
@@ -161,13 +169,23 @@ impl CreatingConfig {
                     info!("No content found for key {}", key);
                 }
             }
+        } else {
+            debug!("No data found in ConfigMap..");
         }
         Ok(())
     }
 
     fn needs_update(target_file: &PathBuf, content: &str) -> Result<bool, StackableError> {
-        let current_content = read_to_string(target_file)?;
-        Ok(current_content.ne(content))
+        if target_file.is_file() {
+            let current_content = read_to_string(target_file)?;
+            debug!("Compared config file {:?} with result of", target_file);
+            return Ok(current_content.ne(content));
+        }
+        debug!(
+            "Target config file {:?} doesn't exist, no need to compare.",
+            target_file
+        );
+        Ok(true)
     }
 }
 
@@ -187,14 +205,19 @@ impl State<PodState> for CreatingConfig {
 
         // Check if all required config maps have been created in the api-server
         let referenced_config_maps = self.get_config_maps(_pod).await;
-        let missing_config_maps = self.missing_config_maps(client.clone(), referenced_config_maps).await;
+        let missing_config_maps = self
+            .missing_config_maps(client.clone(), referenced_config_maps)
+            .await;
         if !missing_config_maps.is_empty() {
             // not all configmaps are present
             info!("Missing config maps, waiting..");
-            return Transition::next(self, WaitingConfigMap { missing_config_maps })
-
+            return Transition::next(
+                self,
+                WaitingConfigMap {
+                    missing_config_maps,
+                },
+            );
         }
-
 
         debug!("Entering state \"creating config\" for service {}", name);
         let containers = _pod.containers();
@@ -215,16 +238,19 @@ impl State<PodState> for CreatingConfig {
                 for mount in mounts {
                     for volume in volumes {
                         if mount.name.eq(&volume.name) {
-                            let target_dir =
-                                target_directory.join(&mount.mount_path.trim_start_matches('/'));
+                            let target_dir = target_directory.join(&mount.mount_path);
                             if let Some(config_map) = &volume.config_map {
                                 if let Some(map_name) = &config_map.name {
                                     if let Ok(map) = self
                                         .retrieve_config_map(client.clone(), map_name.to_string())
                                         .await
                                     {
-                                        debug!("found config map: {:?}", config_map);
-                                        self.apply_config_map(map, target_dir, &CreatingConfig::create_render_data(pod_state));
+                                        debug!("found config map: {:?} - applying", config_map);
+                                        self.apply_config_map(
+                                            map,
+                                            target_dir,
+                                            &CreatingConfig::create_render_data(pod_state),
+                                        );
                                     }
                                 }
                             } else {
@@ -235,7 +261,7 @@ impl State<PodState> for CreatingConfig {
                 }
             };
         }
-
+        debug!("Transitioning to service creation");
         Transition::next(self, CreatingService)
     }
 

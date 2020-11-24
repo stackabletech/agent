@@ -1,6 +1,7 @@
-use kubelet::state::{State, Transition};
 use kubelet::pod::Pod;
+use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
+
 use crate::provider::PodState;
 use crate::provider::states::failed::Failed;
 use crate::provider::states::stopped::Stopped;

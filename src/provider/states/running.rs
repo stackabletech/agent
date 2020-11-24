@@ -1,36 +1,55 @@
-use kubelet::state::{State, Transition};
-use kubelet::pod::Pod;
-use kubelet::state::prelude::*;
-use crate::provider::PodState;
-use crate::provider::states::failed::Failed;
-use crate::provider::states::stopping::Stopping;
-use crate::provider::states::install_package::Installing;
-use kubelet::container::ContainerKey;
-use log::{debug, info, warn, error};
+use std::process::Child;
 use std::sync::Arc;
 use std::time::Duration;
+
+use kubelet::container::ContainerKey;
+use kubelet::pod::Pod;
+use kubelet::state::{State, Transition};
+use kubelet::state::prelude::*;
+use log::{debug, error, info, warn};
 use tokio::time::timeout;
 
-#[derive(Default, Debug, TransitionTo)]
-#[transition_to(Stopping, Failed, Running, Installing)]
-pub struct Running;
+use crate::provider::error::StackableError;
+use crate::provider::PodState;
+use crate::provider::states::failed::Failed;
+use crate::provider::states::install_package::Installing;
+use crate::provider::states::stopping::Stopping;
 
+#[derive(Debug, TransitionTo)]
+#[transition_to(Stopping, Failed, Running, Installing)]
+pub struct Running {
+    pub process_handle: Option<Child>,
+}
 
 #[async_trait::async_trait]
 impl State<PodState> for Running {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
+    async fn next(mut self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
+
+        debug!("waiting");
+        let mut handle = std::mem::replace(&mut self.process_handle, None).unwrap();
         /*while let Ok(_) = timeout(Duration::from_millis(100), changed.notified()).await {
             debug!("drained a waiting notification");
-        }
-        debug!("done draining");
-        */
+        }*/
+       // debug!("done draining");
+
         loop {
             println!("running");
             tokio::select! {
-                _ = tokio::time::delay_for(std::time::Duration::from_secs(10))  => {
+                /*_ = changed.notified() => {
+                    debug!("pod changed");
+                    break;
+                },*/
+                _ = tokio::time::delay_for(std::time::Duration::from_secs(1))  => {
                     debug!("timer expired");
-                    continue;
                 }
+            }
+            match handle.try_wait() {
+                Ok(None) => debug!("Still running"),
+                _ => {
+                    error!("died");
+                    return Transition::next(self, Failed { message: "process died".to_string() })
+                }
+
             }
         }
         Transition::next(self, Installing{
@@ -38,7 +57,7 @@ impl State<PodState> for Running {
             parcel_directory: pod_state.parcel_directory.clone(),
             package: pod_state.package.clone()
         })
-    }
+   }
 
     async fn json_status(
         &self,

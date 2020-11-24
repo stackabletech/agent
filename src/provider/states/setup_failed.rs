@@ -1,8 +1,8 @@
 use kubelet::state::prelude::*;
+use log::{debug, error, info};
 
 use crate::provider::PodState;
 use crate::provider::states::download_package::Downloading;
-use log::{debug, info, error};
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Downloading)]

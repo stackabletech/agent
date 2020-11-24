@@ -1,12 +1,12 @@
-use kubelet::state::{State, Transition};
 use kubelet::pod::Pod;
+use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
-use crate::provider::PodState;
-use crate::provider::states::running::Running;
-use crate::provider::states::failed::Failed;
-use crate::provider::states::starting::Starting;
-use crate::provider::states::setup_failed::SetupFailed;
 
+use crate::provider::PodState;
+use crate::provider::states::failed::Failed;
+use crate::provider::states::running::Running;
+use crate::provider::states::setup_failed::SetupFailed;
+use crate::provider::states::starting::Starting;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Starting, SetupFailed)]

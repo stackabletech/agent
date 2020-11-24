@@ -1,21 +1,20 @@
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
+use std::fmt;
+use std::fs::File;
 use std::hash::{Hash, Hasher};
+use std::io::{copy, Cursor};
+use std::path::PathBuf;
 
 use kube::api::Meta;
+use log::{debug, error, info, trace};
 use serde::{Deserialize, Serialize};
-use k8s_openapi::url::{ParseError, Url};
+use url::{ParseError, Url};
 
-use std::path::PathBuf;
-use std::fs::File;
-use std::io::{Cursor, copy};
+use crate::provider::error::StackableError;
+use crate::provider::error::StackableError::PackageNotFound;
 use crate::provider::repository::package::Package;
 use crate::provider::repository::repository::Repository;
-use crate::provider::error::StackableError;
-use log::{trace, debug, info, error};
-use std::fmt;
-use crate::provider::error::StackableError::PackageNotFound;
-
 
 #[derive(Debug, Clone)]
 pub struct StackableRepoProvider {

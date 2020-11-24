@@ -1,7 +1,9 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::provider::repository::package::Package;
+
 use kube_derive::CustomResource;
+use serde::{Deserialize, Serialize};
+
+use crate::provider::repository::package::Package;
 
 #[derive(CustomResource, Serialize, Deserialize, Default, Clone, Debug)]
 #[kube(
