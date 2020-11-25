@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if let Some(key_file_path) = agent_config.server_key_file {
-        export_env("KRUSTLET_KEY_FILE", key_file_path.to_str().unwrap());
+        export_env("KRUSTLET_PRIVATE_KEY_FILE", key_file_path.to_str().unwrap());
     } else {
         warn!("Not exporting server key file path, as non was specified that could be converted to a String.");
     }
@@ -63,12 +63,13 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Failed to create Kubernetes Client!");
 
-    let parcel_directory = PathBuf::from("/home/sliebau/IdeaProjects/agent/work/parcels");
-    let config_directory = PathBuf::from("/home/sliebau/IdeaProjects/agent/work/config");
+    //let parcel_directory = PathBuf::from("/home/sliebau/IdeaProjects/agent/work/parcels");
+    //let config_directory = PathBuf::from("/home/sliebau/IdeaProjects/agent/work/config");
     let provider = StackableProvider::new(
         kube::Client::new(kubeconfig.clone()),
-        parcel_directory,
-        config_directory,
+        agent_config.parcel_directory.clone(),
+        agent_config.config_directory.clone(),
+        agent_config.log_directory.clone(),
     )
     .await
     .expect("Error initializing provider.");

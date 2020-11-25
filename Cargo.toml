@@ -25,4 +25,5 @@ handlebars = "3.5"
 thiserror = "1.0"
 url = "2.2"
 pnet = "0.26.0"
-stackable_config = { path = "../common/config"}
+#stackable_config = { path = "../common/config" }
+stackable_config = { git = "https://github.com/soenkeliebau/common.git", branch = "generic_of_main" }

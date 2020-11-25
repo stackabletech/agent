@@ -2,15 +2,15 @@ use std::ffi::OsStr;
 use std::process::{Command, Stdio};
 
 use kubelet::pod::Pod;
-use kubelet::state::{State, Transition};
 use kubelet::state::prelude::*;
+use kubelet::state::{State, Transition};
 use log::{debug, error, info, trace};
 use tokio::time::Duration;
 
-use crate::provider::PodState;
 use crate::provider::states::create_config::CreatingConfig;
 use crate::provider::states::failed::Failed;
 use crate::provider::states::running::Running;
+use crate::provider::PodState;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Running, Failed)]
@@ -61,13 +61,17 @@ impl State<PodState> for Starting {
                             "Successfully executed command \"{:?}\" with args {:?}",
                             binary, &os_args
                         );
+
                         debug!("Waiting if startup fails..");
                         for i in 1..10 {
                             tokio::time::delay_for(Duration::from_secs(1)).await;
                             if let Ok(None) = child.try_wait() {
                                 trace!("Process still alive after {} seconds ..", i);
                             } else {
-                                error!("Process died after {} seconds during startup!", i);
+                                error!(
+                                    "Process died {} after {} seconds during startup!",
+                                    pod_state.service_name, i
+                                );
                                 return Transition::next(
                                     self,
                                     Failed {

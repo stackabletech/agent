@@ -48,8 +48,7 @@ impl CreatingConfig {
         let directory_name = pod_state.package.get_directory_name();
 
         if let Ok(package_dir) = &pod_state
-            .parcel_directory
-            .join(&directory_name)
+            .get_service_package_directory()
             .into_os_string()
             .into_string()
         {
@@ -59,8 +58,7 @@ impl CreatingConfig {
         }
 
         if let Ok(conf_dir) = &pod_state
-            .config_directory
-            .join(&directory_name)
+            .get_service_config_directory()
             .into_os_string()
             .into_string()
         {
@@ -68,6 +66,19 @@ impl CreatingConfig {
         } else {
             warn!("Unable to parse value for config directory as UTF8");
         }
+
+        // Add {{logroot}} variable, this will resolve to the base-logdirectory/podname
+        if let Ok(log_dir) = &pod_state
+            .get_service_log_directory()
+            .into_os_string()
+            .into_string()
+        {
+            render_data.insert(String::from("logroot"), String::from(log_dir));
+        } else {
+            warn!("Unable to parse value for log directory as UTF8");
+        }
+
+        // Return all template data
         render_data
     }
 
@@ -197,8 +208,9 @@ impl State<PodState> for CreatingConfig {
         let client = pod_state.client.clone();
         let package = pod_state.package.clone();
         let config_directory = pod_state.config_directory.clone();
-        self.target_directory = Some(config_directory.join(package.get_directory_name()));
-        let target_directory = self.target_directory.clone().unwrap();
+        //self.target_directory = Some(config_directory.join(package.get_directory_name()));
+        //let target_directory = self.target_directory.clone().unwrap();
+        let target_directory = pod_state.get_service_config_directory();
 
         // Check if all required config maps have been created in the api-server
         let referenced_config_maps = self.get_config_maps(_pod).await;

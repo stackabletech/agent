@@ -22,6 +22,7 @@ pub struct StackableProvider {
     client: Client,
     parcel_directory: PathBuf,
     config_directory: PathBuf,
+    log_directory: PathBuf,
 }
 
 pub const CRDS: &'static [&'static str] = &["repositories.stable.stackable.de"];
@@ -35,10 +36,26 @@ pub struct PodState {
     parcel_directory: PathBuf,
     download_directory: PathBuf,
     config_directory: PathBuf,
+    log_directory: PathBuf,
     package_download_backoff_strategy: ExponentialBackoffStrategy,
     service_name: String,
     package: Package,
     process_handle: Option<Child>,
+}
+
+impl PodState {
+    pub fn get_service_config_directory(&self) -> PathBuf {
+        self.config_directory.join(&self.service_name)
+    }
+
+    pub fn get_service_package_directory(&self) -> PathBuf {
+        self.parcel_directory
+            .join(&self.package.get_directory_name())
+    }
+
+    pub fn get_service_log_directory(&self) -> PathBuf {
+        self.log_directory.join(&self.service_name)
+    }
 }
 
 impl StackableProvider {
@@ -46,11 +63,13 @@ impl StackableProvider {
         client: Client,
         parcel_directory: PathBuf,
         config_directory: PathBuf,
+        log_directory: PathBuf,
     ) -> Result<Self, StackableError> {
         let provider = StackableProvider {
             client,
             parcel_directory,
             config_directory,
+            log_directory,
         };
         let missing_crds = provider.check_crds().await;
         if missing_crds.is_empty() {
@@ -127,6 +146,7 @@ impl Provider for StackableProvider {
         let parcel_directory = self.parcel_directory.clone();
         let download_directory = parcel_directory.join("_download");
         let config_directory = self.config_directory.clone();
+        let log_directory = self.log_directory.clone();
 
         let package = self.get_package(pod)?;
         if !(&download_directory.is_dir()) {
@@ -140,6 +160,7 @@ impl Provider for StackableProvider {
             client: self.client.clone(),
             parcel_directory,
             download_directory,
+            log_directory,
             config_directory: self.config_directory.clone(),
             package_download_backoff_strategy: ExponentialBackoffStrategy::default(),
             service_name: String::from(service_name),
