@@ -9,6 +9,10 @@ use crate::provider::states::failed::Failed;
 use crate::provider::states::install_package::Installing;
 use crate::provider::states::stopping::Stopping;
 use crate::provider::PodState;
+use k8s_openapi::api::core::v1::{
+    ContainerState, ContainerStateRunning, ContainerStateWaiting,
+    ContainerStatus as KubeContainerStatus,
+};
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(Stopping, Failed, Running, Installing)]
@@ -63,6 +67,25 @@ impl State<PodState> for Running {
         _pod_state: &mut PodState,
         _pod: &Pod,
     ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Running, &"status:running")
+        let state = ContainerState {
+            running: Some(ContainerStateRunning { started_at: None }),
+            ..Default::default()
+        };
+
+        let mut container = &_pod.containers()[0];
+        let mut container_status = vec![];
+        container_status.push(KubeContainerStatus {
+            name: container.name().to_string(),
+            ready: true,
+            started: Some(false),
+            state: Some(state),
+            ..Default::default()
+        });
+        Ok(make_status_with_containers(
+            Phase::Running,
+            &"status:running",
+            container_status,
+            vec![],
+        ))
     }
 }
