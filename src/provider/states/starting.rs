@@ -50,6 +50,10 @@ impl State<PodState> for Starting {
                     binary, os_args
                 );
                 let env_variables = if let Some(vars) = container.env() {
+                    debug!(
+                        "Got environment vars: {:?} service {}",
+                        vars, pod_state.service_name
+                    );
                     vars.into_iter()
                         .map(|env_var| {
                             (
@@ -59,6 +63,10 @@ impl State<PodState> for Starting {
                         })
                         .collect::<Vec<_>>()
                 } else {
+                    debug!(
+                        "No environment vars set for service {}",
+                        pod_state.service_name
+                    );
                     vec![]
                 };
                 debug!(
