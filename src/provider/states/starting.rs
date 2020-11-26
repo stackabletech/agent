@@ -49,9 +49,23 @@ impl State<PodState> for Starting {
                     "Starting command: {:?} with arguments {:?}",
                     binary, os_args
                 );
+                let env_variables = if let Some(vars) = container.env() {
+                    vars.into_iter()
+                        .map(|env_var| {
+                            (
+                                String::from(&env_var.name),
+                                String::from(&env_var.value.clone().unwrap_or(String::from(""))),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![]
+                };
+
                 let start_result = Command::new(binary)
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
+                    .envs(env_variables)
                     .args(&os_args)
                     .spawn();
 
