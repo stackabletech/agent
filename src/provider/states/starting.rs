@@ -61,6 +61,10 @@ impl State<PodState> for Starting {
                 } else {
                     vec![]
                 };
+                debug!(
+                    "Setting environment for service {} to {:?}",
+                    pod_state.service_name, &env_variables
+                );
 
                 let start_result = Command::new(binary)
                     .stdout(Stdio::null())
