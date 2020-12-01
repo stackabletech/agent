@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
-use kube::{Api, Client};
 use kube::api::ListParams;
+use kube::{Api, Client};
 use log::{debug, trace};
 
 use crate::provider::error::StackableError;
@@ -13,7 +13,11 @@ pub mod package;
 pub mod repository;
 pub mod stackablerepository;
 
-pub async fn find_repository(client: Client, package: &Package, repository_reference: Option<String>) -> Result<Option<StackableRepoProvider>, StackableError> {
+pub async fn find_repository(
+    client: Client,
+    package: &Package,
+    repository_reference: Option<String>,
+) -> Result<Option<StackableRepoProvider>, StackableError> {
     let repositories: Api<Repository> = Api::namespaced(client.clone(), "default");
     if let Some(repository_name) = repository_reference {
         // A repository name was provided, just check that exact repository for the package
@@ -21,9 +25,8 @@ pub async fn find_repository(client: Client, package: &Package, repository_refer
         let mut repo = StackableRepoProvider::try_from(&repo)?;
         if repo.provides_package(package.clone()).await? {
             return Ok(Some(repo));
-        } else {
-            return Ok(None);
         }
+        return Ok(None);
     } else {
         // No repository name was provided, retrieve all repositories from the orchestrator/apiserver
         // and check which one provides the package

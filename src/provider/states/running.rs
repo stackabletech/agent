@@ -6,12 +6,11 @@ use kubelet::state::{State, Transition};
 use log::{debug, error, trace};
 
 use crate::provider::states::failed::Failed;
-use crate::provider::states::install_package::Installing;
+use crate::provider::states::installing::Installing;
 use crate::provider::states::stopping::Stopping;
 use crate::provider::PodState;
 use k8s_openapi::api::core::v1::{
-    ContainerState, ContainerStateRunning, ContainerStateWaiting,
-    ContainerStatus as KubeContainerStatus,
+    ContainerState, ContainerStateRunning, ContainerStatus as KubeContainerStatus,
 };
 
 #[derive(Debug, TransitionTo)]
@@ -83,7 +82,7 @@ impl State<PodState> for Running {
         });
         Ok(make_status_with_containers(
             Phase::Running,
-            &"status:running",
+            "Running",
             container_status,
             vec![],
         ))

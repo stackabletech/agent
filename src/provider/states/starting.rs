@@ -7,21 +7,34 @@ use kubelet::state::{State, Transition};
 use log::{debug, error, info, trace};
 use tokio::time::Duration;
 
-use crate::provider::states::create_config::CreatingConfig;
+use crate::provider::states::creating_config::CreatingConfig;
 use crate::provider::states::failed::Failed;
 use crate::provider::states::running::Running;
+use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::PodState;
 
 #[derive(Default, Debug, TransitionTo)]
-#[transition_to(Running, Failed)]
+#[transition_to(Running, Failed, SetupFailed)]
 pub struct Starting;
 
 #[async_trait::async_trait]
 impl State<PodState> for Starting {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
-        let container = _pod.containers()[0].clone();
-        let template_data = CreatingConfig::create_render_data(&pod_state);
+    async fn next(self: Box<Self>, pod_state: &mut PodState, pod: &Pod) -> Transition<PodState> {
+        let container = pod.containers()[0].clone();
+        let template_data = if let Ok(data) = CreatingConfig::create_render_data(&pod_state) {
+            data
+        } else {
+            error!("Unable to parse directories for command template as UTF8");
+            return Transition::next(
+                self,
+                SetupFailed {
+                    message: "Unable to parse directories for command template as UTF8".to_string(),
+                },
+            );
+        };
         if let Some(mut command) = container.command().clone() {
+            // We need to reverse the vec here, because pop works on the wrong "end" of
+            // the vec for our purposes
             debug!("Reversing {:?}", &command);
             command.reverse();
             debug!("Processing {:?}", &command);
@@ -36,13 +49,7 @@ impl State<PodState> for Starting {
 
                 let os_args: Vec<String> = command
                     .iter()
-                    .map(|s| {
-                        CreatingConfig::render_config_template(
-                            template_data.clone(),
-                            String::from(s),
-                        )
-                        .unwrap()
-                    })
+                    .map(|s| CreatingConfig::render_config_template(&template_data, s).unwrap())
                     .collect();
 
                 debug!(

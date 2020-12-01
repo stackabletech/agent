@@ -1,14 +1,12 @@
 use kubelet::state::prelude::*;
 use log::{debug, info};
 
-use crate::provider::states::install_package::Installing;
+use crate::provider::states::installing::Installing;
 use crate::provider::states::starting::Starting;
 use crate::provider::PodState;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Starting, Installing)]
-/// The Pod failed to run.
-// If we manually implement, we can allow for arguments.
 pub struct Failed {
     pub message: String,
 }
@@ -26,10 +24,10 @@ impl Failed {
 
 #[async_trait::async_trait]
 impl State<PodState> for Failed {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
+    async fn next(self: Box<Self>, _pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
         info!("Process entered failed state");
         if self.restart_enabled(_pod) {
-            debug!("Restart poliy is set to restart, starting...");
+            debug!("Restart policy is set to restart, starting...");
             return Transition::next(self, Starting {});
         } else {
             debug!("Restart is disabled for process.");

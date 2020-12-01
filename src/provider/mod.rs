@@ -15,7 +15,7 @@ use log::{debug, error};
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::{CrdMissing, PodValidationError};
 use crate::provider::repository::package::Package;
-use crate::provider::states::download_package::Downloading;
+use crate::provider::states::downloading::Downloading;
 use crate::provider::states::terminated::Terminated;
 
 pub struct StackableProvider {
@@ -81,24 +81,24 @@ impl StackableProvider {
         }
     }
 
-    fn get_package(&self, pod: &Pod) -> Result<Package, StackableError> {
+    fn get_package(pod: &Pod) -> Result<Package, StackableError> {
         let containers = pod.containers();
-        if containers.len().ne(&1) {
+        return if containers.len().ne(&1) {
             let e = PodValidationError {
                 msg: String::from("Size of containers list in PodSpec has to be exactly 1"),
             };
-            return Err(e);
+            Err(e)
         } else {
             // List has exactly one value, try to parse this
             if let Ok(Some(reference)) = containers[0].image() {
-                return Package::try_from(reference);
+                Package::try_from(reference)
             } else {
                 let e = PodValidationError {
-                    msg: String::from("Unable to get package reference from pod"),
+                    msg: format!("Unable to get package reference from pod: {}", &pod.name()),
                 };
-                return Err(e);
+                Err(e)
             }
-        }
+        };
     }
 
     async fn check_crds(&self) -> Vec<String> {
@@ -144,11 +144,12 @@ impl Provider for StackableProvider {
     async fn initialize_pod_state(&self, pod: &Pod) -> anyhow::Result<Self::PodState> {
         let service_name = pod.name();
         let parcel_directory = self.parcel_directory.clone();
+        // TODO: make this configurable
         let download_directory = parcel_directory.join("_download");
         let config_directory = self.config_directory.clone();
         let log_directory = self.log_directory.clone();
 
-        let package = self.get_package(pod)?;
+        let package = Self::get_package(pod)?;
         if !(&download_directory.is_dir()) {
             fs::create_dir_all(&download_directory)?;
         }

@@ -1,8 +1,7 @@
 use std::collections::hash_map::RandomState;
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::net::IpAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use log::{debug, error, info, trace};
@@ -45,7 +44,7 @@ impl AgentConfig {
         default: None,
         required: false,
         takes_argument: true,
-        help: "The local IP to bind the callback webserver to. Will be automatically set to the first address of the first non-loopback interface if not specified.",
+        help: "The certificate file for the local webserver which the Krustlet starts.",
         documentation: "",
         list: false,
     };
@@ -55,18 +54,24 @@ impl AgentConfig {
         default: None,
         required: false,
         takes_argument: true,
-        help: "The local IP to bind the callback webserver to. Will be automatically set to the first address of the first non-loopback interface if not specified.",
+        help:
+            "Private key file (in PKCS8 format) to use for the local webserver the Krustlet starts.",
         documentation: "",
         list: false,
     };
 
-    pub const PARCEL_DIR: ConfigOption = ConfigOption {
-        name: "parcel-directory",
-        default: Some("/opt/stackable/parcels"),
+    pub const PACKAGE_DIR: ConfigOption = ConfigOption {
+        name: "package-directory",
+        default: Some("/opt/stackable/packages"),
         required: false,
         takes_argument: true,
-        help: "The base directory under which installed parcels will be stored.",
-        documentation: "Yak Yak!",
+        help: "The base directory under which installed packages will be stored.",
+        documentation: "This directory will serve as starting point for packages that are needed by \
+        pods assigned to this node.\n Packages will be downloaded into the \"_download\" folder at the
+top level of this folder as archives and remain there for potential future use.\n\
+        Archives will the be extracted directly into this folder in subdirectories following the naming
+scheme of \"productname-productversion\".
+        The agent will need full access to this directory and tries to create it if it does not exist.",
         list: false,
     };
 
@@ -76,7 +81,12 @@ impl AgentConfig {
         required: false,
         takes_argument: true,
         help: "The base directory under which configuration will be generated for all executed services.",
-        documentation: "Yak Yak!",
+        documentation: "This directory will serve as starting point for all log files which this service creates.\
+        Every service will get its own subdirectories created within this directory - for every service start a \
+        new subdirectory will be created to show a full history of configuration that was used for this service.\n
+        ConfigMaps that are mounted into the pod that describes this service will be created relative to these run \
+        directories - unless the mounts specify an absolute path, in which case it is allowed to break out of this directory.\n\n\
+        The agent will need full access to this directory and tries to create it if it does not exist.",        
         list: false,
     };
 
@@ -86,7 +96,10 @@ impl AgentConfig {
         required: false,
         takes_argument: true,
         help: "The base directory under which log files will be placed for all services.",
-        documentation: "Yak Yak!",
+        documentation: "This directory will serve as starting point for all log files which this service creates.\
+        Every service will get its own subdirectory created within this directory.\n
+        Anything that is then specified in the log4j config or similar files will be resolved relatively to this directory.\n\n\
+        The agent will need full access to this directory and tries to create it if it does not exist.",
         list: false,
     };
 
@@ -115,7 +128,7 @@ impl AgentConfig {
             AgentConfig::SERVER_IP_ADDRESS,
             AgentConfig::SERVER_CERT_FILE,
             AgentConfig::SERVER_KEY_FILE,
-            AgentConfig::PARCEL_DIR,
+            AgentConfig::PACKAGE_DIR,
             AgentConfig::CONFIG_DIR,
             AgentConfig::LOG_DIR,
             AgentConfig::NO_CONFIG,
@@ -126,6 +139,14 @@ impl AgentConfig {
         .collect()
     }
 
+    /// Helper method to ensure that for config options which only allow one value only one value
+    /// was specified.
+    /// In theory this should be unnecessary, as clap already enforces this check, but we still get
+    /// a vec, so in theory could have too many values in there - or none (in which case the default
+    /// should have been inserted by clap).
+    ///
+    /// If we get an incorrect number of arguments, a WrongArgumentCount error is returned which will
+    /// cause config parsing to panic.
     fn get_exactly_one_string(
         parsed_values: &HashMap<ConfigOption, Option<Vec<String>>>,
         option: &ConfigOption,
@@ -141,7 +162,6 @@ impl AgentConfig {
         );
         if let Some(Some(list_value)) = parsed_values.get(option) {
             if list_value.len() != 1 {
-                //panic!(&format!("Expected exactly one value to be specified for parameter {} but got {} instead.", option.name.clone(), list_value.len().clone()));
                 error!("Got additional, unexpected values for parameter!");
             } else {
                 // We've checked that the list has exactly one value at this point, so no errors should
@@ -154,26 +174,16 @@ impl AgentConfig {
         })
     }
 
-    fn get_at_least_one_string(
-        parsed_values: &HashMap<ConfigOption, Option<Vec<String>>>,
-        option: &ConfigOption,
-    ) -> Vec<String> {
-        if let Some(Some(list_value)) = parsed_values.get(option) {
-            if list_value.len() > 0 {
-                return list_value.clone();
-            }
-            panic!("Unexpectedly got empty list of values for parameter".to_string());
-        } else {
-            panic!("Parameter was not specified but a value is required!".to_string());
-        }
-    }
-
+    /// This tries to find the first non loopback interface with an ip address assigned.
+    /// This should usually be the default interface according to:
+    ///
+    /// https://docs.rs/pnet/0.27.2/pnet/datalink/fn.interfaces.html
     fn get_default_ipaddress() -> Option<IpAddr> {
         let all_interfaces = datalink::interfaces();
 
         let default_interface = all_interfaces
             .iter()
-            .filter(|e| e.is_up() && !e.is_loopback() && e.ips.len() > 0)
+            .filter(|e| e.is_up() && !e.is_loopback() && !e.ips.is_empty())
             .next();
 
         match default_interface {
@@ -182,7 +192,7 @@ impl AgentConfig {
                     "Found default interface {} with following ips: [{:?}].",
                     interface, interface.ips
                 );
-                if let ipv4_network = interface.ips[0] {
+                if let Some(ipv4_network) = interface.ips.get(0) {
                     return Some(ipv4_network.ip());
                 }
             }
@@ -190,7 +200,7 @@ impl AgentConfig {
                 "Error while finding the default interface - delegating ip retrieval to Kubelet."
             ),
         };
-        return None;
+        None
     }
 }
 
@@ -206,16 +216,15 @@ impl Configurable for AgentConfig {
 
     fn parse_values(
         parsed_values: HashMap<ConfigOption, Option<Vec<String>>, RandomState>,
-    ) -> Result<Box<Self>, anyhow::Error> {
+    ) -> Result<Self, anyhow::Error> {
         // Parse IP Address or lookup default
         let final_ip = if let Ok(ip) =
             AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::SERVER_IP_ADDRESS)
         {
             IpAddr::from_str(&ip).expect(&format!("Couldn't parse {} as a valid ip address!", ip))
         } else {
-            AgentConfig::get_default_ipaddress().expect(&format!(
-                "Error getting default ip address, please specify it explicitly!"
-            ))
+            AgentConfig::get_default_ipaddress()
+                .expect("Error getting default ip address, please specify it explicitly!")
         };
         info!("Selected {} as local address to listen on.", final_ip);
 
@@ -255,7 +264,7 @@ impl Configurable for AgentConfig {
 
         // Parse parcel directory
         let final_parcel_dir = if let Ok(parcel_dir) =
-            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::PARCEL_DIR)
+            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::PACKAGE_DIR)
         {
             PathBuf::from_str(&parcel_dir).expect(&format!(
                 "Error parsing valid parcel directory from string: {}",
@@ -263,7 +272,7 @@ impl Configurable for AgentConfig {
             ))
         } else {
             PathBuf::from_str(
-                AgentConfig::PARCEL_DIR
+                AgentConfig::PACKAGE_DIR
                     .default
                     .expect("Invalid default value for parcel directory option!"),
             )
@@ -303,7 +312,7 @@ impl Configurable for AgentConfig {
                     // key=value pair with just a log message -> so we panic if this can't be
                     // parsed
                     panic!(format!(
-                        "Unable to parse value {} for option --tag as key=value pair!",
+                        "Unable to parse value [{}] for option --tag as key=value pair!",
                         tag
                     ))
                 } else {
@@ -313,7 +322,7 @@ impl Configurable for AgentConfig {
             }
         }
 
-        Ok(Box::new(AgentConfig {
+        Ok(AgentConfig {
             parcel_directory: final_parcel_dir,
             config_directory: final_config_dir,
             log_directory: final_log_dir,
@@ -321,6 +330,6 @@ impl Configurable for AgentConfig {
             server_cert_file: final_server_cert_file,
             server_key_file: final_server_key_file,
             tags: final_tags,
-        }))
+        })
     }
 }

@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
     // a new Kubelet, all you need to implement is a provider.
 
     let agent_config: AgentConfig =
-        *ConfigBuilder::build(env::args_os().collect::<Vec<OsString>>(), "CONFIG_FILE")
+        ConfigBuilder::build(env::args_os().collect::<Vec<OsString>>(), "CONFIG_FILE")
             .expect("Error initializing Configuration!");
 
     export_env(

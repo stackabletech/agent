@@ -7,8 +7,8 @@ use log::{debug, error, info, warn};
 
 use crate::provider::repository::find_repository;
 use crate::provider::repository::package::Package;
-use crate::provider::states::download_package_backoff::DownloadingBackoff;
-use crate::provider::states::install_package::Installing;
+use crate::provider::states::downloading_backoff::DownloadingBackoff;
+use crate::provider::states::installing::Installing;
 use crate::provider::PodState;
 
 #[derive(Default, Debug, TransitionTo)]
@@ -16,11 +16,7 @@ use crate::provider::PodState;
 pub struct Downloading;
 
 impl Downloading {
-    fn package_downloaded<T: Into<Package>>(
-        &self,
-        package: T,
-        download_directory: PathBuf,
-    ) -> bool {
+    fn package_downloaded<T: Into<Package>>(package: T, download_directory: &PathBuf) -> bool {
         let package = package.into();
         let package_file_name = download_directory.join(package.get_file_name());
         debug!(
@@ -41,7 +37,7 @@ impl State<PodState> for Downloading {
             "Checking if package {} has already been downloaded.",
             package
         );
-        if self.package_downloaded(package.clone(), pod_state.download_directory.clone()) {
+        if Downloading::package_downloaded(package.clone(), &pod_state.download_directory) {
             info!(
                 "Package {} has already been downloaded to {:?}, continuing with installation",
                 package, pod_state.download_directory
@@ -56,10 +52,10 @@ impl State<PodState> for Downloading {
             );
         }
         let repo = find_repository(pod_state.client.clone(), &package, None).await;
-        match repo {
+        return match repo {
             Ok(Some(mut repo)) => {
                 // We found a repository providing the package, proceed with download
-                // The repository has already downloaded its metadata it this time, as that
+                // The repository has already downloaded its metadata at this time, as that
                 // was used to check whether it provides the package
                 info!(
                     "Starting download of package {} from repository {}",
@@ -76,23 +72,23 @@ impl State<PodState> for Downloading {
                             package,
                             download_directory.clone()
                         );
-                        return Transition::next(
+                        Transition::next(
                             self,
                             Installing {
                                 download_directory: pod_state.download_directory.clone(),
                                 parcel_directory: pod_state.parcel_directory.clone(),
                                 package: package.clone(),
                             },
-                        );
+                        )
                     }
                     Err(e) => {
                         warn!("Download of package {} failed: {}", package, e);
-                        return Transition::next(
+                        Transition::next(
                             self,
                             DownloadingBackoff {
                                 package: package.clone(),
                             },
-                        );
+                        )
                     }
                 }
             }
@@ -103,28 +99,27 @@ impl State<PodState> for Downloading {
                     &package
                 );
                 error!("{}", &message);
-                return Transition::next(
+                Transition::next(
                     self,
                     DownloadingBackoff {
                         package: package.clone(),
                     },
-                );
+                )
             }
             Err(e) => {
                 // An error occurred when looking for a repository providing this package
-                let message = format!(
+                error!(
                     "Error occurred trying to find package {}: {:?}",
                     &package, e
                 );
-                error!("{}", &message);
-                return Transition::next(
+                Transition::next(
                     self,
                     DownloadingBackoff {
                         package: package.clone(),
                     },
-                );
+                )
             }
-        }
+        };
     }
 
     async fn json_status(
@@ -132,6 +127,6 @@ impl State<PodState> for Downloading {
         _pod_state: &mut PodState,
         _pod: &Pod,
     ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"status:initializing")
+        make_status(Phase::Pending, &"Downloading package")
     }
 }

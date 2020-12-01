@@ -26,7 +26,7 @@ pub struct StackableRepoProvider {
 #[derive(Serialize, Deserialize, Debug)]
 struct RepoData {
     version: String,
-    parcels: HashMap<String, Vec<Product>>,
+    packages: HashMap<String, Vec<Product>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -39,7 +39,7 @@ struct Product {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct RepositoryContent {
     pub version: String,
-    pub parcels: HashMap<String, HashMap<String, StackablePackage>>,
+    pub packages: HashMap<String, HashMap<String, StackablePackage>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -54,15 +54,25 @@ impl StackableRepoProvider {
     pub fn new(name: String, base_url: String) -> Result<StackableRepoProvider, StackableError> {
         let base_url = Url::parse(&base_url)?;
 
-        Ok(StackableRepoProvider { base_url, name, content: None })
+        Ok(StackableRepoProvider {
+            base_url,
+            name,
+            content: None,
+        })
     }
 
-    pub async fn provides_package<T: Into<Package>>(&mut self, package: T) -> Result<bool, StackableError> {
-        debug!("Starting metadata refresh for repository of type {} at location {}", "StackableRepo", self.base_url);
+    pub async fn provides_package<T: Into<Package>>(
+        &mut self,
+        package: T,
+    ) -> Result<bool, StackableError> {
+        debug!(
+            "Starting metadata refresh for repository of type {} at location {}",
+            "StackableRepo", self.base_url
+        );
         let package = package.into();
         let metadata = self.get_repo_metadata().await?;
         debug!("Repository provides the following products: {:?}", metadata);
-        if let Some(product) = metadata.parcels.get(&package.product) {
+        if let Some(product) = metadata.packages.get(&package.product) {
             return Ok(product.contains_key(&package.version));
         }
         Ok(false)
@@ -73,7 +83,7 @@ impl StackableRepoProvider {
             self.get_repo_metadata().await?;
         }
         if let Some(content) = &self.content {
-            let parcels = &content.parcels;
+            let parcels = &content.packages;
             if let Some(product) = parcels.get(&package.product) {
                 // product exists in repo
                 if let Some(version) = product.get(&package.version) {
@@ -82,10 +92,14 @@ impl StackableRepoProvider {
                 }
             };
         }
-        Err(PackageNotFound {package})
+        Err(PackageNotFound { package })
     }
 
-    pub async fn download_package(&mut self, package: &Package, target_path: PathBuf) -> Result<(), StackableError> {
+    pub async fn download_package(
+        &mut self,
+        package: &Package,
+        target_path: PathBuf,
+    ) -> Result<(), StackableError> {
         if self.content.is_none() {
             let _content = self.get_repo_metadata();
         }
@@ -94,7 +108,7 @@ impl StackableRepoProvider {
         let download_link = Url::parse(&stackable_package.link)?;
         let response = reqwest::get(download_link).await?;
 
-        let mut content =  Cursor::new(response.bytes().await?);
+        let mut content = Cursor::new(response.bytes().await?);
 
         let mut out = File::create(target_path.join(package.get_file_name()))?;
         copy(&mut content, &mut out)?;
@@ -119,8 +133,8 @@ impl StackableRepoProvider {
 
         debug!("Got repository metadata: {:?}", repo_data);
 
-        let mut parcels: HashMap<String, HashMap<String, StackablePackage>> = HashMap::new();
-        for (product, versions) in repo_data.parcels {
+        let mut packages: HashMap<String, HashMap<String, StackablePackage>> = HashMap::new();
+        for (product, versions) in repo_data.packages {
             let mut versionlist = HashMap::new();
             for version in versions {
                 versionlist.insert(
@@ -129,22 +143,31 @@ impl StackableRepoProvider {
                         product: product.clone(),
                         version: version.version,
                         link: self.resolve_url(version.path.clone())?,
-                        hashes: version.hashes.clone()
+                        hashes: version.hashes.clone(),
                     },
                 );
             }
-            parcels.insert(product, versionlist);
+            packages.insert(product, versionlist);
         }
         let repo_content: RepositoryContent = RepositoryContent {
             version: repo_data.version,
-            parcels,
+            packages,
         };
         self.content = Some(repo_content.clone());
         Ok(repo_content)
     }
 
-    fn resolve_url(&self, path: String) -> Result<String, StackableError> {
-        if let Result::Ok(absolute_link) = Url::parse(&path) {
+    /// Resolves relative paths that are defined for elements in this repository against
+    /// the repo's base URL.
+    /// Unless the element has an absolute URL defined, in this case the base URL is ignored
+    /// an the absolute URL returned unchanged.
+    ///
+    /// Public for testing
+    pub fn resolve_url(&self, path: String) -> Result<String, StackableError> {
+        if let Result::Ok(_) = Url::parse(&path) {
+            // The URL defined for this element is an absolute URL, so we won't
+            // resolve that agains the base url of the repository but simply
+            // return it unchanged
             return Ok(path);
         }
         let resolved_path = self.base_url.join(&path)?;
@@ -164,10 +187,14 @@ impl TryFrom<&Repository> for StackableRepoProvider {
     fn try_from(value: &Repository) -> Result<Self, Self::Error> {
         let properties: HashMap<String, String> = value.clone().spec.properties;
         let path = properties.get("url");
-        match path {
-            Some(gna) => return Ok(StackableRepoProvider { name: Meta::name(value), base_url: Url::parse(gna)?, content: None }),
-            None => return Err(StackableError::RepositoryConversionError)
+        if let Some(valid_path) = path {
+            return Ok(StackableRepoProvider {
+                name: Meta::name(value),
+                base_url: Url::parse(valid_path)?,
+                content: None,
+            });
         }
+        return Err(StackableError::RepositoryConversionError);
     }
 }
 
@@ -187,11 +214,52 @@ impl Hash for StackableRepoProvider {
 
 #[cfg(test)]
 mod tests {
+    use crate::provider::repository::repository::RepoType::StackableRepo;
+    use crate::provider::repository::repository::{Repository, RepositorySpec};
+    use crate::provider::repository::stackablerepository::StackableRepoProvider;
+    use std::collections::HashMap;
+    use std::convert::TryFrom;
     use url::Url;
 
     #[test]
     fn test_url_functions() {
-        assert!(true);
+        let repo =
+            StackableRepoProvider::new(String::from("test"), String::from("http://localhost:8000"))
+                .unwrap();
+
+        // Check that a relative URL is correctly resolved against the repo's baseurl
+        assert_eq!(
+            repo.resolve_url(String::from("test")).unwrap(),
+            "http://localhost:8000/test"
+        );
+
+        // Test that an absolute URL is correctly returned without change
+        assert_eq!(
+            repo.resolve_url(String::from("http://test.com/test"))
+                .unwrap(),
+            "http://test.com/test"
+        );
+    }
+
+    #[test]
+    fn test_repository_try_from() {
+        let mut props = HashMap::new();
+        props.insert(
+            String::from("url"),
+            String::from("http://monitoring.stackable.demo:8000"),
+        );
+        let test_repo_crd = Repository::new(
+            "test",
+            RepositorySpec {
+                repo_type: Default::default(),
+                properties: props,
+            },
+        );
+        let converted_repo = StackableRepoProvider::try_from(&test_repo_crd).unwrap();
+        assert_eq!(converted_repo.name, "test");
+        assert_eq!(
+            converted_repo.base_url.as_str(),
+            "http://monitoring.stackable.demo:8000/"
+        );
     }
 }
-

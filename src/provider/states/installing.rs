@@ -10,7 +10,7 @@ use tar::Archive;
 
 use crate::provider::error::StackableError;
 use crate::provider::repository::package::Package;
-use crate::provider::states::create_config::CreatingConfig;
+use crate::provider::states::creating_config::CreatingConfig;
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::PodState;
 
@@ -40,7 +40,6 @@ impl Installing {
 
     fn install_package<T: Into<Package>>(&self, package: T) -> Result<(), StackableError> {
         let package: Package = package.into();
-        // To be on the safe side, check if the package is actually there
 
         let archive_path = self.download_directory.join(package.get_file_name());
         let tar_gz = File::open(&archive_path)?;
@@ -60,9 +59,9 @@ impl Installing {
 
 #[async_trait::async_trait]
 impl State<PodState> for Installing {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
+    async fn next(self: Box<Self>, _pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
         let package = self.package.clone();
-        if self.package_installed(package.clone()) {
+        return if self.package_installed(package.clone()) {
             info!("Package {} has already been installed", package);
             return Transition::next(
                 self,
@@ -73,25 +72,22 @@ impl State<PodState> for Installing {
         } else {
             info!("Installing package {}", package);
             match self.install_package(package.clone()) {
-                Ok(()) => {}
+                Ok(()) => Transition::next(
+                    self,
+                    CreatingConfig {
+                        target_directory: None,
+                    },
+                ),
                 Err(e) => {
                     return Transition::next(
                         self,
                         SetupFailed {
-                            message: "".to_string(),
+                            message: e.to_string(),
                         },
-                    );
+                    )
                 }
             }
-        }
-
-        debug!("installing package");
-        Transition::next(
-            self,
-            CreatingConfig {
-                target_directory: None,
-            },
-        )
+        };
     }
 
     async fn json_status(
@@ -99,6 +95,6 @@ impl State<PodState> for Installing {
         _pod_state: &mut PodState,
         _pod: &Pod,
     ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"status:initializing")
+        make_status(Phase::Pending, &"Installing packages")
     }
 }
