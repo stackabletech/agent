@@ -32,12 +32,6 @@ impl State<PodState> for Failed {
         } else {
             debug!("Restart is disabled for process.");
         }
-        //tokio::time::delay_for(std::time::Duration::from_secs(2)).await;
-        // T//ransition::next(self, Installing{
-        //    download_directory: pod_state.download_directory.clone(),
-        //   parcel_directory: pod_state.parcel_directory.clone(),
-        //   package: pod_state.package.clone()
-        //})
         Transition::Complete(Ok(()))
     }
 

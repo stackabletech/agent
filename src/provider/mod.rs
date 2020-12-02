@@ -73,13 +73,13 @@ impl StackableProvider {
             log_directory,
         };
         let missing_crds = provider.check_crds().await?;
-        if missing_crds.is_empty() {
+        return if missing_crds.is_empty() {
             debug!("All required CRDS present!");
-            return Ok(provider);
+            Ok(provider)
         } else {
-            debug!("Missing required CDRS");
-            return Err(CrdMissing { missing_crds });
-        }
+            debug!("Missing required CDRS: [{:?}]", &missing_crds);
+            Err(CrdMissing { missing_crds })
+        };
     }
 
     fn get_package(pod: &Pod) -> Result<Package, StackableError> {

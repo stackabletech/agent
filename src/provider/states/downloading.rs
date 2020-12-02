@@ -109,7 +109,7 @@ impl State<PodState> for Downloading {
             Err(e) => {
                 // An error occurred when looking for a repository providing this package
                 error!(
-                    "Error occurred trying to find package {}: {:?}",
+                    "Error occurred trying to find package [{}]: [{:?}]",
                     &package, e
                 );
                 Transition::next(
@@ -127,6 +127,6 @@ impl State<PodState> for Downloading {
         _pod_state: &mut PodState,
         _pod: &Pod,
     ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"Downloading package")
+        make_status(Phase::Pending, &"Downloading")
     }
 }

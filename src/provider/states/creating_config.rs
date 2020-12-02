@@ -17,7 +17,7 @@ use crate::provider::error::StackableError::{
     ConfigFileWriteError, DirectoryParseError, MissingConfigMapsError, PodValidationError,
     RuntimeError,
 };
-use crate::provider::states::create_service::CreatingService;
+use crate::provider::states::creating_service::CreatingService;
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::states::waiting_config_map::WaitingConfigMap;
 use crate::provider::PodState;
