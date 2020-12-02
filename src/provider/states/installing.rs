@@ -5,7 +5,7 @@ use flate2::read::GzDecoder;
 use kubelet::pod::Pod;
 use kubelet::state::prelude::*;
 use kubelet::state::{State, Transition};
-use log::{debug, info};
+use log::{debug, error, info};
 use tar::Archive;
 
 use crate::provider::error::StackableError;
@@ -61,6 +61,7 @@ impl Installing {
 impl State<PodState> for Installing {
     async fn next(self: Box<Self>, _pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
         let package = self.package.clone();
+        let package_name = &package.get_directory_name();
         return if self.package_installed(package.clone()) {
             info!("Package {} has already been installed", package);
             return Transition::next(
@@ -78,12 +79,18 @@ impl State<PodState> for Installing {
                         target_directory: None,
                     },
                 ),
-                Err(e) => Transition::next(
-                    self,
-                    SetupFailed {
-                        message: "PackageInstallationFailed".to_string(),
-                    },
-                ),
+                Err(e) => {
+                    error!(
+                        "Failed to install package [{}] due to: [{:?}]",
+                        &package_name, e
+                    );
+                    Transition::next(
+                        self,
+                        SetupFailed {
+                            message: "PackageInstallationFailed".to_string(),
+                        },
+                    )
+                }
             }
         };
     }
