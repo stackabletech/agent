@@ -26,7 +26,7 @@ pub struct StackableProvider {
     log_directory: PathBuf,
 }
 
-pub const CRDS: &'static [&'static str] = &["repositories.stable.stackable.de"];
+pub const CRDS: &[&str] = &["repositories.stable.stackable.de"];
 
 mod error;
 mod repository;
