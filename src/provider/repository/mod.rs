@@ -6,11 +6,11 @@ use log::{debug, trace};
 
 use crate::provider::error::StackableError;
 use crate::provider::repository::package::Package;
-use crate::provider::repository::repository::Repository;
+use crate::provider::repository::repository_spec::Repository;
 use crate::provider::repository::stackablerepository::StackableRepoProvider;
 
 pub mod package;
-pub mod repository;
+pub mod repository_spec;
 pub mod stackablerepository;
 
 pub async fn find_repository(

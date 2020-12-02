@@ -81,13 +81,13 @@ impl CreatingConfig {
     // Public for testing
     pub fn pathbuf_to_string(target_field: &str, path: PathBuf) -> Result<String, StackableError> {
         let path_as_string = path.into_os_string().into_string();
-        return match path_as_string {
-            Ok(valid_string) => return Ok(valid_string),
+        match path_as_string {
+            Ok(valid_string) => Ok(valid_string),
             Err(non_utf8) => Err(DirectoryParseError {
                 target: target_field.to_string(),
-                original: non_utf8.clone(),
+                original: non_utf8,
             }),
-        };
+        }
     }
 
     async fn retrieve_config_maps(
@@ -107,7 +107,7 @@ impl CreatingConfig {
                         found_configmaps.insert(String::from(map_name), config_map);
                     } else {
                         warn!("Got config map {} with no name in metadata, this should never have happened!", map);
-                        missing_configmaps.push(String::from(map));
+                        missing_configmaps.push(map);
                     }
                 }
                 Err(kube::error::Error::Api(ErrorResponse { reason, .. }))
@@ -115,7 +115,7 @@ impl CreatingConfig {
                 {
                     // ConfigMap was not created, add it to the list of missing config maps
                     debug!("ConfigMap {} not found", &map);
-                    missing_configmaps.push(String::from(map));
+                    missing_configmaps.push(map);
                 }
                 Err(e) => {
                     // An error occurred when communicating with the api server
@@ -168,7 +168,7 @@ impl CreatingConfig {
             });
         }
         let map = map.clone();
-        let config_map_name = &map.metadata.name.expect("Got object with no name from K8s, even though we checked for this one line ago - something went seriously wrong!").clone();
+        let config_map_name = &map.metadata.name.expect("Got object with no name from K8s, even though we checked for this one line ago - something went seriously wrong!");
         debug!(
             "applying configmap {} to directory {:?}",
             &config_map_name, target_directory
@@ -177,7 +177,7 @@ impl CreatingConfig {
             info!("creating config directory {:?}", target_directory);
             fs::create_dir_all(&target_directory)?;
         }
-        if let Some(data) = map.data.clone() {
+        if let Some(data) = map.data {
             debug!("Map contained keys: {:?}", &data.keys());
             for key in data.keys() {
                 debug!("found key: {} in configmap {}", key, &config_map_name);

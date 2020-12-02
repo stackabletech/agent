@@ -107,7 +107,7 @@ impl StackableProvider {
         let crds: Api<CustomResourceDefinition> = Api::all(self.client.clone());
 
         // Check all CRDS
-        for crd in CRDS.into_iter() {
+        for crd in CRDS.iter() {
             debug!("Checking if CRD [{}] is registered", crd);
             match crds.get(crd).await {
                 Err(kube::error::Error::Api(ErrorResponse { reason, .. }))

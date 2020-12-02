@@ -183,8 +183,7 @@ scheme of \"productname-productversion\".
 
         let default_interface = all_interfaces
             .iter()
-            .filter(|e| e.is_up() && !e.is_loopback() && !e.ips.is_empty())
-            .next();
+            .find(|e| e.is_up() && !e.is_loopback() && !e.ips.is_empty());
 
         match default_interface {
             Some(interface) => {
@@ -221,7 +220,8 @@ impl Configurable for AgentConfig {
         let final_ip = if let Ok(ip) =
             AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::SERVER_IP_ADDRESS)
         {
-            IpAddr::from_str(&ip).expect(&format!("Couldn't parse {} as a valid ip address!", ip))
+            IpAddr::from_str(&ip)
+                .unwrap_or_else(|_| panic!("Couldn't parse {} as a valid ip address!", ip))
         } else {
             AgentConfig::get_default_ipaddress()
                 .expect("Error getting default ip address, please specify it explicitly!")
@@ -232,61 +232,66 @@ impl Configurable for AgentConfig {
         let final_log_dir = if let Ok(log_dir) =
             AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::LOG_DIR)
         {
-            PathBuf::from_str(&log_dir).expect(&format!(
-                "Error parsing valid log directory from string: {}",
-                log_dir
-            ))
+            PathBuf::from_str(&log_dir).unwrap_or_else(|_| {
+                panic!("Error parsing valid log directory from string: {}", log_dir)
+            })
         } else {
             PathBuf::from_str(
                 AgentConfig::LOG_DIR
                     .default
                     .expect("Invalid default value for log directory option!"),
             )
-            .expect(&format!("Unable to get log directory from options!"))
+            .unwrap_or_else(|_| panic!("Unable to get log directory from options!".to_string()))
         };
 
         // Parse config directory
         let final_config_dir = if let Ok(config_dir) =
             AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::CONFIG_DIR)
         {
-            PathBuf::from_str(&config_dir).expect(&format!(
-                "Error parsing valid config directory from string: {}",
-                config_dir
-            ))
+            PathBuf::from_str(&config_dir).unwrap_or_else(|_| {
+                panic!(
+                    "Error parsing valid config directory from string: {}",
+                    config_dir
+                )
+            })
         } else {
             PathBuf::from_str(
                 AgentConfig::CONFIG_DIR
                     .default
                     .expect("Invalid default value for config directory option!"),
             )
-            .expect(&format!("Unable to get config directory from options!"))
+            .unwrap_or_else(|_| panic!("Unable to get config directory from options!".to_string()))
         };
 
         // Parse parcel directory
         let final_parcel_dir = if let Ok(parcel_dir) =
             AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::PACKAGE_DIR)
         {
-            PathBuf::from_str(&parcel_dir).expect(&format!(
-                "Error parsing valid parcel directory from string: {}",
-                parcel_dir
-            ))
+            PathBuf::from_str(&parcel_dir).unwrap_or_else(|_| {
+                panic!(
+                    "Error parsing valid parcel directory from string: {}",
+                    parcel_dir
+                )
+            })
         } else {
             PathBuf::from_str(
                 AgentConfig::PACKAGE_DIR
                     .default
                     .expect("Invalid default value for parcel directory option!"),
             )
-            .expect(&format!("Unable to get parcel directory from options!"))
+            .unwrap_or_else(|_| panic!("Unable to get parcel directory from options!".to_string()))
         };
 
         // Parse cert file
         let final_server_cert_file = if let Ok(server_cert_file) =
             AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::SERVER_CERT_FILE)
         {
-            Some(PathBuf::from_str(&server_cert_file).expect(&format!(
-                "Error parsing valid server cert file directory from string: {}",
-                server_cert_file
-            )))
+            Some(PathBuf::from_str(&server_cert_file).unwrap_or_else(|_| {
+                panic!(
+                    "Error parsing valid server cert file directory from string: {}",
+                    server_cert_file
+                )
+            }))
         } else {
             None
         };
@@ -295,10 +300,12 @@ impl Configurable for AgentConfig {
         let final_server_key_file = if let Ok(server_key_file) =
             AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::SERVER_KEY_FILE)
         {
-            Some(PathBuf::from_str(&server_key_file).expect(&format!(
-                "Error parsing valid server key file directory from string: {}",
-                server_key_file
-            )))
+            Some(PathBuf::from_str(&server_key_file).unwrap_or_else(|_| {
+                panic!(
+                    "Error parsing valid server key file directory from string: {}",
+                    server_key_file
+                )
+            }))
         } else {
             None
         };
@@ -306,7 +313,7 @@ impl Configurable for AgentConfig {
         let mut final_tags: HashMap<String, String> = HashMap::new();
         if let Some(Some(tags)) = parsed_values.get(&AgentConfig::TAG) {
             for tag in tags {
-                let split: Vec<&str> = tag.split("=").collect();
+                let split: Vec<&str> = tag.split('=').collect();
                 if split.len() != 2 {
                     // We want to avoid any "unpredictable" behavior like ignoring a malformed
                     // key=value pair with just a log message -> so we panic if this can't be

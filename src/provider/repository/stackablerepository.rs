@@ -14,7 +14,7 @@ use url::Url;
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::PackageNotFound;
 use crate::provider::repository::package::Package;
-use crate::provider::repository::repository::Repository;
+use crate::provider::repository::repository_spec::Repository;
 
 #[derive(Debug, Clone)]
 pub struct StackableRepoProvider {
@@ -164,7 +164,7 @@ impl StackableRepoProvider {
     ///
     /// Public for testing
     pub fn resolve_url(&self, path: String) -> Result<String, StackableError> {
-        if let Result::Ok(_) = Url::parse(&path) {
+        if Url::parse(&path).is_ok() {
             // The URL defined for this element is an absolute URL, so we won't
             // resolve that agains the base url of the repository but simply
             // return it unchanged
@@ -194,7 +194,7 @@ impl TryFrom<&Repository> for StackableRepoProvider {
                 content: None,
             });
         }
-        return Err(StackableError::RepositoryConversionError);
+        Err(StackableError::RepositoryConversionError)
     }
 }
 
@@ -214,7 +214,7 @@ impl Hash for StackableRepoProvider {
 
 #[cfg(test)]
 mod tests {
-    use crate::provider::repository::repository::{Repository, RepositorySpec};
+    use crate::provider::repository::repository_spec::{Repository, RepositorySpec};
     use crate::provider::repository::stackablerepository::StackableRepoProvider;
     use std::collections::HashMap;
     use std::convert::TryFrom;

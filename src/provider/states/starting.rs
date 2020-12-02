@@ -61,11 +61,13 @@ impl State<PodState> for Starting {
                         "Got environment vars: {:?} service {}",
                         vars, pod_state.service_name
                     );
-                    vars.into_iter()
+                    vars.iter()
                         .map(|env_var| {
                             (
                                 String::from(&env_var.name),
-                                String::from(&env_var.value.clone().unwrap_or(String::from(""))),
+                                String::from(
+                                    &env_var.value.clone().unwrap_or_else(|| String::from("")),
+                                ),
                             )
                         })
                         .collect::<Vec<_>>()

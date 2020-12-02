@@ -71,7 +71,7 @@ impl State<PodState> for Installing {
             );
         } else {
             info!("Installing package {}", package);
-            match self.install_package(package.clone()) {
+            match self.install_package(package) {
                 Ok(()) => Transition::next(
                     self,
                     CreatingConfig {
