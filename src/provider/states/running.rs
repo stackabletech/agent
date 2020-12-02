@@ -28,17 +28,9 @@ impl State<PodState> for Running {
     ) -> Transition<PodState> {
         debug!("waiting");
         let mut handle = std::mem::replace(&mut self.process_handle, None).unwrap();
-        /*while let Ok(_) = timeout(Duration::from_millis(100), changed.notified()).await {
-            debug!("drained a waiting notification");
-        }*/
-        // debug!("done draining");
 
         loop {
             tokio::select! {
-                /*_ = changed.notified() => {
-                    debug!("pod changed");
-                    break;
-                },*/
                 _ = tokio::time::delay_for(std::time::Duration::from_secs(1))  => {
                     trace!("Checking if service {} is still running.", &pod_state.service_name);
                 }
@@ -53,7 +45,7 @@ impl State<PodState> for Running {
                     return Transition::next(
                         self,
                         Failed {
-                            message: "Process died unexpectedly!".to_string(),
+                            message: "ProcessDiedUnexpectedly".to_string(),
                         },
                     );
                 }

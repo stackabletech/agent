@@ -4,8 +4,7 @@ use log::info;
 use crate::provider::PodState;
 
 #[derive(Default, Debug)]
-/// The Pod failed to run.
-// If we manually implement, we can allow for arguments.
+/// The pod object was deleted in Kubernetes
 pub struct Terminated {
     pub message: String,
 }

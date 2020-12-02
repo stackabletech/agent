@@ -354,7 +354,7 @@ impl State<PodState> for CreatingConfig {
             return Transition::next(
                 self,
                 SetupFailed {
-                    message: "Unable to parse directories for command template as UTF8".to_string(),
+                    message: "DirectoryParseError".to_string(),
                 },
             );
         };
@@ -373,17 +373,16 @@ impl State<PodState> for CreatingConfig {
                     &template_data,
                 ) {
                     // Creation of config file failed!
-                    let error_message = format!(
+                    error!(
                         "Failed to create config file [{:?}] from config map [{}] due to: {:?}",
                         &joined_target_path.to_str(),
                         volume,
                         e
                     );
-                    error!("{}", &error_message);
                     return Transition::next(
                         self,
                         SetupFailed {
-                            message: error_message,
+                            message: "FailedToCreateConfigFile".to_string(),
                         },
                     );
                 }

@@ -28,7 +28,7 @@ impl State<PodState> for Starting {
             return Transition::next(
                 self,
                 SetupFailed {
-                    message: "Unable to parse directories for command template as UTF8".to_string(),
+                    message: "DirectoryParseError".to_string(),
                 },
             );
         };
@@ -110,7 +110,7 @@ impl State<PodState> for Starting {
                                 return Transition::next(
                                     self,
                                     Failed {
-                                        message: "process failed during startup".to_string(),
+                                        message: "ProcessFailedDuringStartup".to_string(),
                                     },
                                 );
                             }
@@ -129,7 +129,7 @@ impl State<PodState> for Starting {
                         return Transition::next(
                             self,
                             Failed {
-                                message: error_message,
+                                message: "ProcessStartFailed".to_string(),
                             },
                         );
                     }
@@ -140,7 +140,7 @@ impl State<PodState> for Starting {
         return Transition::next(
             self,
             Failed {
-                message: "no command object present, failing process".to_string(),
+                message: "MissingCommandObject".to_string(),
             },
         );
     }

@@ -81,7 +81,7 @@ impl State<PodState> for Installing {
                 Err(e) => Transition::next(
                     self,
                     SetupFailed {
-                        message: e.to_string(),
+                        message: "PackageInstallationFailed".to_string(),
                     },
                 ),
             }
