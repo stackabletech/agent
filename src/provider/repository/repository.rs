@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(CustomResource, Serialize, Deserialize, Default, Clone, Debug)]
 #[kube(
-kind = "Repository",
-group = "stable.stackable.de",
-version = "v1",
-namespaced
+    kind = "Repository",
+    group = "stable.stackable.de",
+    version = "v1",
+    namespaced
 )]
 pub struct RepositorySpec {
     pub repo_type: RepoType,
