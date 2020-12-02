@@ -64,14 +64,14 @@ impl State<PodState> for Running {
     async fn json_status(
         &self,
         _pod_state: &mut PodState,
-        _pod: &Pod,
+        pod: &Pod,
     ) -> anyhow::Result<serde_json::Value> {
         let state = ContainerState {
             running: Some(ContainerStateRunning { started_at: None }),
             ..Default::default()
         };
 
-        let mut container = &_pod.containers()[0];
+        let container = &pod.containers()[0];
         let mut container_status = vec![];
         container_status.push(KubeContainerStatus {
             name: container.name().to_string(),

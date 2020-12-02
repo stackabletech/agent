@@ -33,6 +33,9 @@ impl Package {
 impl TryFrom<Reference> for Package {
     type Error = StackableError;
 
+    // Converts from an oci reference to a package representation
+    // The oci tag (anything after the \":\" in the string) is used as
+    // version by this code and needs to be present
     fn try_from(value: Reference) -> Result<Self, Self::Error> {
         Ok(Package {
             product: String::from(value.repository()),

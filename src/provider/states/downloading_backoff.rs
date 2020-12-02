@@ -29,6 +29,6 @@ impl State<PodState> for DownloadingBackoff {
         _pod_state: &mut PodState,
         _pod: &Pod,
     ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"Waiting to retry download of package")
+        make_status(Phase::Pending, &"DownloadingBackoff")
     }
 }

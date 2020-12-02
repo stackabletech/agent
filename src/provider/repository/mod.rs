@@ -33,17 +33,19 @@ pub async fn find_repository(
         let list_params = ListParams::default();
         let repos = repositories.list(&list_params).await?;
         for repository in repos.iter() {
-            let repo: &Repository = repository;
-            debug!("got repo definition: {:?}", repository);
+            debug!("got repo definition: [{:?}]", repository);
             // Convert repository to object implementing our trait
             // TODO: add generic implementation here to support different types of repository
             let mut repo = StackableRepoProvider::try_from(repository)?;
             trace!("converted to stackable repo: {:?}", repository);
             if repo.provides_package(package.clone()).await? {
-                debug!("Found package {} in repository {}", &package, repo);
+                debug!("Found package [{}] in repository [{}]", &package, repo);
                 return Ok(Some(repo));
             } else {
-                debug!("Package {} not provided by repository {}", &package, repo);
+                debug!(
+                    "Package [{}] not provided by repository [{}]",
+                    &package, repo
+                );
             }
         }
     }

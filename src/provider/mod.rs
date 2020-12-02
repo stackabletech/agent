@@ -13,10 +13,11 @@ use kubelet::provider::Provider;
 use log::{debug, error};
 
 use crate::provider::error::StackableError;
-use crate::provider::error::StackableError::{CrdMissing, PodValidationError};
+use crate::provider::error::StackableError::{CrdMissing, KubeError, PodValidationError};
 use crate::provider::repository::package::Package;
 use crate::provider::states::downloading::Downloading;
 use crate::provider::states::terminated::Terminated;
+use kube::error::ErrorResponse;
 
 pub struct StackableProvider {
     client: Client,
@@ -71,7 +72,7 @@ impl StackableProvider {
             config_directory,
             log_directory,
         };
-        let missing_crds = provider.check_crds().await;
+        let missing_crds = provider.check_crds().await?;
         if missing_crds.is_empty() {
             debug!("All required CRDS present!");
             return Ok(provider);
@@ -101,22 +102,31 @@ impl StackableProvider {
         };
     }
 
-    async fn check_crds(&self) -> Vec<String> {
+    async fn check_crds(&self) -> Result<Vec<String>, StackableError> {
         let mut missing_crds = vec![];
         let crds: Api<CustomResourceDefinition> = Api::all(self.client.clone());
 
         // Check all CRDS
         for crd in CRDS.into_iter() {
-            debug!("Checking if CRD \"{}\" is registered", crd);
+            debug!("Checking if CRD [{}] is registered", crd);
             match crds.get(crd).await {
-                Err(e) => {
-                    error!("Missing required CRD: \"{}\"", crd);
+                Err(kube::error::Error::Api(ErrorResponse { reason, .. }))
+                    if reason == "NotFound" =>
+                {
+                    error!("Missing required CRD: [{}]", crd);
                     missing_crds.push(String::from(*crd))
                 }
-                _ => debug!("Found registered crd: {}", crd),
+                Err(e) => {
+                    error!(
+                        "An error ocurred when checking if CRD [{}] is registered: \"{}\"",
+                        crd, e
+                    );
+                    return Err(KubeError { source: e });
+                }
+                _ => debug!("Found registered crd: [{}]", crd),
             }
         }
-        missing_crds
+        Ok(missing_crds)
     }
 }
 
@@ -172,10 +182,10 @@ impl Provider for StackableProvider {
 
     async fn logs(
         &self,
-        namespace: String,
-        pod: String,
-        container: String,
-        sender: Sender,
+        _namespace: String,
+        _pod: String,
+        _container: String,
+        _sender: Sender,
     ) -> anyhow::Result<()> {
         Ok(())
     }

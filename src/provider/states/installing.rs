@@ -78,14 +78,12 @@ impl State<PodState> for Installing {
                         target_directory: None,
                     },
                 ),
-                Err(e) => {
-                    return Transition::next(
-                        self,
-                        SetupFailed {
-                            message: e.to_string(),
-                        },
-                    )
-                }
+                Err(e) => Transition::next(
+                    self,
+                    SetupFailed {
+                        message: e.to_string(),
+                    },
+                ),
             }
         };
     }
@@ -95,6 +93,6 @@ impl State<PodState> for Installing {
         _pod_state: &mut PodState,
         _pod: &Pod,
     ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"Installing packages")
+        make_status(Phase::Pending, &"Installing")
     }
 }

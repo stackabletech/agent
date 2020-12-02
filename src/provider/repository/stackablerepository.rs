@@ -214,12 +214,10 @@ impl Hash for StackableRepoProvider {
 
 #[cfg(test)]
 mod tests {
-    use crate::provider::repository::repository::RepoType::StackableRepo;
     use crate::provider::repository::repository::{Repository, RepositorySpec};
     use crate::provider::repository::stackablerepository::StackableRepoProvider;
     use std::collections::HashMap;
     use std::convert::TryFrom;
-    use url::Url;
 
     #[test]
     fn test_url_functions() {

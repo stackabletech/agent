@@ -6,7 +6,6 @@ use kube::config::KubeConfigOptions;
 use kubelet::config::Config;
 use kubelet::Kubelet;
 use log::{info, warn};
-use pnet::datalink;
 use stackable_config::ConfigBuilder;
 
 use crate::agentconfig::AgentConfig;

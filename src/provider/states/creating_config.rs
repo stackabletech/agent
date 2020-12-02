@@ -21,7 +21,6 @@ use crate::provider::states::create_service::CreatingService;
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::states::waiting_config_map::WaitingConfigMap;
 use crate::provider::PodState;
-use kube::api::Meta;
 use kube::error::ErrorResponse;
 
 #[derive(Default, Debug, TransitionTo)]
@@ -82,17 +81,13 @@ impl CreatingConfig {
     // Public for testing
     pub fn pathbuf_to_string(target_field: &str, path: PathBuf) -> Result<String, StackableError> {
         let path_as_string = path.into_os_string().into_string();
-        match path_as_string {
-            Ok(valid_string) => {
-                return Ok(valid_string);
-            }
-            Err(non_utf8) => {
-                return Err(DirectoryParseError {
-                    target: "package directory".to_string(),
-                    original: non_utf8.clone(),
-                })
-            }
-        }
+        return match path_as_string {
+            Ok(valid_string) => return Ok(valid_string),
+            Err(non_utf8) => Err(DirectoryParseError {
+                target: target_field.to_string(),
+                original: non_utf8.clone(),
+            }),
+        };
     }
 
     async fn retrieve_config_maps(
@@ -106,13 +101,6 @@ impl CreatingConfig {
         let mut missing_configmaps = vec![];
         let mut found_configmaps = HashMap::new();
         for map in configmaps {
-            /*
-                        match api.get(T::RESOURCE_NAME).await {
-                Ok(_) => { Ok(true) }
-                Err(kube::error::Error::Api(ErrorResponse {reason, .. })) if reason == "NotFound" => { println!("foo"); Ok(false) }
-                Err(err) => Err(error::Error::from(err))
-            }
-                        */
             match configmaps_api.get(&map).await {
                 Ok(config_map) => {
                     if let Some(map_name) = &config_map.metadata.name {
@@ -169,7 +157,7 @@ impl CreatingConfig {
     ///
     fn apply_config_map(
         map: &ConfigMap,
-        target_directory: PathBuf,
+        target_directory: &PathBuf,
         template_data: &BTreeMap<String, String>,
     ) -> Result<(), StackableError> {
         if map.metadata.name.is_none() {
@@ -255,7 +243,6 @@ impl State<PodState> for CreatingConfig {
         // TODO: this entire function needs to be heavily refactored
         let name = pod.name();
         let client = pod_state.client.clone();
-        let target_directory = pod_state.get_service_config_directory();
 
         // Check size of containers array, we currently only allow one container to be present, this
         // might change in the future
@@ -377,80 +364,32 @@ impl State<PodState> for CreatingConfig {
         for (target_path, volume) in volume_mounts {
             let volume = volume.clone();
             let joined_target_path = config_dir.join(&target_path);
+
             debug!("Applying config map {} to {}", volume, target_path);
             if let Some(volume_content) = config_map_data.get(&volume) {
                 if let Err(e) = CreatingConfig::apply_config_map(
                     volume_content,
-                    joined_target_path,
+                    &joined_target_path,
                     &template_data,
                 ) {
                     // Creation of config file failed!
+                    let error_message = format!(
+                        "Failed to create config file [{:?}] from config map [{}] due to: {:?}",
+                        &joined_target_path.to_str(),
+                        volume,
+                        e
+                    );
+                    error!("{}", &error_message);
+                    return Transition::next(
+                        self,
+                        SetupFailed {
+                            message: error_message,
+                        },
+                    );
                 }
             }
-
             // Creation went well, carry on
         }
-
-        /*
-        if let Some(mounts) = container.volume_mounts() {
-            debug!("Found {} mounts in pod {}", mounts.len(), pod.name());
-            // Got mounts and volumes, we can now decide which ones we need to act upon
-            let mut unexpectedly_missing_config_maps = vec![]; // track maps that could not be retrieved
-            for mount in mounts {
-                for volume in volumes {
-                    if mount.name.eq(&volume.name) {
-                        let target_dir = target_directory.join(&mount.mount_path);
-                        if let Some(config_map) = &volume.config_map {
-                            if let Some(map_name) = &config_map.name {
-                                if let Some(map) = config_map_data.get(map) {
-                                    debug!("found config map: {:?} - applying", config_map);
-                                    match CreatingConfig::apply_config_map(
-                                        map,
-                                        target_dir,
-                                        &template_data,
-                                    ) {
-                                        Err(e) => {
-                                            return Transition::next(
-                                                self,
-                                                SetupFailed {
-                                                    message:
-                                                        "Failed to create file from config map!"
-                                                            .to_string(),
-                                                },
-                                            );
-                                        }
-                                        _ => {}
-                                    }
-                                } else {
-                                    // Config map not found in the previously retrieved data, this
-                                    // should not happen
-                                    warn!("Config map {} unexpectedly missing - this means that the pod object was created with a mount referencing a missing volume, which should have been caught by Kubernetes", map_name);
-
-                                    // Add this map to the list of missing maps, this will trigger
-                                    // a transition to config map missing state after the loop
-                                    // Note: this may create a partial state on disk, but again,
-                                    // this should not happen, so I'm not too worried about it
-                                    unexpectedly_missing_config_maps.push(map_name.clone());
-                                }
-                            }
-                        } else {
-                            warn!("Skipping volume {} - it is not a config map", volume.name);
-                        }
-                    }
-                }
-            }
-            if !unexpectedly_missing_config_maps.is_empty() {
-                // We were unable to retrieve a config map that was present
-                // beforehand - transition to waiting for config maps state
-                return Transition::next(
-                    self,
-                    WaitingConfigMap {
-                        missing_config_maps: unexpectedly_missing_config_maps,
-                    },
-                );
-            }
-        };
-        */
         debug!("Transitioning to service creation");
         Transition::next(self, CreatingService)
     }
@@ -460,7 +399,7 @@ impl State<PodState> for CreatingConfig {
         _pod_state: &mut PodState,
         _pod: &Pod,
     ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, "status: creating config")
+        make_status(Phase::Pending, "CreatingConfig")
     }
 }
 

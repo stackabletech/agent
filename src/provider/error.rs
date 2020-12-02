@@ -15,8 +15,6 @@ pub enum StackableError {
     IO(#[from] std::io::Error),
     #[error("unable to create repository from received repo object")]
     RepositoryConversionError,
-    #[error("error parsing package from containerimage string, has to be in the form of: \"repositoryname/package:version\"")]
-    PackageParseError,
     #[error("Invalid content in pod object: {msg}")]
     PodValidationError { msg: String },
     #[error("Kubernetes reported error: {source}")]

@@ -1,6 +1,0 @@
---tag=test=test1
---tag=test2=test2
---package-directory=/home/sliebau/IdeaProjects/agent/work/packages
---config-directory=/home/sliebau/IdeaProjects/agent/work/config
---server-cert-file=/home/sliebau/Downloads/EasyRSA-3.0.8/pki/issued/krustlet1.crt
---server-key-file=/home/sliebau/Downloads/EasyRSA-3.0.8/pki/private/pkcs8.key
