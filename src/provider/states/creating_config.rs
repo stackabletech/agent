@@ -425,9 +425,11 @@ mod tests {
 
         // Test if an undefined variable leads to an error
         let template_with_undefined_var = "{{var4}}test";
+        let result = CreatingConfig::render_config_template(&context, template_with_undefined_var);
+
         match CreatingConfig::render_config_template(&context, template_with_undefined_var) {
             Ok(_) => assert!(false),
-            Err(_) => assert!(true),
+            Err(_) => {}
         }
     }
 
