@@ -1,5 +1,6 @@
-use std::process::Child;
-
+use k8s_openapi::api::core::v1::{
+    ContainerState, ContainerStateRunning, ContainerStatus as KubeContainerStatus,
+};
 use kubelet::pod::Pod;
 use kubelet::state::prelude::*;
 use kubelet::state::{State, Transition};
@@ -9,15 +10,10 @@ use crate::provider::states::failed::Failed;
 use crate::provider::states::installing::Installing;
 use crate::provider::states::stopping::Stopping;
 use crate::provider::PodState;
-use k8s_openapi::api::core::v1::{
-    ContainerState, ContainerStateRunning, ContainerStatus as KubeContainerStatus,
-};
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(Stopping, Failed, Running, Installing)]
-pub struct Running {
-    pub process_handle: Option<Child>,
-}
+pub struct Running {}
 
 #[async_trait::async_trait]
 impl State<PodState> for Running {
@@ -26,17 +22,32 @@ impl State<PodState> for Running {
         pod_state: &mut PodState,
         _pod: &Pod,
     ) -> Transition<PodState> {
-        debug!("waiting");
-        let mut handle = std::mem::replace(&mut self.process_handle, None).unwrap();
-
         loop {
             tokio::select! {
                 _ = tokio::time::delay_for(std::time::Duration::from_secs(1))  => {
                     trace!("Checking if service {} is still running.", &pod_state.service_name);
                 }
             }
-            match handle.try_wait() {
-                Ok(None) => debug!("Service {} is still running", &pod_state.service_name),
+
+            // Obtain a mutable reference to the process handle
+            let child = if let Some(testproc) = pod_state.process_handle.as_mut() {
+                testproc
+            } else {
+                return Transition::next(
+                    self,
+                    Failed {
+                        message: "Unable to obtain process handle from podstate!".to_string(),
+                    },
+                );
+            };
+
+            // Check if an exit code is available for the process - if yes, it exited
+            match child.try_wait() {
+                Ok(None) => debug!(
+                    "Service {} is still running with pid {}",
+                    &pod_state.service_name,
+                    child.id()
+                ),
                 _ => {
                     error!(
                         "Service {} died unexpectedly, moving to failed state",

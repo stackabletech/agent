@@ -40,13 +40,15 @@ pub struct PodState {
     log_directory: PathBuf,
     package_download_backoff_strategy: ExponentialBackoffStrategy,
     service_name: String,
+    service_uid: String,
     package: Package,
     process_handle: Option<Child>,
 }
 
 impl PodState {
     pub fn get_service_config_directory(&self) -> PathBuf {
-        self.config_directory.join(&self.service_name)
+        self.config_directory
+            .join(format!("{}-{}", &self.service_name, &self.service_uid))
     }
 
     pub fn get_service_package_directory(&self) -> PathBuf {
@@ -153,6 +155,7 @@ impl Provider for StackableProvider {
 
     async fn initialize_pod_state(&self, pod: &Pod) -> anyhow::Result<Self::PodState> {
         let service_name = pod.name();
+        let service_uid = String::from(pod.as_kube_pod().metadata.uid.as_ref().unwrap());
         let parcel_directory = self.parcel_directory.clone();
         // TODO: make this configurable
         let download_directory = parcel_directory.join("_download");
@@ -175,6 +178,7 @@ impl Provider for StackableProvider {
             config_directory: self.config_directory.clone(),
             package_download_backoff_strategy: ExponentialBackoffStrategy::default(),
             service_name: String::from(service_name),
+            service_uid,
             package,
             process_handle: None,
         })

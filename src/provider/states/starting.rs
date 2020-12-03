@@ -115,13 +115,10 @@ impl State<PodState> for Starting {
                                 );
                             }
                         }
-                        //pod_state.process_handle = Some(child);
-                        return Transition::next(
-                            self,
-                            Running {
-                                process_handle: Some(child),
-                            },
-                        );
+                        // Store the child handle in the podstate so that later states
+                        // can use it
+                        pod_state.process_handle = Some(child);
+                        return Transition::next(self, Running {});
                     }
                     Err(error) => {
                         let error_message = format!("Failed to start process with error {}", error);
