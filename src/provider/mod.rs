@@ -14,7 +14,7 @@ use log::{debug, error};
 
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::{
-    CrdMissing, IllegalKubeObject, KubeError, PodValidationError,
+    CrdMissing, KubeError, MissingObjectKey, PodValidationError,
 };
 use crate::provider::repository::package::Package;
 use crate::provider::states::downloading::Downloading;
@@ -164,8 +164,8 @@ impl Provider for StackableProvider {
         let service_uid = if let Some(uid) = pod.as_kube_pod().metadata.uid.as_ref() {
             uid.to_string()
         } else {
-            return Err(anyhow::Error::new(IllegalKubeObject {
-                field_name: "uid".to_string(),
+            return Err(anyhow::Error::new(MissingObjectKey {
+                key: ".metadata.uid",
             }));
         };
         let parcel_directory = self.parcel_directory.clone();
