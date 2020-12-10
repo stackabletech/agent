@@ -20,13 +20,16 @@ use crate::provider::error::StackableError::{
 use crate::provider::repository::package::Package;
 use crate::provider::states::downloading::Downloading;
 use crate::provider::states::terminated::Terminated;
+use crate::provider::systemdmanager::manager::Manager;
 use kube::error::ErrorResponse;
+use std::sync::{Arc, RwLock};
 
 pub struct StackableProvider {
     client: Client,
     parcel_directory: PathBuf,
     config_directory: PathBuf,
     log_directory: PathBuf,
+    systemd_manager: Arc<RwLock<Manager>>,
 }
 
 pub const CRDS: &[&str] = &["repositories.stable.stackable.de"];
@@ -34,6 +37,7 @@ pub const CRDS: &[&str] = &["repositories.stable.stackable.de"];
 mod error;
 mod repository;
 mod states;
+mod systemdmanager;
 
 pub struct PodState {
     client: Client,
@@ -46,6 +50,7 @@ pub struct PodState {
     service_uid: String,
     package: Package,
     process_handle: Option<Child>,
+    systemd_manager: Arc<RwLock<Manager>>,
 }
 
 impl PodState {
@@ -62,6 +67,11 @@ impl PodState {
     pub fn get_service_log_directory(&self) -> PathBuf {
         self.log_directory.join(&self.service_name)
     }
+
+    // I know, I know, the name sucks!
+    pub fn get_service_service_directory(&self) -> PathBuf {
+        self.get_service_config_directory().join("_service")
+    }
 }
 
 impl StackableProvider {
@@ -71,11 +81,17 @@ impl StackableProvider {
         config_directory: PathBuf,
         log_directory: PathBuf,
     ) -> Result<Self, StackableError> {
+        let systemdmanager = RwLock::new(Manager::new(
+            PathBuf::from("/home/sliebau/IdeaProjects/agent/work/systemd"),
+            false,
+        ));
+
         let provider = StackableProvider {
             client,
             parcel_directory,
             config_directory,
             log_directory,
+            systemd_manager: Arc::new(systemdmanager),
         };
         let missing_crds = provider.check_crds().await?;
         return if missing_crds.is_empty() {
@@ -194,6 +210,7 @@ impl Provider for StackableProvider {
             service_uid,
             package,
             process_handle: None,
+            systemd_manager: self.systemd_manager.clone(),
         })
     }
 
