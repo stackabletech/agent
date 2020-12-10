@@ -43,4 +43,6 @@ pub enum StackableError {
         "The following config maps were specified in a pod but not found: {missing_config_maps:?}"
     )]
     MissingConfigMapsError { missing_config_maps: Vec<String> },
+    #[error("An object received from Kubernetes didn't contain a required field: {field_name}")]
+    IllegalKubeObject {field_name: String}
 }

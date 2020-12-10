@@ -13,7 +13,9 @@ use kubelet::provider::Provider;
 use log::{debug, error};
 
 use crate::provider::error::StackableError;
-use crate::provider::error::StackableError::{CrdMissing, KubeError, PodValidationError};
+use crate::provider::error::StackableError::{
+    CrdMissing, IllegalKubeObject, KubeError, PodValidationError,
+};
 use crate::provider::repository::package::Package;
 use crate::provider::states::downloading::Downloading;
 use crate::provider::states::terminated::Terminated;
@@ -155,7 +157,17 @@ impl Provider for StackableProvider {
 
     async fn initialize_pod_state(&self, pod: &Pod) -> anyhow::Result<Self::PodState> {
         let service_name = pod.name();
-        let service_uid = String::from(pod.as_kube_pod().metadata.uid.as_ref().unwrap());
+
+        // Extract uid from pod object, if this fails we return an error -
+        // this should not happen, as all objects we get from Kubernetes should have
+        // a uid set!
+        let service_uid = if let Some(uid) = pod.as_kube_pod().metadata.uid.as_ref() {
+            uid.to_string()
+        } else {
+            return Err(anyhow::Error::new(IllegalKubeObject {
+                field_name: "uid".to_string(),
+            }));
+        };
         let parcel_directory = self.parcel_directory.clone();
         // TODO: make this configurable
         let download_directory = parcel_directory.join("_download");

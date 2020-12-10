@@ -17,7 +17,7 @@ impl State<PodState> for Stopping {
         if let Some(child) = &pod_state.process_handle {
             info!(
                 "Received stop command for service {}, stopping process with pid {}",
-                pod_state.service_name, &1
+                pod_state.service_name, child.id()
             );
         }
         Transition::next(self, Stopped)
