@@ -15,10 +15,10 @@ pub struct Stopping;
 impl State<PodState> for Stopping {
     async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
         if let Some(child) = &pod_state.process_handle {
-            let pid = child.id();
             info!(
                 "Received stop command for service {}, stopping process with pid {}",
-                pod_state.service_name, pid
+                pod_state.service_name,
+                child.id()
             );
         }
         Transition::next(self, Stopped)
