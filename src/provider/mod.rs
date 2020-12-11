@@ -13,7 +13,9 @@ use kubelet::provider::Provider;
 use log::{debug, error};
 
 use crate::provider::error::StackableError;
-use crate::provider::error::StackableError::{CrdMissing, KubeError, PodValidationError};
+use crate::provider::error::StackableError::{
+    CrdMissing, KubeError, MissingObjectKey, PodValidationError,
+};
 use crate::provider::repository::package::Package;
 use crate::provider::states::downloading::Downloading;
 use crate::provider::states::terminated::Terminated;
@@ -40,13 +42,15 @@ pub struct PodState {
     log_directory: PathBuf,
     package_download_backoff_strategy: ExponentialBackoffStrategy,
     service_name: String,
+    service_uid: String,
     package: Package,
     process_handle: Option<Child>,
 }
 
 impl PodState {
     pub fn get_service_config_directory(&self) -> PathBuf {
-        self.config_directory.join(&self.service_name)
+        self.config_directory
+            .join(format!("{}-{}", &self.service_name, &self.service_uid))
     }
 
     pub fn get_service_package_directory(&self) -> PathBuf {
@@ -153,6 +157,17 @@ impl Provider for StackableProvider {
 
     async fn initialize_pod_state(&self, pod: &Pod) -> anyhow::Result<Self::PodState> {
         let service_name = pod.name();
+
+        // Extract uid from pod object, if this fails we return an error -
+        // this should not happen, as all objects we get from Kubernetes should have
+        // a uid set!
+        let service_uid = if let Some(uid) = pod.as_kube_pod().metadata.uid.as_ref() {
+            uid.to_string()
+        } else {
+            return Err(anyhow::Error::new(MissingObjectKey {
+                key: ".metadata.uid",
+            }));
+        };
         let parcel_directory = self.parcel_directory.clone();
         // TODO: make this configurable
         let download_directory = parcel_directory.join("_download");
@@ -175,6 +190,7 @@ impl Provider for StackableProvider {
             config_directory: self.config_directory.clone(),
             package_download_backoff_strategy: ExponentialBackoffStrategy::default(),
             service_name: String::from(service_name),
+            service_uid,
             package,
             process_handle: None,
         })

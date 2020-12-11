@@ -1,5 +1,6 @@
+use anyhow::anyhow;
 use kubelet::state::prelude::*;
-use log::info;
+use log::{debug, error, info};
 
 use crate::provider::PodState;
 
@@ -12,8 +13,31 @@ pub struct Terminated {
 #[async_trait::async_trait]
 impl State<PodState> for Terminated {
     async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
-        info!("Service {} was terminated!", &pod_state.service_name);
-        Transition::Complete(Ok(()))
+        info!(
+            "Pod {} was terminated, stopping process!",
+            &pod_state.service_name
+        );
+        // Obtain a mutable reference to the process handle
+        let child = if let Some(testproc) = pod_state.process_handle.as_mut() {
+            testproc
+        } else {
+            return Transition::Complete(Err(anyhow!("Unable to retrieve process handle")));
+        };
+
+        return match child.kill() {
+            Ok(()) => {
+                debug!("Successfully killed process {}", pod_state.service_name);
+                Transition::Complete(Ok(()))
+            }
+            Err(e) => {
+                error!(
+                    "Failed to stop process with pid {} due to: {:?}",
+                    child.id(),
+                    e
+                );
+                Transition::Complete(Err(anyhow::Error::new(e)))
+            }
+        };
     }
 
     async fn json_status(
