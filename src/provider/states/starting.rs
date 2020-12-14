@@ -65,9 +65,11 @@ impl State<PodState> for Starting {
                         .map(|env_var| {
                             (
                                 String::from(&env_var.name),
-                                String::from(
+                                CreatingConfig::render_config_template(
+                                    &template_data,
                                     &env_var.value.clone().unwrap_or_else(|| String::from("")),
-                                ),
+                                )
+                                .unwrap_or(String::from("")),
                             )
                         })
                         .collect::<Vec<_>>()
