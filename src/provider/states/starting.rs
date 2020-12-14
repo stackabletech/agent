@@ -56,23 +56,37 @@ impl State<PodState> for Starting {
                     "Starting command: {:?} with arguments {:?}",
                     binary, os_args
                 );
+
+                // Check if environment variables were stated for the container
                 let env_variables = if let Some(vars) = container.env() {
                     debug!(
                         "Got environment vars: {:?} service {}",
                         vars, pod_state.service_name
                     );
-                    vars.iter()
+                    match vars
+                        .iter()
                         .map(|env_var| {
-                            (
-                                String::from(&env_var.name),
-                                CreatingConfig::render_config_template(
-                                    &template_data,
-                                    &env_var.value.clone().unwrap_or_else(|| String::from("")),
-                                )
-                                .unwrap_or(String::from("")),
-                            )
+                            let name = String::from(&env_var.name);
+                            let value_result = CreatingConfig::render_config_template(
+                                &template_data,
+                                &env_var.value.clone().unwrap_or_else(|| String::from("")),
+                            );
+                            match value_result {
+                                Ok(value) => Ok((name, value)),
+                                Err(error) => Err(error),
+                            }
                         })
-                        .collect::<Vec<_>>()
+                        .collect()
+                    {
+                        // All variables were rendered correctly, continue
+                        Ok(rendered_value) => rendered_value,
+                        // One or more variables failed to render, transition this pod to a failed
+                        // state
+                        Err(error) => {
+                            error!("Failed to render value for env var due to: {:?}", error);
+                            return Transition::Complete(Err(anyhow::Error::from(error)));
+                        }
+                    }
                 } else {
                     debug!(
                         "No environment vars set for service {}",
