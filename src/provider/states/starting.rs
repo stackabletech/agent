@@ -57,37 +57,42 @@ impl State<PodState> for Starting {
                     binary, os_args
                 );
 
-                // Check if environment variables were stated for the container
+                // Check if environment variables are set on the container - if some are present
+                // we render all values as templates to replace configroot, packageroot and logroot
+                // directories in case they are referenced in the values
+                //
+                // If even one of these renderings fails the entire pod will be failed and
+                // transitioned to a complete state with the error that occurred.
+                // If all renderings work, the vec<(String,String)> is returned as value and used
+                // later when starting the process
                 let env_variables = if let Some(vars) = container.env() {
                     debug!(
                         "Got environment vars: {:?} service {}",
                         vars, pod_state.service_name
                     );
-                    match vars
+                    let render_result = vars
                         .iter()
                         .map(|env_var| {
-                            let name = String::from(&env_var.name);
-                            let value_result = CreatingConfig::render_config_template(
+                            // Replace variables in value
+                            CreatingConfig::render_config_template(
                                 &template_data,
-                                &env_var.value.clone().unwrap_or_else(|| String::from("")),
-                            );
-                            match value_result {
-                                Ok(value) => Ok((name, value)),
-                                Err(error) => Err(error),
-                            }
+                                &env_var.value.as_deref().unwrap_or_default(),
+                            )
+                            .map(|value| (&env_var.name, value))
                         })
-                        .collect()
-                    {
-                        // All variables were rendered correctly, continue
-                        Ok(rendered_value) => rendered_value,
-                        // One or more variables failed to render, transition this pod to a failed
-                        // state
+                        .collect();
+
+                    // If any single rendering failed, the overall result for the map will have
+                    // collected the Err which we can check for here
+                    match render_result {
+                        Ok(rendered_values) => rendered_values,
                         Err(error) => {
                             error!("Failed to render value for env var due to: {:?}", error);
                             return Transition::Complete(Err(anyhow::Error::from(error)));
                         }
                     }
                 } else {
+                    // No environment variables present for this container -> empty vec
                     debug!(
                         "No environment vars set for service {}",
                         pod_state.service_name
