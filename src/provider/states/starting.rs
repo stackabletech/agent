@@ -65,6 +65,11 @@ impl State<PodState> for Starting {
                 // transitioned to a complete state with the error that occurred.
                 // If all renderings work, the vec<(String,String)> is returned as value and used
                 // later when starting the process
+                // This works because Result implements
+                // (FromIterator)[https://doc.rust-lang.org/std/result/enum.Result.html#method.from_iter]
+                // which returns a Result that is Ok(..) if none of the internal results contained
+                // an Error. If any error occurred, iteration stops on the first error and returns
+                // that in the outer result.
                 let env_variables = if let Some(vars) = container.env() {
                     debug!(
                         "Got environment vars: {:?} service {}",
