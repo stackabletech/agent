@@ -37,34 +37,11 @@ pub fn make_status_with_containers_and_condition(
 ) -> serde_json::Value {
     serde_json::json!(
        {
-           "metadata": {
-               "resourceVersion": "",
-           },
            "status": {
                "phase": phase,
                "reason": reason,
                "containerStatuses": container_statuses,
                "initContainerStatuses": init_container_statuses,
-               "conditions": pod_conditions
-           }
-       }
-    )
-}
-
-/// Create basic Pod status patch.
-pub fn make_status_with_condition(
-    phase: Phase,
-    reason: &str,
-    pod_conditions: Vec<KubePodCondition>,
-) -> serde_json::Value {
-    serde_json::json!(
-       {
-           "metadata": {
-               "resourceVersion": "",
-           },
-           "status": {
-               "phase": phase,
-               "reason": reason,
                "conditions": pod_conditions
            }
        }
