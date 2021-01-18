@@ -3,13 +3,14 @@ use std::ffi::OsString;
 
 use kube::config::Config as KubeConfig;
 use kube::config::KubeConfigOptions;
-use kubelet::config::Config;
+use kubelet::config::{Config, ServerConfig};
 use kubelet::Kubelet;
 use log::{info, warn};
 use stackable_config::ConfigBuilder;
 
 use crate::agentconfig::AgentConfig;
 use crate::provider::StackableProvider;
+use std::path::PathBuf;
 
 mod agentconfig;
 mod provider;
@@ -46,19 +47,40 @@ async fn main() -> anyhow::Result<()> {
 
     export_env("NODE_LABELS", &node_labels);
 
-    if let Some(cert_file_path) = agent_config.server_cert_file {
+    if let Some(cert_file_path) = &agent_config.server_cert_file {
         export_env("KRUSTLET_CERT_FILE", cert_file_path.to_str().unwrap());
     } else {
         warn!("Not exporting server cert file path, as non was specified that could be converted to a String.");
     }
 
-    if let Some(key_file_path) = agent_config.server_key_file {
+    if let Some(key_file_path) = &agent_config.server_key_file {
         export_env("KRUSTLET_PRIVATE_KEY_FILE", key_file_path.to_str().unwrap());
     } else {
         warn!("Not exporting server key file path, as non was specified that could be converted to a String.");
     }
     info!("args: {:?}", env::args());
-    let krustlet_config = Config::new_from_flags(env!("CARGO_PKG_VERSION"));
+
+    let krustlet_config_comp = Config::new_from_flags(env!("CARGO_PKG_VERSION"));
+    let server_config = ServerConfig {
+        addr: agent_config.server_ip_address.clone(),
+        port: agent_config.server_port,
+        cert_file: agent_config.server_cert_file.unwrap_or(Default::default()),
+        private_key_file: agent_config.server_key_file.unwrap_or(Default::default()),
+    };
+
+    let krustlet_config = Config {
+        node_ip: agent_config.server_ip_address.clone(),
+        hostname: agent_config.hostname.clone(),
+        node_name: agent_config.hostname.clone(),
+        server_config,
+        data_dir: PathBuf::from("/home/sliebau/.krustlet"),
+        node_labels: agent_config.tags,
+        max_pods: 0,
+        bootstrap_file: PathBuf::from("/etc/kubernetes/bootstrap-kubelet.conf"),
+        allow_local_modules: false,
+        insecure_registries: None,
+        plugins_dir: PathBuf::from("/home/sliebau/.krustlet/plugins"),
+    };
 
     let kubeconfig = KubeConfig::from_kubeconfig(&KubeConfigOptions::default())
         .await

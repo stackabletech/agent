@@ -19,16 +19,49 @@ pub enum AgentConfigError {
 
 #[derive(Clone)]
 pub struct AgentConfig {
+    pub hostname: String,
     pub parcel_directory: PathBuf,
     pub config_directory: PathBuf,
     pub log_directory: PathBuf,
     pub server_ip_address: IpAddr,
+    pub server_port: u16,
     pub server_cert_file: Option<PathBuf>,
     pub server_key_file: Option<PathBuf>,
     pub tags: HashMap<String, String>,
 }
 
 impl AgentConfig {
+    pub const HOSTNAME: ConfigOption = ConfigOption {
+        name: "hostname",
+        default: None,
+        required: false,
+        takes_argument: true,
+        help:
+            "The hostname to register the node under in Kubernetes - defaults to system hostname.",
+        documentation: "",
+        list: false,
+    };
+
+    pub const DATA_DIR: ConfigOption = ConfigOption {
+        name: "datadir",
+        default: Some("/etc/stackable-agent"),
+        required: false,
+        takes_argument: true,
+        help: "The directory where the stackable agent should keep its working data.",
+        documentation: "",
+        list: false,
+    };
+
+    pub const PLUGIN_DIR: ConfigOption = ConfigOption {
+        name: "plugindir",
+        default: Some("/etc/stackable-agent/plugins"),
+        required: false,
+        takes_argument: true,
+        help: "The directory to observe for new sockets to appear which can be used to communicate with CSI plugins.",
+        documentation: "",
+        list: false,
+    };
+
     pub const SERVER_IP_ADDRESS: ConfigOption = ConfigOption {
         name: "server-bind-ip",
         default: None,
@@ -56,6 +89,16 @@ impl AgentConfig {
         takes_argument: true,
         help:
             "Private key file (in PKCS8 format) to use for the local webserver the Krustlet starts.",
+        documentation: "",
+        list: false,
+    };
+
+    pub const SERVER_PORT: ConfigOption = ConfigOption {
+        name: "server-port",
+        default: Some("3000"),
+        required: false,
+        takes_argument: true,
+        help: "Port to listen on for callbacks.",
         documentation: "",
         list: false,
     };
@@ -125,9 +168,13 @@ scheme of \"productname-productversion\".
 
     fn get_options() -> HashSet<ConfigOption> {
         [
+            AgentConfig::HOSTNAME,
+            AgentConfig::DATA_DIR,
+            AgentConfig::PLUGIN_DIR,
             AgentConfig::SERVER_IP_ADDRESS,
             AgentConfig::SERVER_CERT_FILE,
             AgentConfig::SERVER_KEY_FILE,
+            AgentConfig::SERVER_PORT,
             AgentConfig::PACKAGE_DIR,
             AgentConfig::CONFIG_DIR,
             AgentConfig::LOG_DIR,
@@ -201,6 +248,12 @@ scheme of \"productname-productversion\".
         };
         None
     }
+
+    fn default_hostname() -> anyhow::Result<String> {
+        Ok(hostname::get()?
+            .into_string()
+            .map_err(|_| anyhow::anyhow!("invalid utf-8 hostname string"))?)
+    }
 }
 
 impl Configurable for AgentConfig {
@@ -216,6 +269,14 @@ impl Configurable for AgentConfig {
     fn parse_values(
         parsed_values: HashMap<ConfigOption, Option<Vec<String>>, RandomState>,
     ) -> Result<Self, anyhow::Error> {
+        // Parse hostname or lookup local hostname
+        let final_hostname =
+            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::HOSTNAME)
+                .unwrap_or_else(|_| {
+                    AgentConfig::default_hostname()
+                        .unwrap_or_else(|_| panic!("Unable to get hostname!"))
+                });
+
         // Parse IP Address or lookup default
         let final_ip = if let Ok(ip) =
             AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::SERVER_IP_ADDRESS)
@@ -227,6 +288,14 @@ impl Configurable for AgentConfig {
                 .expect("Error getting default ip address, please specify it explicitly!")
         };
         info!("Selected {} as local address to listen on.", final_ip);
+
+        // Parse data directory from values
+        let final_data_dir = if let Ok(data_dir) =
+        AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::DATA_DIR)
+        {
+            PathBuf::from_str(&data_dir).unwrap_or_else(|_| {panic!("Error parsing valid data directory from string: {}", data_dir)})
+        }
+        // Parse plugin directory from values
 
         // Parse log directory
         let final_log_dir = if let Ok(log_dir) =
@@ -310,6 +379,18 @@ impl Configurable for AgentConfig {
             None
         };
 
+        let mut final_port = if let Ok(server_port) =
+            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::SERVER_PORT)
+        {
+            u16::from_str(&server_port)
+                .unwrap_or_else(|_| panic!("Error parsing webserver port from [{}], aborting."))
+        } else {
+            // This should not be necessary, as the default should be provided by clap,
+            // it is more _just in case_
+            u16::from_str(&AgentConfig::SERVER_PORT.default.unwrap_or("3000"))
+                .unwrap_or_else(|_| panic!("Error parsing webserver port from [{}], aborting."))
+        };
+
         let mut final_tags: HashMap<String, String> = HashMap::new();
         if let Some(Some(tags)) = parsed_values.get(&AgentConfig::TAG) {
             for tag in tags {
@@ -330,10 +411,12 @@ impl Configurable for AgentConfig {
         }
 
         Ok(AgentConfig {
+            hostname: final_hostname,
             parcel_directory: final_parcel_dir,
             config_directory: final_config_dir,
             log_directory: final_log_dir,
             server_ip_address: final_ip,
+            server_port: final_port,
             server_cert_file: final_server_cert_file,
             server_key_file: final_server_key_file,
             tags: final_tags,

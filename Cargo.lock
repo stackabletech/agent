@@ -2552,6 +2552,7 @@ dependencies = [
  "env_logger",
  "flate2",
  "handlebars",
+ "hostname",
  "k8s-openapi",
  "kube",
  "kube-derive",

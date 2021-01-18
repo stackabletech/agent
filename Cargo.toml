@@ -30,3 +30,4 @@ thiserror = "1.0"
 url = "2.2"
 pnet = "0.26.0"
 stackable_config = { git = "https://github.com/stackabletech/common.git", branch = "main" }
+hostname = "0.3"
