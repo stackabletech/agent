@@ -1,0 +1,5 @@
+This directory will serve as starting point for all log files which this service creates.
+Every service will get its own subdirectory created within this directory.
+Anything that is then specified in the log4j config or similar files will be resolved relatively to this directory.
+
+The agent will need full access to this directory and tries to create it if it does not exist.

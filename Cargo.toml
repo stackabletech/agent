@@ -10,7 +10,6 @@ edition = "2018"
 # We will look to move this to officially released versions as soon as possible
 kubelet = { git="https://github.com/deislabs/krustlet.git", rev="ac218b38ba564de806568e49d9e38aaef9f41537", default-features = true, features= ["derive", "cli"] }
 oci-distribution = { git="https://github.com/deislabs/krustlet.git", rev="ac218b38ba564de806568e49d9e38aaef9f41537"}
-
 k8s-openapi = { version = "0.9", default-features = false, features = ["v1_18"] }
 kube = { version= "0.42", default-features = false, features = ["native-tls"] }
 kube-derive = "0.43"

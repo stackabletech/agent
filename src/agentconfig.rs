@@ -23,6 +23,9 @@ pub struct AgentConfig {
     pub parcel_directory: PathBuf,
     pub config_directory: PathBuf,
     pub log_directory: PathBuf,
+    pub bootstrap_file: PathBuf,
+    pub data_directory: PathBuf,
+    pub plugin_directory: PathBuf,
     pub server_ip_address: IpAddr,
     pub server_port: u16,
     pub server_cert_file: Option<PathBuf>,
@@ -38,27 +41,37 @@ impl AgentConfig {
         takes_argument: true,
         help:
             "The hostname to register the node under in Kubernetes - defaults to system hostname.",
-        documentation: "",
+        documentation: include_str!("config_documentation/hostname.adoc"),
         list: false,
     };
 
     pub const DATA_DIR: ConfigOption = ConfigOption {
-        name: "datadir",
-        default: Some("/etc/stackable-agent"),
+        name: "data-directory",
+        default: Some("/etc/stackable/agent"),
         required: false,
         takes_argument: true,
         help: "The directory where the stackable agent should keep its working data.",
-        documentation: "",
+        documentation: include_str!("config_documentation/data_directory.adoc"),
         list: false,
     };
 
     pub const PLUGIN_DIR: ConfigOption = ConfigOption {
-        name: "plugindir",
-        default: Some("/etc/stackable-agent/plugins"),
+        name: "plugin-directory",
+        default: Some("/etc/stackable/agent/plugins"),
         required: false,
         takes_argument: true,
         help: "The directory to observe for new sockets to appear which can be used to communicate with CSI plugins.",
-        documentation: "",
+        documentation: include_str!("config_documentation/plugin_directory.adoc"),
+        list: false,
+    };
+
+    pub const BOOTSTRAP_FILE: ConfigOption = ConfigOption {
+        name: "bootstrap-file",
+        default: Some("/etc/kubernetes/bootstrap-kubelet.conf"),
+        required: false,
+        takes_argument: true,
+        help: "The bootstrap file to use in case Kubernetes bootstraping is used to add the agent.",
+        documentation: include_str!("config_documentation/bootstrap_file.adoc"),
         list: false,
     };
 
@@ -68,7 +81,7 @@ impl AgentConfig {
         required: false,
         takes_argument: true,
         help: "The local IP to register as the node's ip with the apiserver. Will be automatically set to the first address of the first non-loopback interface if not specified.",
-        documentation: "",
+        documentation: include_str!("config_documentation/server_ip_address.adoc"),
         list: false,
     };
 
@@ -78,7 +91,7 @@ impl AgentConfig {
         required: false,
         takes_argument: true,
         help: "The certificate file for the local webserver which the Krustlet starts.",
-        documentation: "",
+        documentation: include_str!("config_documentation/server_cert_file.adoc"),
         list: false,
     };
 
@@ -89,7 +102,7 @@ impl AgentConfig {
         takes_argument: true,
         help:
             "Private key file (in PKCS8 format) to use for the local webserver the Krustlet starts.",
-        documentation: "",
+        documentation: include_str!("config_documentation/server_key_file.adoc"),
         list: false,
     };
 
@@ -99,7 +112,7 @@ impl AgentConfig {
         required: false,
         takes_argument: true,
         help: "Port to listen on for callbacks.",
-        documentation: "",
+        documentation: include_str!("config_documentation/server_port.adoc"),
         list: false,
     };
 
@@ -109,12 +122,7 @@ impl AgentConfig {
         required: false,
         takes_argument: true,
         help: "The base directory under which installed packages will be stored.",
-        documentation: "This directory will serve as starting point for packages that are needed by \
-        pods assigned to this node.\n Packages will be downloaded into the \"_download\" folder at the
-top level of this folder as archives and remain there for potential future use.\n\
-        Archives will the be extracted directly into this folder in subdirectories following the naming
-scheme of \"productname-productversion\".
-        The agent will need full access to this directory and tries to create it if it does not exist.",
+        documentation: include_str!("config_documentation/package_directory.adoc"),
         list: false,
     };
 
@@ -124,12 +132,7 @@ scheme of \"productname-productversion\".
         required: false,
         takes_argument: true,
         help: "The base directory under which configuration will be generated for all executed services.",
-        documentation: "This directory will serve as starting point for all log files which this service creates.\
-        Every service will get its own subdirectories created within this directory - for every service start a \
-        new subdirectory will be created to show a full history of configuration that was used for this service.\n
-        ConfigMaps that are mounted into the pod that describes this service will be created relative to these run \
-        directories - unless the mounts specify an absolute path, in which case it is allowed to break out of this directory.\n\n\
-        The agent will need full access to this directory and tries to create it if it does not exist.",        
+        documentation: include_str!("config_documentation/config_directory.adoc"),        
         list: false,
     };
 
@@ -139,10 +142,7 @@ scheme of \"productname-productversion\".
         required: false,
         takes_argument: true,
         help: "The base directory under which log files will be placed for all services.",
-        documentation: "This directory will serve as starting point for all log files which this service creates.\
-        Every service will get its own subdirectory created within this directory.\n
-        Anything that is then specified in the log4j config or similar files will be resolved relatively to this directory.\n\n\
-        The agent will need full access to this directory and tries to create it if it does not exist.",
+        documentation: include_str!("config_documentation/log_directory.adoc"),
         list: false,
     };
 
@@ -152,7 +152,7 @@ scheme of \"productname-productversion\".
         required: false,
         takes_argument: false,
         help: "If this option is specified, any file referenced in AGENT_CONF environment variable will be ignored.",
-        documentation: "",
+        documentation: include_str!("config_documentation/no_config.adoc"),
         list: false,
     };
 
@@ -162,7 +162,7 @@ scheme of \"productname-productversion\".
         required: false,
         takes_argument: true,
         help: "A \"key=value\" pair that should be assigned to this agent as tag. This can be specified multiple times to assign additional tags.",
-        documentation: "Tags are the main way of identifying nodes to assign services to later on.",
+        documentation: include_str!("config_documentation/tags.adoc"),
         list: true
     };
 
@@ -291,11 +291,48 @@ impl Configurable for AgentConfig {
 
         // Parse data directory from values
         let final_data_dir = if let Ok(data_dir) =
-        AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::DATA_DIR)
+            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::DATA_DIR)
         {
-            PathBuf::from_str(&data_dir).unwrap_or_else(|_| {panic!("Error parsing valid data directory from string: {}", data_dir)})
-        }
+            PathBuf::from_str(&data_dir).unwrap_or_else(|_| {
+                panic!(
+                    "Error parsing valid data directory from string: {}",
+                    data_dir
+                )
+            })
+        } else {
+            // Should not happen due to default value being assigned to the parameter
+            PathBuf::from("")
+        };
+
+        // Parse bootstrap file from values
+        let final_bootstrap_file = if let Ok(bootstrap_file) =
+            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::BOOTSTRAP_FILE)
+        {
+            PathBuf::from_str(&bootstrap_file).unwrap_or_else(|_| {
+                panic!(
+                    "Error parsing valid data directory from string: {}",
+                    bootstrap_file
+                )
+            })
+        } else {
+            // Should not happen due to default value being assigned to the parameter
+            PathBuf::from("")
+        };
+
         // Parse plugin directory from values
+        let final_plugin_dir = if let Ok(plugin_dir) =
+            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::PLUGIN_DIR)
+        {
+            PathBuf::from_str(&plugin_dir).unwrap_or_else(|_| {
+                panic!(
+                    "Error parsing valid plugin directory from string: {}",
+                    plugin_dir
+                )
+            })
+        } else {
+            // Should not happen due to default value being assigned to the parameter
+            PathBuf::from("")
+        };
 
         // Parse log directory
         let final_log_dir = if let Ok(log_dir) =
@@ -414,7 +451,10 @@ impl Configurable for AgentConfig {
             hostname: final_hostname,
             parcel_directory: final_parcel_dir,
             config_directory: final_config_dir,
+            data_directory: final_data_dir,
+            plugin_directory: final_plugin_dir,
             log_directory: final_log_dir,
+            bootstrap_file: final_bootstrap_file,
             server_ip_address: final_ip,
             server_port: final_port,
             server_cert_file: final_server_cert_file,

@@ -73,13 +73,14 @@ async fn main() -> anyhow::Result<()> {
         hostname: agent_config.hostname.clone(),
         node_name: agent_config.hostname.clone(),
         server_config,
-        data_dir: PathBuf::from("/home/sliebau/.krustlet"),
+        data_dir: agent_config.data_directory,
+        plugins_dir: agent_config.plugin_directory,
         node_labels: agent_config.tags,
-        max_pods: 0,
+        // TODO: Discuss whether we want this configurable or leave it at a high number for now
+        max_pods: 110,
         bootstrap_file: PathBuf::from("/etc/kubernetes/bootstrap-kubelet.conf"),
         allow_local_modules: false,
         insecure_registries: None,
-        plugins_dir: PathBuf::from("/home/sliebau/.krustlet/plugins"),
     };
 
     let kubeconfig = KubeConfig::from_kubeconfig(&KubeConfigOptions::default())
