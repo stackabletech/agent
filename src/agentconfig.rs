@@ -67,10 +67,10 @@ impl AgentConfig {
         takes_argument: true,
         help: "The base directory under which installed packages will be stored.",
         documentation: "This directory will serve as starting point for packages that are needed by \
-        pods assigned to this node.\n Packages will be downloaded into the \"_download\" folder at the
-top level of this folder as archives and remain there for potential future use.\n\
-        Archives will the be extracted directly into this folder in subdirectories following the naming
-scheme of \"productname-productversion\".
+        pods assigned to this node.\n Packages will be downloaded into the \"_download\" folder at the\
+        top level of this folder as archives and remain there for potential future use.\n\
+        Archives will the be extracted directly into this folder in subdirectories following the naming\
+        scheme of \"productname-productversion\".
         The agent will need full access to this directory and tries to create it if it does not exist.",
         list: false,
     };
@@ -83,7 +83,7 @@ scheme of \"productname-productversion\".
         help: "The base directory under which configuration will be generated for all executed services.",
         documentation: "This directory will serve as starting point for all log files which this service creates.\
         Every service will get its own subdirectories created within this directory - for every service start a \
-        new subdirectory will be created to show a full history of configuration that was used for this service.\n
+        new subdirectory will be created to show a full history of configuration that was used for this service.\n\
         ConfigMaps that are mounted into the pod that describes this service will be created relative to these run \
         directories - unless the mounts specify an absolute path, in which case it is allowed to break out of this directory.\n\n\
         The agent will need full access to this directory and tries to create it if it does not exist.",        
@@ -97,7 +97,7 @@ scheme of \"productname-productversion\".
         takes_argument: true,
         help: "The base directory under which log files will be placed for all services.",
         documentation: "This directory will serve as starting point for all log files which this service creates.\
-        Every service will get its own subdirectory created within this directory.\n
+        Every service will get its own subdirectory created within this directory.\n\
         Anything that is then specified in the log4j config or similar files will be resolved relatively to this directory.\n\n\
         The agent will need full access to this directory and tries to create it if it does not exist.",
         list: false,
@@ -201,10 +201,49 @@ scheme of \"productname-productversion\".
         };
         None
     }
+
+    pub fn get_documentation() -> Result<String, AgentConfigError> {
+        let mut doc_string = String::new();
+        for option in AgentConfig::get_options() {
+            doc_string.push_str(&format!("\n\n\n### {}\n\n", option.name));
+            doc_string.push_str(&format!(
+                "*Default value*: {}\n\n",
+                option.default.unwrap_or("No default value")
+            ));
+            doc_string.push_str(&format!("*Required*: {}\n\n", option.required));
+            doc_string.push_str(&format!("*Multiple values:*: {}\n\n\n", option.list));
+
+            // We have not yet specified a documentation string for all options, as an interim
+            // solution we use the help string for the docs, if no proper doc has been written yet.
+            if option.documentation.is_empty() {
+                doc_string.push_str(&option.help);
+            } else {
+                doc_string.push_str(&option.documentation);
+            }
+        }
+        Ok(doc_string)
+    }
+
+    fn gen_docs() {
+        // TODO: this needs to be moved to a build.rs type of thing
+        use std::env;
+        use std::fs;
+        use std::path::PathBuf;
+
+        let target_file = PathBuf::from("config/commandline_args.adoc");
+
+        // We have unwraps in here, as this is supposed to be called during the build process,
+        // it shouldn't even be part of the codebase itself.
+        // Once this is moved out the unwraps are fine, because a failure during build is ok if
+        // something is wrong.
+        let test = AgentConfig::get_documentation().unwrap();
+        fs::write(&target_file, test).unwrap();
+    }
 }
 
 impl Configurable for AgentConfig {
     fn get_config_description() -> Configuration {
+        AgentConfig::gen_docs();
         Configuration {
             name: "Stackable Agent",
             version: "0.1",
