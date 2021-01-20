@@ -60,7 +60,6 @@ async fn main() -> anyhow::Result<()> {
     }
     info!("args: {:?}", env::args());
 
-    let krustlet_config_comp = Config::new_from_flags(env!("CARGO_PKG_VERSION"));
     let server_config = ServerConfig {
         addr: agent_config.server_ip_address.clone(),
         port: agent_config.server_port,
@@ -78,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
         node_labels: agent_config.tags,
         // TODO: Discuss whether we want this configurable or leave it at a high number for now
         max_pods: 110,
-        bootstrap_file: PathBuf::from("/etc/kubernetes/bootstrap-kubelet.conf"),
+        bootstrap_file: agent_config.bootstrap_file,
         allow_local_modules: false,
         insecure_registries: None,
     };
