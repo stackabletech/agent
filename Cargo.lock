@@ -1041,6 +1041,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "indoc"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5a75aeaaef0ce18b58056d306c27b07436fbb34b8816c53094b76dd81803136"
+dependencies = [
+ "unindent",
+]
+
+[[package]]
 name = "inotify"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2249,6 +2258,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rstest"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dec448bc157977efdc0a71369cf923915b0c4806b1b2449c3fb011071d6f7c38"
+dependencies = [
+ "cfg-if 0.1.10",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
+ "syn",
+]
+
+[[package]]
 name = "rust-argon2"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2552,6 +2574,7 @@ dependencies = [
  "env_logger",
  "flate2",
  "handlebars",
+ "indoc",
  "k8s-openapi",
  "kube",
  "kube-derive",
@@ -2560,9 +2583,11 @@ dependencies = [
  "oci-distribution",
  "pnet",
  "reqwest",
+ "rstest",
  "serde",
  "serde_derive",
  "serde_json",
+ "serde_yaml",
  "stackable_config",
  "tar",
  "thiserror",
@@ -3360,6 +3385,12 @@ name = "unicode-xid"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7fe0bb3479651439c9112f72b6c505038574c9fbb575ed1bf3b797fa39dd564"
+
+[[package]]
+name = "unindent"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f14ee04d9415b52b3aeab06258a3f07093182b88ba0f9b8d203f211a7a7d41c7"
 
 [[package]]
 name = "untrusted"

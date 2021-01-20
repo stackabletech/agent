@@ -1,10 +1,9 @@
 use std::convert::TryFrom;
 use std::fmt;
 
+use anyhow::{anyhow, Result};
 use oci_distribution::Reference;
 use serde::{Deserialize, Serialize};
-
-use crate::provider::error::StackableError;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Package {
@@ -31,15 +30,18 @@ impl Package {
 }
 
 impl TryFrom<Reference> for Package {
-    type Error = StackableError;
+    type Error = anyhow::Error;
 
     // Converts from an oci reference to a package representation
     // The oci tag (anything after the \":\" in the string) is used as
     // version by this code and needs to be present
-    fn try_from(value: Reference) -> Result<Self, Self::Error> {
+    fn try_from(value: Reference) -> Result<Self> {
+        let repository = value.repository();
+        let tag = value.tag().ok_or(anyhow!("Tag is required."))?;
+
         Ok(Package {
-            product: String::from(value.repository()),
-            version: String::from(value.tag().unwrap()),
+            product: String::from(repository),
+            version: String::from(tag),
         })
     }
 }
@@ -47,5 +49,37 @@ impl TryFrom<Reference> for Package {
 impl fmt::Display for Package {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.product, self.version)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn try_from_complete_reference() {
+        let reference = Reference::try_from("kafka:2.7").expect("Reference cannot be parsed.");
+
+        let maybe_package = Package::try_from(reference);
+
+        if let Ok(package) = maybe_package {
+            assert_eq!("kafka", package.product);
+            assert_eq!("2.7", package.version);
+        } else {
+            panic!("Package expected but got {:?}", maybe_package);
+        }
+    }
+
+    #[test]
+    fn try_from_reference_without_tag() {
+        let reference = Reference::try_from("kafka").expect("Reference cannot be parsed.");
+
+        let maybe_package = Package::try_from(reference);
+
+        if let Err(error) = maybe_package {
+            assert_eq!("Tag is required.", error.to_string());
+        } else {
+            panic!("Error expected but got {:?}", maybe_package);
+        }
     }
 }
