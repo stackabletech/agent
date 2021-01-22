@@ -9,7 +9,7 @@ Instead components are installed locally on the host filesystem and executed via
 This allows using the fabulous orchestration options offered by Kubernetes to describe the necessary infrastructure while leaving aside the extra overhead and complexity that are added by running services in containers.
 Additionally, as we are already using a Kubernetes cluster, this will fairly easily allow defining hybrid scenarios where some services run on pure Kubernetes and others are orchestrated on bare-metal.
 
-The agent in principle behaves similar to a  https://github.com/virtual-kubelet/virtual-kubelet[virtual kubelet], but is not implemented using the virtual kubelet framework.
+The agent in principle behaves similar to a https://github.com/virtual-kubelet/virtual-kubelet[virtual kubelet], but is not implemented using the virtual kubelet framework.
 Instead it is based on the https://github.com/deislabs/krustlet[Krustlet], which is under active development by Microsoft.
 
 More specifically the functionality of this agent closely resembles that of https://github.com/virtual-kubelet/systemk[systemk].
@@ -17,7 +17,7 @@ The reason why both projects currently exist is simply that systemk was not arou
 
 We are currently evaluating whether or not we should instead use systemk and contribute to that project instead of building our own agent under issue
 
-The agent registers itself as a node with a kube-apiserver will be considered by the Kubernetes scheduler for workloads (pods).
+The agent registers itself as a node with a kube-apiserver and will be considered by the Kubernetes scheduler for workloads (pods).
 To avoid _normal_ Kubernetes pods being scheduled on the Stackable agent (it would not know what to do with these) the agent assigns the following taints to its node object:
 
 |===
