@@ -30,3 +30,8 @@ url = "2.2"
 pnet = "0.26.0"
 stackable_config = { git = "https://github.com/stackabletech/common.git", branch = "main" }
 hostname = "0.3"
+
+[dev-dependencies]
+indoc = "1.0"
+rstest = "0.6"
+serde_yaml = "0.8"
