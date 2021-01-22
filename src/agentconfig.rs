@@ -28,7 +28,6 @@ pub struct AgentConfig {
     pub log_directory: PathBuf,
     pub bootstrap_file: PathBuf,
     pub data_directory: PathBuf,
-    pub plugin_directory: PathBuf,
     pub server_ip_address: IpAddr,
     pub server_port: u16,
     pub server_cert_file: Option<PathBuf>,
@@ -55,16 +54,6 @@ impl AgentConfig {
         takes_argument: true,
         help: "The directory where the stackable agent should keep its working data.",
         documentation: include_str!("config_documentation/data_directory.adoc"),
-        list: false,
-    };
-
-    pub const PLUGIN_DIR: ConfigOption = ConfigOption {
-        name: "plugin-directory",
-        default: Some("/etc/stackable/agent/plugins"),
-        required: false,
-        takes_argument: true,
-        help: "The directory to observe for new sockets to appear which can be used to communicate with CSI plugins.",
-        documentation: include_str!("config_documentation/plugin_directory.adoc"),
         list: false,
     };
 
@@ -173,7 +162,6 @@ impl AgentConfig {
         [
             AgentConfig::HOSTNAME,
             AgentConfig::DATA_DIR,
-            AgentConfig::PLUGIN_DIR,
             AgentConfig::SERVER_IP_ADDRESS,
             AgentConfig::SERVER_CERT_FILE,
             AgentConfig::SERVER_KEY_FILE,
@@ -344,15 +332,6 @@ impl Configurable for AgentConfig {
             &AgentConfig::BOOTSTRAP_FILE,
             error_list.as_mut(),
         );
-        debug!("bootstrapfile: {:?}", final_bootstrap_file);
-
-        // Parse plugin directory from values
-        let final_plugin_dir = AgentConfig::get_with_default(
-            &parsed_values,
-            &AgentConfig::PLUGIN_DIR,
-            error_list.as_mut(),
-        );
-        debug!("plugindir: {:?}", final_plugin_dir);
 
         // Parse log directory
         let final_log_dir = AgentConfig::get_with_default(
@@ -446,7 +425,6 @@ impl Configurable for AgentConfig {
             parcel_directory: final_package_dir.unwrap(),
             config_directory: final_config_dir.unwrap(),
             data_directory: final_data_dir.unwrap(),
-            plugin_directory: final_plugin_dir.unwrap(),
             log_directory: final_log_dir.unwrap(),
             bootstrap_file: final_bootstrap_file.unwrap(),
             server_ip_address: final_ip,
