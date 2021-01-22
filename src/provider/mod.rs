@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Child;
 
+use anyhow::anyhow;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{Api, Client};
 use kubelet::backoff::ExponentialBackoffStrategy;
@@ -87,23 +88,23 @@ impl StackableProvider {
     }
 
     fn get_package(pod: &Pod) -> Result<Package, StackableError> {
-        let containers = pod.containers();
-        return if containers.len().ne(&1) {
-            let e = PodValidationError {
-                msg: String::from("Size of containers list in PodSpec has to be exactly 1"),
-            };
-            Err(e)
+        if let Some((container, [])) = pod.containers().split_first() {
+            container
+                .image()
+                .and_then(|maybe_ref| maybe_ref.ok_or_else(|| anyhow!("Image is required.")))
+                .and_then(Package::try_from)
+                .map_err(|err| PodValidationError {
+                    msg: format!(
+                        "Unable to get package reference from pod [{}]: {}",
+                        &pod.name(),
+                        &err
+                    ),
+                })
         } else {
-            // List has exactly one value, try to parse this
-            if let Ok(Some(reference)) = containers[0].image() {
-                Package::try_from(reference)
-            } else {
-                let e = PodValidationError {
-                    msg: format!("Unable to get package reference from pod: {}", &pod.name()),
-                };
-                Err(e)
-            }
-        };
+            Err(PodValidationError {
+                msg: String::from("Only one container is supported in the PodSpec."),
+            })
+        }
     }
 
     async fn check_crds(&self) -> Result<Vec<String>, StackableError> {
@@ -204,5 +205,91 @@ impl Provider for StackableProvider {
         _sender: Sender,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use indoc::indoc;
+    use rstest::rstest;
+
+    #[test]
+    fn try_to_get_package_from_complete_configuration() {
+        let pod = parse_pod_from_yaml(indoc! {"
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: test
+            spec:
+              containers:
+              - name: kafka
+                image: kafka:2.7
+        "});
+
+        let maybe_package = StackableProvider::get_package(&pod);
+
+        if let Ok(package) = maybe_package {
+            assert_eq!("kafka", package.product);
+            assert_eq!("2.7", package.version);
+        } else {
+            panic!("Package expected but got {:?}", maybe_package);
+        }
+    }
+
+    #[rstest(pod_config, expected_err,
+        case(indoc! {"
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: test
+                spec:
+                  containers:
+                  - name: kafka
+                    image: kafka:2.7
+                  - name: zookeeper
+                    image: zookeeper:3.6.2
+            "},
+            "Only one container is supported in the PodSpec."
+        ),
+        case(indoc! {"
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: test
+                spec:
+                  containers:
+                  - name: kafka
+            "},
+            "Unable to get package reference from pod [test]: Image is required."
+        ),
+        case(indoc! {"
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: test
+                spec:
+                  containers:
+                  - name: kafka
+                    image: kafka
+            "},
+            "Unable to get package reference from pod [test]: Tag is required."
+        ),
+    )]
+    fn try_to_get_package_from_insufficient_configuration(pod_config: &str, expected_err: &str) {
+        let pod = parse_pod_from_yaml(pod_config);
+
+        let maybe_package = StackableProvider::get_package(&pod);
+
+        if let Err(PodValidationError { msg }) = maybe_package {
+            assert_eq!(expected_err, msg);
+        } else {
+            panic!("PodValidationError expected but got {:?}", maybe_package);
+        }
+    }
+
+    fn parse_pod_from_yaml(pod_config: &str) -> Pod {
+        let kube_pod: k8s_openapi::api::core::v1::Pod = serde_yaml::from_str(pod_config).unwrap();
+        Pod::from(kube_pod)
     }
 }
