@@ -6,6 +6,9 @@ The purpose of the Stackable architecture, if I had to put it in one sentence is
 This agent is the component in our stack which registers itself with Kubernetes as an executor for workloads and then locally runs the assigned tasks - without using containers.
 Instead components are installed locally on the host filesystem and executed via systemd units.
 
+This allows using the fabulous orchestration options offered by Kubernetes to describe the necessary infrastructure while leaving aside the extra overhead and complexity that are added by running services in containers.
+Additionally, as we are already using a Kubernetes cluster, this will fairly easily allow defining hybrid scenarios where some services run on pure Kubernetes and others are orchestrated on bare-metal.
+
 The agent in principle behaves similar to a  https://github.com/virtual-kubelet/virtual-kubelet[virtual kubelet], but is not implemented using the virtual kubelet framework.
 Instead it is based on the https://github.com/deislabs/krustlet[Krustlet], which is under active development by Microsoft.
 
