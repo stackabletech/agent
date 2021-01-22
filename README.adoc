@@ -1,10 +1,18 @@
-# Stackable Agent
+= Stackable Agent
 
-## Purpose
-This agent is the component in the Stackable stack which is run locally on all nodes to enact changes that are necessary to deploy and manager the software components that are managed by Stackable.
+== Purpose
+The purpose of the Stackable architecture, if I had to put it in one sentence is to "run Kubernetes workloads without containers".
 
-The agent behaves similar to a  https://github.com/virtual-kubelet/virtual-kubelet[virtual kubelet], but is not implemented using the virtual kubelet framework.
+This agent is the component in stack which registers itself with Kubernetes as an executor for workloads and then locally runs the assigned tasks - without using containers.
+Instead components are installed locally on the host filesystem and executed via systemd units.
+
+The agent in principle behaves similar to a  https://github.com/virtual-kubelet/virtual-kubelet[virtual kubelet], but is not implemented using the virtual kubelet framework.
 Instead it is based on the https://github.com/deislabs/krustlet[Krustlet], which is under active development by Microsoft.
+
+More specifically the functionality of this agent closely resembles that of https://github.com/virtual-kubelet/systemk[systemk].
+The reason why both projects currently exist is simply that systemk was not around when we started Stackable and so we had to go and build our own.
+
+We are currently evaluating whether or not we should instead use systemk and contribute to that project instead of building our own agent under issue
 
 The agent registers itself as a node with a kube-apiserver will be considered by the Kubernetes scheduler for workloads (pods).
 To avoid _normal_ Kubernetes pods being scheduled on the Stackable agent (it would not know what to do with these) the agent assigns the following taints to its node object:
@@ -23,8 +31,8 @@ To avoid _normal_ Kubernetes pods being scheduled on the Stackable agent (it wou
 
 These taints _suggest_ to the Kubernetes scheduler that only pods with matching tolerations should be scheduled on this node.
 
-## Installation
-### Build from source
+== Installation
+=== Build from source
 Building from source is fairly straightforward if you have the rust toolchain installed.
 If you need to install this, generally the recommended way is to use https://rustup.rs/[rustup].
 
@@ -34,16 +42,16 @@ After rust is installed simply run
 
 To create the binary file in _target/debug_.
 
-### Download binary
+=== Download binary
 We do not at this time provide pre-compiled binaries, as we are still in the process of setting up the build jobs to create these.
 This readme will be updated as soon as binary downloads are available!
 
-### OS Packages
+=== OS Packages
 We do not at this time provide os packages, that is due to change in the near future and this readme will be updated accordingly!
 
-## Configuration
+== Configuration
 
-### Command Line Parameters
+=== Command Line Parameters
 
 WARNING: Due to https://github.com/stackabletech/agent/issues/34[#34] it is not currently possible to specify these parameters directly on the commandline, please use a config file instead.
 
@@ -51,7 +59,7 @@ The agent accepts the following command line parameters:
 
 include::config/commandline_args.adoc[]
 
-### Config File
+=== Config File
 In addition to directly specifying them on the command line, the agent allows specifying a config file via the environment variable _CONFIG_FILE_. Values specified in the file will have to adhere to the format _--parameter=value_.
 
 This file can contain all command line parameters as well and will be parsed before the actual command line.
@@ -63,7 +71,7 @@ For parameters that are present in the file and on the command line, the command
     --server-cert-file=/etc/stackable/agent/secure/cert.crt
     --server-key-file=/etc/stackable/agent/secure/key.key
 
-### Kubernetes Config
+=== Kubernetes Config
 The agent uses the default way of looking for a kube-apiserver, so if your system is already set up to connect to Kubernetes with kubectl you should be good to go right of the bat.
 
 The default location for the Kubernetes client config is _~/.kube/config_, if you want to change this location you can override this via the _KUBECONFIG_ environment variable.
@@ -71,7 +79,7 @@ The default location for the Kubernetes client config is _~/.kube/config_, if yo
     export KUBECONFIG=/etc/stackable/agent/kubeconfig
 
 
-### Certificates
+=== Certificates
 The agent requires a keypair and signed certificate to start a webserver which can be used to handle callbacks.
 If these are not specified on the commandline, the agent will create a keypair, upload a certificate signing request to Kubernetes and wait for the certificate before continuing.
 These steps require a certificate manager to be set up and running in your Kubernetes cluster, which may or may not be the case.
@@ -87,7 +95,7 @@ The following example shows how to create these files using https://github.com/O
     # Convert key to pksc8 format
     openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in pki/private/krustlet1.key -out pkcs8.key
 
-## Contributing
+== Contributing
 The agent is developed as an open source tool and we absolutely welcome any and all contributions!
 Don't hesitate to drop us a line at info@stackable.de or reach out directly to any of our committers / contributors.
 
