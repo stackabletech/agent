@@ -37,7 +37,7 @@ impl TryFrom<Reference> for Package {
     // version by this code and needs to be present
     fn try_from(value: Reference) -> Result<Self> {
         let repository = value.repository();
-        let tag = value.tag().ok_or(anyhow!("Tag is required."))?;
+        let tag = value.tag().ok_or_else(|| anyhow!("Tag is required."))?;
 
         Ok(Package {
             product: String::from(repository),

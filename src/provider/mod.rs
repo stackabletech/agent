@@ -91,7 +91,7 @@ impl StackableProvider {
         if let Some((container, [])) = pod.containers().split_first() {
             container
                 .image()
-                .and_then(|maybe_ref| maybe_ref.ok_or(anyhow!("Image is required.")))
+                .and_then(|maybe_ref| maybe_ref.ok_or_else(|| anyhow!("Image is required.")))
                 .and_then(Package::try_from)
                 .map_err(|err| PodValidationError {
                     msg: format!(
