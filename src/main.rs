@@ -62,8 +62,8 @@ async fn main() -> anyhow::Result<()> {
     let server_config = ServerConfig {
         addr: agent_config.server_ip_address.clone(),
         port: agent_config.server_port,
-        cert_file: agent_config.server_cert_file.unwrap_or(Default::default()),
-        private_key_file: agent_config.server_key_file.unwrap_or(Default::default()),
+        cert_file: agent_config.server_cert_file.unwrap_or_default(),
+        private_key_file: agent_config.server_key_file.unwrap_or_default(),
     };
 
     let krustlet_config = Config {
