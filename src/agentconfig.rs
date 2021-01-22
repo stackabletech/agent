@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use std::collections::hash_map::RandomState;
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
@@ -9,12 +10,14 @@ use pnet::datalink;
 use stackable_config::{ConfigOption, Configurable, Configuration};
 use thiserror::Error;
 
-use crate::agentconfig::AgentConfigError::WrongArgumentCount;
+use crate::agentconfig::AgentConfigError::{ArgumentParseError, WrongArgumentCount};
 
 #[derive(Error, Debug)]
 pub enum AgentConfigError {
     #[error("Wrong number of arguments found for config option {}!", .option.name)]
     WrongArgumentCount { option: ConfigOption },
+    #[error("Unable to parse value for parameter [{}]!", .name)]
+    ArgumentParseError { name: String },
 }
 
 #[derive(Clone)]
@@ -47,7 +50,7 @@ impl AgentConfig {
 
     pub const DATA_DIR: ConfigOption = ConfigOption {
         name: "data-directory",
-        default: Some("/etc/stackable/agent"),
+        default: Some("/var/stackable/agent/data"),
         required: false,
         takes_argument: true,
         help: "The directory where the stackable agent should keep its working data.",
@@ -180,6 +183,7 @@ impl AgentConfig {
             AgentConfig::LOG_DIR,
             AgentConfig::NO_CONFIG,
             AgentConfig::TAG,
+            AgentConfig::BOOTSTRAP_FILE,
         ]
         .iter()
         .cloned()
@@ -221,6 +225,38 @@ impl AgentConfig {
         })
     }
 
+    /// Helper method to retrieve a path from the config and convert this to a PathBuf directly.
+    /// This method assumes that a default value has been specified for this option and panics if
+    /// no value can be retrieved (should only happen if assigning the default value fails or
+    /// one was not specified)
+    ///
+    /// # Panics
+    /// This function panics if the parsed_values object does not contain a value for the key.
+    /// This is due to the fact that we expect a default value to be defined for these parameters,
+    /// so if we do not get a value that default value has not been defined or something else went
+    /// badly wrong.
+    fn get_with_default<T: FromStr>(
+        parsed_values: &HashMap<ConfigOption, Option<Vec<String>>>,
+        option: &ConfigOption,
+        error_list: &mut Vec<AgentConfigError>,
+    ) -> Result<T, anyhow::Error> {
+        T::from_str(
+            &AgentConfig::get_exactly_one_string(&parsed_values, option).unwrap_or_else(|_| {
+                panic!(
+                    "No value present for parameter {} even though it should have a default value!",
+                    option.name
+                )
+            }),
+        )
+        .map_err(|_| {
+            let error = ArgumentParseError {
+                name: option.name.to_string(),
+            };
+            error_list.push(error);
+            anyhow!("Error for parameter: {}", option.name)
+        })
+    }
+
     /// This tries to find the first non loopback interface with an ip address assigned.
     /// This should usually be the default interface according to:
     ///
@@ -250,9 +286,9 @@ impl AgentConfig {
     }
 
     fn default_hostname() -> anyhow::Result<String> {
-        Ok(hostname::get()?
+        hostname::get()?
             .into_string()
-            .map_err(|_| anyhow::anyhow!("invalid utf-8 hostname string"))?)
+            .map_err(|_| anyhow::anyhow!("invalid utf-8 hostname string"))
     }
 }
 
@@ -289,104 +325,55 @@ impl Configurable for AgentConfig {
         };
         info!("Selected {} as local address to listen on.", final_ip);
 
-        // Parse data directory from values
-        let final_data_dir = if let Ok(data_dir) =
-            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::DATA_DIR)
-        {
-            PathBuf::from_str(&data_dir).unwrap_or_else(|_| {
-                panic!(
-                    "Error parsing valid data directory from string: {}",
-                    data_dir
-                )
-            })
-        } else {
-            // Should not happen due to default value being assigned to the parameter
-            PathBuf::from("")
-        };
+        let mut error_list = vec![];
+
+        // Parse directory/file parameters
+        // PathBuf::from_str returns an infallible as Error, so cannot fail, hence unwrap is save
+        // to use for PathBufs here
+
+        // Parse data directory from values, add any error that occured to the list of errors
+        let final_data_dir = AgentConfig::get_with_default(
+            &parsed_values,
+            &AgentConfig::DATA_DIR,
+            error_list.as_mut(),
+        );
 
         // Parse bootstrap file from values
-        let final_bootstrap_file = if let Ok(bootstrap_file) =
-            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::BOOTSTRAP_FILE)
-        {
-            PathBuf::from_str(&bootstrap_file).unwrap_or_else(|_| {
-                panic!(
-                    "Error parsing valid data directory from string: {}",
-                    bootstrap_file
-                )
-            })
-        } else {
-            // Should not happen due to default value being assigned to the parameter
-            PathBuf::from("")
-        };
+        let final_bootstrap_file = AgentConfig::get_with_default(
+            &parsed_values,
+            &AgentConfig::BOOTSTRAP_FILE,
+            error_list.as_mut(),
+        );
+        debug!("bootstrapfile: {:?}", final_bootstrap_file);
 
         // Parse plugin directory from values
-        let final_plugin_dir = if let Ok(plugin_dir) =
-            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::PLUGIN_DIR)
-        {
-            PathBuf::from_str(&plugin_dir).unwrap_or_else(|_| {
-                panic!(
-                    "Error parsing valid plugin directory from string: {}",
-                    plugin_dir
-                )
-            })
-        } else {
-            // Should not happen due to default value being assigned to the parameter
-            PathBuf::from("")
-        };
+        let final_plugin_dir = AgentConfig::get_with_default(
+            &parsed_values,
+            &AgentConfig::PLUGIN_DIR,
+            error_list.as_mut(),
+        );
+        debug!("plugindir: {:?}", final_plugin_dir);
 
         // Parse log directory
-        let final_log_dir = if let Ok(log_dir) =
-            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::LOG_DIR)
-        {
-            PathBuf::from_str(&log_dir).unwrap_or_else(|_| {
-                panic!("Error parsing valid log directory from string: {}", log_dir)
-            })
-        } else {
-            PathBuf::from_str(
-                AgentConfig::LOG_DIR
-                    .default
-                    .expect("Invalid default value for log directory option!"),
-            )
-            .unwrap_or_else(|_| panic!("Unable to get log directory from options!".to_string()))
-        };
+        let final_log_dir = AgentConfig::get_with_default(
+            &parsed_values,
+            &AgentConfig::LOG_DIR,
+            error_list.as_mut(),
+        );
 
         // Parse config directory
-        let final_config_dir = if let Ok(config_dir) =
-            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::CONFIG_DIR)
-        {
-            PathBuf::from_str(&config_dir).unwrap_or_else(|_| {
-                panic!(
-                    "Error parsing valid config directory from string: {}",
-                    config_dir
-                )
-            })
-        } else {
-            PathBuf::from_str(
-                AgentConfig::CONFIG_DIR
-                    .default
-                    .expect("Invalid default value for config directory option!"),
-            )
-            .unwrap_or_else(|_| panic!("Unable to get config directory from options!".to_string()))
-        };
+        let final_config_dir = AgentConfig::get_with_default(
+            &parsed_values,
+            &AgentConfig::CONFIG_DIR,
+            error_list.as_mut(),
+        );
 
         // Parse parcel directory
-        let final_parcel_dir = if let Ok(parcel_dir) =
-            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::PACKAGE_DIR)
-        {
-            PathBuf::from_str(&parcel_dir).unwrap_or_else(|_| {
-                panic!(
-                    "Error parsing valid parcel directory from string: {}",
-                    parcel_dir
-                )
-            })
-        } else {
-            PathBuf::from_str(
-                AgentConfig::PACKAGE_DIR
-                    .default
-                    .expect("Invalid default value for parcel directory option!"),
-            )
-            .unwrap_or_else(|_| panic!("Unable to get parcel directory from options!".to_string()))
-        };
+        let final_package_dir = AgentConfig::get_with_default(
+            &parsed_values,
+            &AgentConfig::PACKAGE_DIR,
+            error_list.as_mut(),
+        );
 
         // Parse cert file
         let final_server_cert_file = if let Ok(server_cert_file) =
@@ -416,17 +403,11 @@ impl Configurable for AgentConfig {
             None
         };
 
-        let mut final_port = if let Ok(server_port) =
-            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::SERVER_PORT)
-        {
-            u16::from_str(&server_port)
-                .unwrap_or_else(|_| panic!("Error parsing webserver port from [{}], aborting."))
-        } else {
-            // This should not be necessary, as the default should be provided by clap,
-            // it is more _just in case_
-            u16::from_str(&AgentConfig::SERVER_PORT.default.unwrap_or("3000"))
-                .unwrap_or_else(|_| panic!("Error parsing webserver port from [{}], aborting."))
-        };
+        let final_port = AgentConfig::get_with_default(
+            &parsed_values,
+            &AgentConfig::SERVER_PORT,
+            error_list.as_mut(),
+        );
 
         let mut final_tags: HashMap<String, String> = HashMap::new();
         if let Some(Some(tags)) = parsed_values.get(&AgentConfig::TAG) {
@@ -436,10 +417,9 @@ impl Configurable for AgentConfig {
                     // We want to avoid any "unpredictable" behavior like ignoring a malformed
                     // key=value pair with just a log message -> so we panic if this can't be
                     // parsed
-                    panic!(format!(
-                        "Unable to parse value [{}] for option --tag as key=value pair!",
-                        tag
-                    ))
+                    error_list.push(ArgumentParseError {
+                        name: AgentConfig::TAG.name.to_string(),
+                    });
                 } else {
                     // This might panic, but really shouldn't, as we've checked the size of the array
                     final_tags.insert(split[0].to_string(), split[1].to_string());
@@ -447,16 +427,30 @@ impl Configurable for AgentConfig {
             }
         }
 
+        // Panic if we encountered any errors during parsing of the values
+        if !error_list.is_empty() {
+            panic!(
+                "Error parsing command line parameters:\n{}",
+                error_list
+                    .into_iter()
+                    .map(|thiserror| format!("{:?}\n", thiserror))
+                    .collect::<String>()
+            );
+        }
+
+        // These unwraps are ok to panic, if one of them barfs then something went horribly wrong
+        // above, as we should have paniced in a "controlled fashion" from the conditional block
+        // right before this
         Ok(AgentConfig {
             hostname: final_hostname,
-            parcel_directory: final_parcel_dir,
-            config_directory: final_config_dir,
-            data_directory: final_data_dir,
-            plugin_directory: final_plugin_dir,
-            log_directory: final_log_dir,
-            bootstrap_file: final_bootstrap_file,
+            parcel_directory: final_package_dir.unwrap(),
+            config_directory: final_config_dir.unwrap(),
+            data_directory: final_data_dir.unwrap(),
+            plugin_directory: final_plugin_dir.unwrap(),
+            log_directory: final_log_dir.unwrap(),
+            bootstrap_file: final_bootstrap_file.unwrap(),
             server_ip_address: final_ip,
-            server_port: final_port,
+            server_port: final_port.unwrap(),
             server_cert_file: final_server_cert_file,
             server_key_file: final_server_key_file,
             tags: final_tags,

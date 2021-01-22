@@ -10,7 +10,6 @@ use stackable_config::ConfigBuilder;
 
 use crate::agentconfig::AgentConfig;
 use crate::provider::StackableProvider;
-use std::path::PathBuf;
 
 mod agentconfig;
 mod provider;
@@ -68,9 +67,9 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let krustlet_config = Config {
-        node_ip: agent_config.server_ip_address.clone(),
+        node_ip: agent_config.server_ip_address,
         hostname: agent_config.hostname.clone(),
-        node_name: agent_config.hostname.clone(),
+        node_name: agent_config.hostname,
         server_config,
         data_dir: agent_config.data_directory,
         plugins_dir: agent_config.plugin_directory,
