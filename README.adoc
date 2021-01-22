@@ -3,7 +3,7 @@
 == Purpose
 The purpose of the Stackable architecture, if I had to put it in one sentence is to "run Kubernetes workloads without containers".
 
-This agent is the component in stack which registers itself with Kubernetes as an executor for workloads and then locally runs the assigned tasks - without using containers.
+This agent is the component in our stack which registers itself with Kubernetes as an executor for workloads and then locally runs the assigned tasks - without using containers.
 Instead components are installed locally on the host filesystem and executed via systemd units.
 
 The agent in principle behaves similar to a  https://github.com/virtual-kubelet/virtual-kubelet[virtual kubelet], but is not implemented using the virtual kubelet framework.
@@ -52,12 +52,9 @@ We do not at this time provide os packages, that is due to change in the near fu
 == Configuration
 
 === Command Line Parameters
-
-WARNING: Due to https://github.com/stackabletech/agent/issues/34[#34] it is not currently possible to specify these parameters directly on the commandline, please use a config file instead.
-
 The agent accepts the following command line parameters:
 
-include::config/commandline_args.adoc[]
+include::documentation/commandline_args.adoc[]
 
 === Config File
 In addition to directly specifying them on the command line, the agent allows specifying a config file via the environment variable _CONFIG_FILE_. Values specified in the file will have to adhere to the format _--parameter=value_.

@@ -300,27 +300,10 @@ impl AgentConfig {
         }
         Ok(doc_string)
     }
-
-    fn gen_docs() {
-        // TODO: this needs to be moved to a build.rs type of thing
-        use std::env;
-        use std::fs;
-        use std::path::PathBuf;
-
-        let target_file = PathBuf::from("config/commandline_args.adoc");
-
-        // We have unwraps in here, as this is supposed to be called during the build process,
-        // it shouldn't even be part of the codebase itself.
-        // Once this is moved out the unwraps are fine, because a failure during build is ok if
-        // something is wrong.
-        let test = AgentConfig::get_documentation().unwrap();
-        fs::write(&target_file, test).unwrap();
-    }
 }
 
 impl Configurable for AgentConfig {
     fn get_config_description() -> Configuration {
-        AgentConfig::gen_docs();
         Configuration {
             name: "Stackable Agent",
             version: "0.1",
