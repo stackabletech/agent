@@ -95,7 +95,7 @@ impl StackableProvider {
                 .and_then(Package::try_from)
                 .map_err(|err| PodValidationError {
                     msg: format!(
-                        r#"Unable to get package reference from pod "{}": {}"#,
+                        "Unable to get package reference from pod [{}]: {}",
                         &pod.name(),
                         &err
                     ),
@@ -261,7 +261,7 @@ mod test {
                   containers:
                   - name: kafka
             "},
-            r#"Unable to get package reference from pod "test": Image is required."#
+            "Unable to get package reference from pod [test]: Image is required."
         ),
         case(indoc! {"
                 apiVersion: v1
@@ -273,7 +273,7 @@ mod test {
                   - name: kafka
                     image: kafka
             "},
-            r#"Unable to get package reference from pod "test": Tag is required."#
+            "Unable to get package reference from pod [test]: Tag is required."
         ),
     )]
     fn try_to_get_package_from_insufficient_configuration(pod_config: &str, expected_err: &str) {
