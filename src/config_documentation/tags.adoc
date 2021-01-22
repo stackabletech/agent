@@ -1,0 +1,3 @@
+A "key=value" pair that should be assigned to this agent as tag. This can be specified multiple times to assign additional tags.
+
+Tags are the main way of identifying nodes to assign services to later on.

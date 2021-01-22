@@ -1,0 +1,6 @@
+This directory will serve as starting point for packages that are needed by pods assigned to this node.\n Packages will be downloaded into the "_download" folder at the top level of this folder as archives and remain there for potential future use.
+
+Archives will the be extracted directly into this folder in subdirectories following the naming
+scheme of "productname-productversion".
+
+The agent will need full access to this directory and tries to create it if it does not exist.
