@@ -288,7 +288,7 @@ impl AgentConfig {
                 option.default.unwrap_or("No default value")
             ));
             doc_string.push_str(&format!("*Required*: {}\n\n", option.required));
-            doc_string.push_str(&format!("*Multiple values:*: {}\n\n\n", option.list));
+            doc_string.push_str(&format!("*Multiple values:* {}\n\n\n", option.list));
 
             // We have not yet specified a documentation string for all options, as an interim
             // solution we use the help string for the docs, if no proper doc has been written yet.
