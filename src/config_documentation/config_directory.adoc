@@ -1,0 +1,11 @@
+This directory will serve as starting point for all log files which this service creates.
+
+Every service will get its own subdirectories created within this directory - for every service start a
+new subdirectory will be created to show a full history of configuration that was used for this service.
+
+ConfigMaps which are specified in the pod that describes this service will be created relative to these run
+directories - unless the mounts specify an absolute path, in which case it is allowed to break out of this directory.
+
+WARNING: This allows anybody who can specify pods more or less full access to the file system on the machine running the agent!
+
+The agent will need full access to this directory and tries to create it if it does not exist.
