@@ -8,7 +8,7 @@ use kubelet::Kubelet;
 use log::{info, warn};
 use stackable_config::ConfigBuilder;
 
-use stackable_agent::agentconfig::AgentConfig;
+use stackable_agent::config::AgentConfig;
 use stackable_agent::provider::StackableProvider;
 
 #[tokio::main(threaded_scheduler)]

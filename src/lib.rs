@@ -1,2 +1,2 @@
-pub mod agentconfig;
+pub mod config;
 pub mod provider;

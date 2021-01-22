@@ -1,11 +1,20 @@
+/// This is a helper binary which generates the file _documentation/commandline_args.adoc_ which
+/// contains documentation of the available command line options for the agent binary.
+///
+/// It gets the content by calling get_documontation from the AgentConfig struct.
+///
+/// * Panics
+/// This will panic if an error occurs when trying to write the file.
+
 fn main() {
-    use stackable_agent::agentconfig::AgentConfig;
-    use std::env;
+    use stackable_agent::config::AgentConfig;
     use std::fs;
-    use std::path::PathBuf;
 
-    let target_file = PathBuf::from("documentation/commandline_args.adoc");
-
-    // Unwrap should be fine here, this will currently get called
-    fs::write(&target_file, AgentConfig::get_documentation().unwrap()).unwrap();
+    let target_file = "documentation/commandline_args.adoc";
+    fs::write(target_file, AgentConfig::get_documentation()).unwrap_or_else(|err| {
+        panic!(
+            "Could not write documentation to [{}]: {}",
+            target_file, err
+        )
+    });
 }

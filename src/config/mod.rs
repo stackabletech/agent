@@ -10,7 +10,7 @@ use pnet::datalink;
 use stackable_config::{ConfigOption, Configurable, Configuration};
 use thiserror::Error;
 
-use crate::agentconfig::AgentConfigError::{ArgumentParseError, WrongArgumentCount};
+use crate::config::AgentConfigError::{ArgumentParseError, WrongArgumentCount};
 
 #[derive(Error, Debug)]
 pub enum AgentConfigError {
@@ -279,7 +279,7 @@ impl AgentConfig {
             .map_err(|_| anyhow::anyhow!("invalid utf-8 hostname string"))
     }
 
-    pub fn get_documentation() -> Result<String, AgentConfigError> {
+    pub fn get_documentation() -> String {
         let mut doc_string = String::new();
         for option in AgentConfig::get_options() {
             doc_string.push_str(&format!("\n\n\n=== {}\n\n", option.name));
@@ -298,7 +298,7 @@ impl AgentConfig {
                 doc_string.push_str(&option.documentation);
             }
         }
-        Ok(doc_string)
+        doc_string
     }
 }
 
