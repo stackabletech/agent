@@ -212,12 +212,12 @@ impl AgentConfig {
             parsed_values.get(option)
         );
         if let Some(Some(list_value)) = parsed_values.get(option) {
-            if list_value.len() != 1 {
-                error!("Got additional, unexpected values for parameter!");
-            } else {
+            if list_value.len() == 1 {
                 // We've checked that the list has exactly one value at this point, so no errors should
                 // occur after this point - but you never know
                 return Ok(list_value[0].to_string());
+            } else {
+                error!("Got additional, unexpected values for parameter!");
             }
         }
         Err(WrongArgumentCount {
@@ -413,16 +413,16 @@ impl Configurable for AgentConfig {
         if let Some(Some(tags)) = parsed_values.get(&AgentConfig::TAG) {
             for tag in tags {
                 let split: Vec<&str> = tag.split('=').collect();
-                if split.len() != 2 {
+                if split.len() == 2 {
+                    // This might panic, but really shouldn't, as we've checked the size of the array
+                    final_tags.insert(split[0].to_string(), split[1].to_string());
+                } else {
                     // We want to avoid any "unpredictable" behavior like ignoring a malformed
                     // key=value pair with just a log message -> so we panic if this can't be
                     // parsed
                     error_list.push(ArgumentParseError {
                         name: AgentConfig::TAG.name.to_string(),
                     });
-                } else {
-                    // This might panic, but really shouldn't, as we've checked the size of the array
-                    final_tags.insert(split[0].to_string(), split[1].to_string());
                 }
             }
         }
