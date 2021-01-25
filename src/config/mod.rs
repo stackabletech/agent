@@ -10,7 +10,7 @@ use pnet::datalink;
 use stackable_config::{ConfigOption, Configurable, Configuration};
 use thiserror::Error;
 
-use crate::agentconfig::AgentConfigError::{ArgumentParseError, WrongArgumentCount};
+use crate::config::AgentConfigError::{ArgumentParseError, WrongArgumentCount};
 
 #[derive(Error, Debug)]
 pub enum AgentConfigError {
@@ -277,6 +277,28 @@ impl AgentConfig {
         hostname::get()?
             .into_string()
             .map_err(|_| anyhow::anyhow!("invalid utf-8 hostname string"))
+    }
+
+    pub fn get_documentation() -> String {
+        let mut doc_string = String::new();
+        for option in AgentConfig::get_options() {
+            doc_string.push_str(&format!("\n\n\n=== {}\n\n", option.name));
+            doc_string.push_str(&format!(
+                "*Default value*: `{}`\n\n",
+                option.default.unwrap_or("No default value")
+            ));
+            doc_string.push_str(&format!("*Required*: {}\n\n", option.required));
+            doc_string.push_str(&format!("*Multiple values:* {}\n\n\n", option.list));
+
+            // We have not yet specified a documentation string for all options, as an interim
+            // solution we use the help string for the docs, if no proper doc has been written yet.
+            if option.documentation.is_empty() {
+                doc_string.push_str(&option.help);
+            } else {
+                doc_string.push_str(&option.documentation);
+            }
+        }
+        doc_string
     }
 }
 

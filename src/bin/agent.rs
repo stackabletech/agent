@@ -8,11 +8,8 @@ use kubelet::Kubelet;
 use log::{info, warn};
 use stackable_config::ConfigBuilder;
 
-use crate::agentconfig::AgentConfig;
-use crate::provider::StackableProvider;
-
-mod agentconfig;
-mod provider;
+use stackable_agent::config::AgentConfig;
+use stackable_agent::provider::StackableProvider;
 
 #[tokio::main(threaded_scheduler)]
 async fn main() -> anyhow::Result<()> {
