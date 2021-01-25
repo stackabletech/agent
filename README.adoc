@@ -8,7 +8,7 @@ In principle this behavior is similar to that of the the https://github.com/virt
 More specifically the functionality of this agent closely resembles that of https://github.com/virtual-kubelet/systemk[systemk].
 The reason why both projects currently exist is simply that systemk was not around when we started Stackable and so we had to go and build our own.
 
-WARNING: We are currently evaluating whether or not we should instead use systemk and contribute to that project instead of building our own agent under https://github.com/stackabletech/agent/issues/42[#42]
+WARNING: We are currently evaluating whether or not we should instead use systemk and contribute to that project instead of building our own agent under https://github.com/stackabletech/agent/issues/42[issue #42]
 
 The agent registers itself as a node with a kube-apiserver and will be considered by the Kubernetes scheduler for workloads (pods).
 To avoid _normal_ Kubernetes pods being scheduled on the Stackable agent (it would not know what to do with these) the agent assigns the following taints to its node object:
@@ -29,7 +29,7 @@ These taints _suggest_ to the Kubernetes scheduler that only pods with matching 
 
 == Installation
 === Build from source
-Building from source is fairly straightforward if you have the rust toolchain installed.
+Building from source is fairly straightforward if you have the rust toolchain installed, our CI chain tests against the latest stable version at the time the checks are run.
 If you need to install this, generally the recommended way is to use https://rustup.rs/[rustup].
 
 After rust is installed simply run
@@ -43,7 +43,7 @@ We do not at this time provide pre-compiled binaries, as we are still in the pro
 This readme will be updated as soon as binary downloads are available!
 
 === OS Packages
-We do not at this time provide os packages, that is due to change in the near future and this readme will be updated accordingly!
+We do not at this time provide OS packages, that is due to change in the near future and this readme will be updated accordingly!
 
 == Configuration
 
@@ -53,10 +53,10 @@ The agent accepts the following command line parameters:
 include::documentation/commandline_args.adoc[]
 
 === Config File
-In addition to directly specifying them on the command line, the agent allows specifying a config file via the environment variable _CONFIG_FILE_. Values specified in the file will have to adhere to the format _--parameter=value_.
+In addition to directly specifying them on the command line, the agent allows specifying a config file via the environment variable `CONFIG_FILE`. Values specified in the file will have to adhere to the format `--parameter=value`.
 
-This file can contain all command line parameters as well and will be parsed before the actual command line.
-For parameters that are present in the file and on the command line, the command line will take precedence, unless it is a parameter that can be specified multiple times, in which case paramaters from both, file and commandline, will be used.
+This file can contain all command line parameters and will be parsed before the actual command line.
+For parameters that are present in the file and on the command line, the command line will take precedence, unless it is a parameter that can be specified multiple times, in which case parameters from both, file and commandline, will be merged.
 
 .Example config file
     --package-directory=/opt/stackable/agent/work/packages
@@ -67,7 +67,7 @@ For parameters that are present in the file and on the command line, the command
 === Kubernetes Config
 The agent uses the default way of looking for a kube-apiserver, so if your system is already set up to connect to Kubernetes with kubectl you should be good to go right of the bat.
 
-The default location for the Kubernetes client config is _~/.kube/config_, if you want to change this location you can override this via the _KUBECONFIG_ environment variable.
+The default location for the Kubernetes client config is `~/.kube/config`, if you want to change this location you can override this via the `KUBECONFIG` environment variable.
 
     export KUBECONFIG=/etc/stackable/agent/kubeconfig
 
