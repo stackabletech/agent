@@ -1,21 +1,14 @@
 = Stackable Agent
 
 == Purpose
-The purpose of the Stackable architecture, if I had to put it in one sentence is to "run Kubernetes workloads without containers".
+The Stackable Agent is an alternative to the Kubernetes Kubelet that executes Pods not in containers but using systemd as its backend.
+It is implemented in Rust as a https://github.com/deislabs/krustlet[Krustlet] provider.
 
-This agent is the component in our stack which registers itself with Kubernetes as an executor for workloads and then locally runs the assigned tasks - without using containers.
-Instead components are installed locally on the host filesystem and executed via systemd units.
-
-This allows using the fabulous orchestration options offered by Kubernetes to describe the necessary infrastructure while leaving aside the extra overhead and complexity that are added by running services in containers.
-Additionally, as we are already using a Kubernetes cluster, this will fairly easily allow defining hybrid scenarios where some services run on pure Kubernetes and others are orchestrated on bare-metal.
-
-The agent in principle behaves similar to a https://github.com/virtual-kubelet/virtual-kubelet[virtual kubelet], but is not implemented using the virtual kubelet framework.
-Instead it is based on the https://github.com/deislabs/krustlet[Krustlet], which is under active development by Microsoft.
-
+In principle this behavior is similar to that of the the https://github.com/virtual-kubelet/virtual-kubelet[virtual kubelet] project.
 More specifically the functionality of this agent closely resembles that of https://github.com/virtual-kubelet/systemk[systemk].
 The reason why both projects currently exist is simply that systemk was not around when we started Stackable and so we had to go and build our own.
 
-We are currently evaluating whether or not we should instead use systemk and contribute to that project instead of building our own agent under issue
+WARNING: We are currently evaluating whether or not we should instead use systemk and contribute to that project instead of building our own agent under https://github.com/stackabletech/agent/issues/42[#42]
 
 The agent registers itself as a node with a kube-apiserver and will be considered by the Kubernetes scheduler for workloads (pods).
 To avoid _normal_ Kubernetes pods being scheduled on the Stackable agent (it would not know what to do with these) the agent assigns the following taints to its node object:

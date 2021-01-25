@@ -284,7 +284,7 @@ impl AgentConfig {
         for option in AgentConfig::get_options() {
             doc_string.push_str(&format!("\n\n\n=== {}\n\n", option.name));
             doc_string.push_str(&format!(
-                "*Default value*: {}\n\n",
+                "*Default value*: `{}`\n\n",
                 option.default.unwrap_or("No default value")
             ));
             doc_string.push_str(&format!("*Required*: {}\n\n", option.required));
