@@ -165,7 +165,7 @@ impl AgentConfig {
         required: false,
         takes_argument: false,
         help: "When specified causes the agent to run services in the session instance of systemd, not the system wide systemd.",
-        documentation: "",
+        documentation: include_str!("config_documentation/session.adoc"),
         list: false
     };
 

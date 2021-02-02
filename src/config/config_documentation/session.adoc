@@ -1,0 +1,7 @@
+This parameter specifies whether to use a session or the system DBus connection when talking to systemd.
+
+When this flag is used symlink for loaded services will be created in the currently active users home directory and no global changes made to the system.
+
+The default is to use the system bus, which is the machine wide systemd instance.
+
+This will mainly be useful for scenarios where no root access is possible and for testing.
