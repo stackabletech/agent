@@ -22,6 +22,8 @@ jobs:
   clippy_check:
     runs-on: ubuntu-latest
     steps:
+      - name: Install dbus dependencies
+        run: sudo apt-get install libdbus-1-dev pkg-config libdbus-1-3
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
         with:
