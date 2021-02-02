@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use kubelet::pod::Pod;
 use kubelet::state::prelude::*;
@@ -16,7 +16,7 @@ use crate::provider::PodState;
 pub struct Downloading;
 
 impl Downloading {
-    fn package_downloaded<T: Into<Package>>(package: T, download_directory: &PathBuf) -> bool {
+    fn package_downloaded<T: Into<Package>>(package: T, download_directory: &Path) -> bool {
         let package = package.into();
         let package_file_name = download_directory.join(package.get_file_name());
         debug!(

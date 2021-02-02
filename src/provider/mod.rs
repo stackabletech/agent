@@ -1,7 +1,6 @@
 use std::convert::TryFrom;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Child;
 
 use anyhow::anyhow;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
@@ -22,14 +21,14 @@ use crate::provider::states::downloading::Downloading;
 use crate::provider::states::terminated::Terminated;
 use crate::provider::systemdmanager::manager::Manager;
 use kube::error::ErrorResponse;
-use std::sync::{Arc, RwLock};
 
 pub struct StackableProvider {
     client: Client,
     parcel_directory: PathBuf,
     config_directory: PathBuf,
     log_directory: PathBuf,
-    systemd_manager: Arc<RwLock<Manager>>,
+    //    systemd_manager: Arc<RwLock<Manager>>,
+    session: bool,
 }
 
 pub const CRDS: &[&str] = &["repositories.stable.stackable.de"];
@@ -49,8 +48,7 @@ pub struct PodState {
     service_name: String,
     service_uid: String,
     package: Package,
-    process_handle: Option<Child>,
-    systemd_manager: Arc<RwLock<Manager>>,
+    systemd_manager: Manager,
 }
 
 impl PodState {
@@ -80,18 +78,19 @@ impl StackableProvider {
         parcel_directory: PathBuf,
         config_directory: PathBuf,
         log_directory: PathBuf,
+        session: bool,
     ) -> Result<Self, StackableError> {
-        let systemdmanager = RwLock::new(Manager::new(
+        /* let systemdmanager = RwLock::new(Manager::new(
             PathBuf::from("/home/sliebau/IdeaProjects/agent/work/systemd"),
-            false,
-        ));
+            session,
+        ));*/
 
         let provider = StackableProvider {
             client,
             parcel_directory,
             config_directory,
             log_directory,
-            systemd_manager: Arc::new(systemdmanager),
+            session,
         };
         let missing_crds = provider.check_crds().await?;
         return if missing_crds.is_empty() {
@@ -190,6 +189,7 @@ impl Provider for StackableProvider {
         let download_directory = parcel_directory.join("_download");
         let config_directory = self.config_directory.clone();
         let log_directory = self.log_directory.clone();
+        let session = self.session;
 
         let package = Self::get_package(pod)?;
         if !(&download_directory.is_dir()) {
@@ -198,6 +198,12 @@ impl Provider for StackableProvider {
         if !(&config_directory.is_dir()) {
             fs::create_dir_all(&config_directory)?;
         }
+
+        // TODO: investigate if we can share one DBus connection across all pods
+        let systemd_manager = Manager::new(
+            PathBuf::from("/home/sliebau/IdeaProjects/agent/work/systemd"),
+            session,
+        );
 
         Ok(PodState {
             client: self.client.clone(),
@@ -209,8 +215,9 @@ impl Provider for StackableProvider {
             service_name: String::from(service_name),
             service_uid,
             package,
-            process_handle: None,
-            systemd_manager: self.systemd_manager.clone(),
+            // TODO: Check if we can work with a reference or a Mutex Guard here to only keep
+            // one connection open to DBus instead of one per tracked Pod
+            systemd_manager,
         })
     }
 

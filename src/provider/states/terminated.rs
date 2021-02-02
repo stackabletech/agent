@@ -1,7 +1,7 @@
-use anyhow::anyhow;
 use kubelet::state::prelude::*;
-use log::{debug, error, info};
+use log::info;
 
+use crate::provider::systemdmanager::manager::UnitTypes;
 use crate::provider::PodState;
 
 #[derive(Default, Debug)]
@@ -17,26 +17,17 @@ impl State<PodState> for Terminated {
             "Pod {} was terminated, stopping process!",
             &pod_state.service_name
         );
-        // Obtain a mutable reference to the process handle
-        let child = if let Some(testproc) = pod_state.process_handle.as_mut() {
-            testproc
-        } else {
-            return Transition::Complete(Err(anyhow!("Unable to retrieve process handle")));
-        };
 
-        return match child.kill() {
-            Ok(()) => {
-                debug!("Successfully killed process {}", pod_state.service_name);
-                Transition::Complete(Ok(()))
-            }
-            Err(e) => {
-                error!(
-                    "Failed to stop process with pid {} due to: {:?}",
-                    child.id(),
-                    e
-                );
-                Transition::Complete(Err(anyhow::Error::new(e)))
-            }
+        // TODO: this can be written in a nicer way with .map() I think
+        return match pod_state.systemd_manager.stop(&pod_state.service_name) {
+            Ok(()) => match pod_state
+                .systemd_manager
+                .unload(&pod_state.service_name, UnitTypes::Service)
+            {
+                Ok(()) => Transition::Complete(Ok(())),
+                Err(e) => Transition::Complete(Err(e)),
+            }, // TODO: make nicer, but due to early return
+            Err(e) => Transition::Complete(Err(e)),
         };
     }
 

@@ -5,8 +5,10 @@ use log::{debug, error, info};
 
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::states::starting::Starting;
+use crate::provider::systemdmanager::manager::UnitTypes;
 use crate::provider::systemdmanager::service::Service;
 use crate::provider::PodState;
+use anyhow::anyhow;
 use std::fs::create_dir_all;
 
 #[derive(Default, Debug, TransitionTo)]
@@ -16,6 +18,7 @@ pub struct CreatingService;
 #[async_trait::async_trait]
 impl State<PodState> for CreatingService {
     async fn next(self: Box<Self>, pod_state: &mut PodState, pod: &Pod) -> Transition<PodState> {
+        let service_name: &str = pod_state.service_name.as_ref();
         info!(
             "Creating service unit for service {}",
             &pod_state.service_name
@@ -43,16 +46,37 @@ impl State<PodState> for CreatingService {
             }
         };
 
-        /*match service.write_unit_files(service_directory) {
-            Ok(()) => Transition::next(self, Starting),
-            Err(error) => {
-                error!(
-                    "Failed to write service units for pod [{}], aborting.",
-                    pod_state.service_name
-                );
-                return Transition::Complete(Err(anyhow::Error::from(error)));
+        for unit in service.systemd_units {
+            let target_file = match service_directory
+                .join(service_name)
+                .into_os_string()
+                .into_string()
+            {
+                Ok(path) => path,
+                Err(_) => {
+                    // TODO: output proper error message with information
+                    return Transition::Complete(Err(anyhow!(
+                        "Failed to convert path for service unit file [{}]",
+                        service_name
+                    )));
+                }
+            };
+
+            match pod_state
+                .systemd_manager
+                .load(&target_file, &unit, UnitTypes::Service)
+            {
+                Ok(()) => {}
+                Err(e) => {
+                    // TODO: We need to discuss what to do here, in theory we could have loaded
+                    // other services already, do we want to stop those?
+                    error!("Failed to load service unit for service [{}]", service_name);
+                    return Transition::Complete(Err(e));
+                }
             }
-        }*/
+        }
+
+        // All services were loaded successfully, otherwise we'd have returned early above
         Transition::next(self, Starting)
     }
 

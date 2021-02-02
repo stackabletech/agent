@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::fs::read_to_string;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use handlebars::Handlebars;
 use k8s_openapi::api::core::v1::ConfigMap;
@@ -157,7 +157,7 @@ impl CreatingConfig {
     ///
     fn apply_config_map(
         map: &ConfigMap,
-        target_directory: &PathBuf,
+        target_directory: &Path,
         template_data: &BTreeMap<String, String>,
     ) -> Result<(), StackableError> {
         if map.metadata.name.is_none() {
@@ -219,7 +219,7 @@ impl CreatingConfig {
         Ok(())
     }
 
-    fn needs_update(target_file: &PathBuf, content: &str) -> Result<bool, StackableError> {
+    fn needs_update(target_file: &Path, content: &str) -> Result<bool, StackableError> {
         if target_file.is_file() {
             let current_content = read_to_string(target_file)?;
             debug!("Compared config file {:?} with result of", target_file);

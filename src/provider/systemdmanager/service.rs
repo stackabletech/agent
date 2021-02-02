@@ -1,7 +1,4 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
-use std::path::PathBuf;
 
 use kubelet::container::Container;
 use kubelet::pod::Pod;
@@ -11,11 +8,8 @@ use crate::provider::error::StackableError;
 
 use crate::provider::error::StackableError::PodValidationError;
 use crate::provider::states::creating_config::CreatingConfig;
-use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::PodState;
-use kubelet::state::Transition;
-use log::{debug, error, info, trace, warn};
-use url::form_urlencoded::Target;
+use log::{debug, error, trace, warn};
 
 static RESTART_POLICY_MAP: phf::Map<&'static str, &'static str> = phf_map! {
     "Always" => "always",
@@ -23,15 +17,14 @@ static RESTART_POLICY_MAP: phf::Map<&'static str, &'static str> = phf_map! {
     "Never" => "no",
 };
 
+// TODO: This will be used later to ensure the same ordering of known sections in
+// unit files, I'll leave it in for now
+#[allow(dead_code)]
 static SECTION_ORDER: phf::OrderedSet<&'static str> =
     phf_ordered_set! {"Unit", "Service", "Install"};
 
-struct Section {
-    name: &'static str,
-}
-
 pub struct Service {
-    systemd_units: Vec<SystemDUnit>,
+    pub systemd_units: Vec<SystemDUnit>,
 }
 
 impl Service {
@@ -50,14 +43,6 @@ impl Service {
             systemd_units: units,
         })
     }
-
-    pub fn start_all(&self) -> Result<(), StackableError> {
-        Ok(())
-    }
-
-    pub fn stop_all(&self) -> Result<(), StackableError> {
-        Ok(())
-    }
 }
 
 #[derive(Clone)]
@@ -68,12 +53,15 @@ pub struct SystemDUnit {
 }
 
 impl SystemDUnit {
+    /// Create a new unit which inherits all common elements from ['common_properties'] and parses
+    /// everything else from the ['container']
+
     pub fn new(
-        unit_template: &SystemDUnit,
+        common_properties: &SystemDUnit,
         container: &Container,
         pod_state: &PodState,
     ) -> Result<Self, StackableError> {
-        let mut unit = unit_template.clone();
+        let mut unit = common_properties.clone();
         unit.name = String::from(container.name());
 
         unit.add_property("Unit", "Description", &unit.name.clone());
@@ -90,8 +78,9 @@ impl SystemDUnit {
             unit.add_env_var(&name, &value);
         }
 
-        unit.add_property("Service", "StandardOutput", "Journal");
-        unit.add_property("Service", "StandardError", "Journal");
+        unit.add_property("Service", "StandardOutput", "journal");
+        unit.add_property("Service", "StandardError", "journal");
+        unit.add_property("Install", "WantedBy", "multi-user.target");
 
         Ok(unit)
     }
@@ -121,7 +110,7 @@ impl SystemDUnit {
         let section = self
             .sections
             .entry(String::from(section))
-            .or_insert(HashMap::new());
+            .or_insert_with(HashMap::new);
         section.insert(String::from(key), String::from(value));
     }
 
@@ -145,7 +134,7 @@ impl SystemDUnit {
                     unit_file_content.push_str(&format!("Environment=\"{}={}\"\n", name, value));
                 }
             }
-            unit_file_content.push_str("\n");
+            unit_file_content.push('\n');
         }
         unit_file_content
     }
@@ -275,18 +264,17 @@ impl SystemDUnit {
                 package_root,
                 container.name()
             );
-            let mut binary_with_path =
-                match package_root.join(&binary).into_os_string().into_string() {
-                    Ok(path_string) => path_string,
-                    Err(original_string) => {
-                        return Err(PodValidationError {
-                            msg: format!(
-                                "Unable to convert command for container [{}] to utf8.",
-                                container.name()
-                            ),
-                        })
-                    }
-                };
+            let binary_with_path = match package_root.join(&binary).into_os_string().into_string() {
+                Ok(path_string) => path_string,
+                Err(_) => {
+                    return Err(PodValidationError {
+                        msg: format!(
+                            "Unable to convert command for container [{}] to utf8.",
+                            container.name()
+                        ),
+                    })
+                }
+            };
             binary.replace_range(.., &binary_with_path);
         }
 
