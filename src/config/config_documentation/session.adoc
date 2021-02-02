@@ -4,4 +4,4 @@ When this flag is used symlink for loaded services will be created in the curren
 
 The default is to use the system bus, which is the machine wide systemd instance.
 
-This will mainly be useful for scenarios where no root access is possible and for testing.
+This will mainly be useful for scenarios without root access and for testing.
