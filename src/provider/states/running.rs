@@ -4,7 +4,7 @@ use k8s_openapi::api::core::v1::{
 use kubelet::pod::Pod;
 use kubelet::state::prelude::*;
 use kubelet::state::{State, Transition};
-use log::{debug, error, trace};
+use log::{debug, trace};
 
 use crate::provider::states::failed::Failed;
 use crate::provider::states::installing::Installing;
@@ -36,62 +36,13 @@ impl State<PodState> for Running {
     ) -> Transition<PodState> {
         loop {
             tokio::select! {
-                _ = tokio::time::delay_for(std::time::Duration::from_secs(1))  => {
+                _ = tokio::time::delay_for(std::time::Duration::from_secs(10))  => {
                     trace!("Checking if service {} is still running.", &pod_state.service_name);
                 }
             }
-
-            match pod_state.systemd_manager.is_active(&pod_state.service_name) {
-                Ok(true) => continue,
-                Ok(false) => {
-                    return Transition::next(
-                        self,
-                        Failed {
-                            message: "Service stopped unexpectedly".to_string(),
-                        },
-                    )
-                }
-                Err(e) => error!(
-                    "Unable to check status of service [{}] due to: [{}]",
-                    pod_state.service_name, e
-                ),
-            }
+            // TODO: We are not watching the service yet, need to subscribe to events and
+            // react to those
         }
-        /*
-            // Obtain a mutable reference to the process handle
-            let child = if let Some(testproc) = pod_state.process_handle.as_mut() {
-                testproc
-            } else {
-                return Transition::next(
-                    self,
-                    Failed {
-                        message: "Unable to obtain process handle from podstate!".to_string(),
-                    },
-                );
-            };
-
-            // Check if an exit code is available for the process - if yes, it exited
-            match child.try_wait() {
-                Ok(None) => debug!(
-                    "Service {} is still running with pid {}",
-                    &pod_state.service_name,
-                    child.id()
-                ),
-                _ => {
-                    error!(
-                        "Service {} died unexpectedly, moving to failed state",
-                        pod_state.service_name
-                    );
-                    return Transition::next(
-                        self,
-                        Failed {
-                            message: "ProcessDiedUnexpectedly".to_string(),
-                        },
-                    );
-                }
-            }
-        }
-        */
     }
 
     async fn json_status(
@@ -105,6 +56,7 @@ impl State<PodState> for Running {
         };
 
         let container = &pod.containers()[0];
+        // TODO: Change to support multiple containers
         let container_status = vec![KubeContainerStatus {
             name: container.name().to_string(),
             ready: true,

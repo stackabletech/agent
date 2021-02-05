@@ -37,3 +37,8 @@ hostname = "0.3"
 indoc = "1.0"
 rstest = "0.6"
 serde_yaml = "0.8"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1

@@ -1,8 +1,10 @@
-//* A systemd unit manager that allows managing systemd services
+//! A manager that allows managing systemd units
 
 use crate::provider::systemdmanager::service::SystemDUnit;
 use anyhow::anyhow;
+use dbus::arg::{AppendAll, ReadAll};
 use dbus::blocking::SyncConnection;
+use dbus::strings::Member;
 use dbus::Path;
 use log::{debug, error, info};
 use std::fs::File;
@@ -10,6 +12,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
+#[derive(Clone)]
 pub enum UnitTypes {
     Service,
 }
@@ -20,16 +23,17 @@ pub struct Manager {
 }
 
 impl Manager {
-    pub fn new(units_directory: PathBuf, user_mode: bool) -> Self {
-        Manager {
+    pub fn new(units_directory: PathBuf, user_mode: bool) -> Result<Self, anyhow::Error> {
+        Ok(Manager {
             units_directory,
-            systemd_connection: SystemDConnection::new(user_mode),
-        }
+            systemd_connection: SystemDConnection::new(user_mode)?,
+        })
     }
 
-    // Write the unit file to disk and enable the service
+    /// Write the unit file to disk and enable the service
+    /// This implicitly calls [link()]
     // TODO: should we maybe split enable out into a different function?
-    pub fn load(
+    pub fn enable(
         &self,
         name: &str,
         unit: &SystemDUnit,
@@ -49,13 +53,12 @@ impl Manager {
             self.units_directory.join(unit_path)
         };
 
-        //let target_file = self.units_directory.join(&unit_name);
-        debug!("Target file for service {} : {:?}", name, target_file);
+        debug!("Target file for service [{}] : [{:?}]", name, target_file);
 
         let mut unit_file = match File::create(&target_file) {
             Ok(file) => file,
             Err(e) => {
-                error!("Error ocurred when creating unit file [{}]: [{}]", name, e);
+                debug!("Error occurred when creating unit file [{}]: [{}]", name, e);
                 return Err(anyhow::Error::from(e));
             }
         };
@@ -83,42 +86,29 @@ impl Manager {
     pub fn start(&self, name: &str) -> Result<(), anyhow::Error> {
         let unit_name = Manager::get_unit_file_name(name, UnitTypes::Service)?;
         match self.systemd_connection.start_unit(&unit_name) {
-            Ok(result) => info!("Successfully started service [{}]: [{}]", unit_name, result),
+            Ok(result) => {
+                info!("Successfully started service [{}]: [{}]", unit_name, result);
+                Ok(())
+            }
             Err(e) => {
                 error!("Error: [{}]", e);
-                return Err(anyhow!("Error starting service [{}]: {}", name, e));
+                Err(anyhow!("Error starting service [{}]: {}", name, e))
             }
-        };
-        Ok(())
+        }
     }
 
     pub fn stop(&self, name: &str) -> Result<(), anyhow::Error> {
         let unit_name = Manager::get_unit_file_name(name, UnitTypes::Service)?;
         match self.systemd_connection.stop_unit(&unit_name) {
-            Ok(result) => info!("Successfully stopped service [{}]: [{}]", unit_name, result),
+            Ok(result) => {
+                info!("Successfully stopped service [{}]: [{}]", unit_name, result);
+                Ok(())
+            }
             Err(e) => {
                 error!("Error: [{}]", e);
-                return Err(anyhow!("Error stopping service [{}]: {}", name, e));
+                Err(anyhow!("Error stopping service [{}]: {}", name, e))
             }
-        };
-        Ok(())
-    }
-
-    /// TODO: Make this actually do something, currently it only returns true
-    #[allow(unused_variables)]
-    pub fn is_active(&self, name: &str) -> Result<bool, anyhow::Error> {
-        /*let unit_name = Manager::get_unit_file_name(name, UnitTypes::Service)?;
-        match self.systemd_connection.get_unit_status(&unit_name) {
-            Ok(result) => debug!(
-                "Successfully retrieved state for unit [{}]: [{}]",
-                unit_name, result
-            ),
-            Err(e) => {
-                error!("Error: [{}]", e);
-                return Err(anyhow!("Error getting unit state [{}]: {}", name, e));
-            }
-        };*/
-        Ok(true)
+        }
     }
 
     // Check if the unit name is valid and append .service if needed
@@ -133,14 +123,11 @@ impl Manager {
             UnitTypes::Service => ".service",
         };
 
-        // Todo: fugly
+        let mut result = String::from(name);
         if !name.ends_with(extension) {
-            let mut result = String::from(name);
             result.push_str(extension);
-            Ok(result)
-        } else {
-            Ok(String::from(name))
         }
+        Ok(result)
     }
 
     pub fn reload(&self) -> Result<(), anyhow::Error> {
@@ -164,20 +151,20 @@ struct SystemDConnection {
 }
 
 impl SystemDConnection {
-    fn new(user_mode: bool) -> SystemDConnection {
+    fn new(user_mode: bool) -> Result<SystemDConnection, anyhow::Error> {
         let connection = if user_mode {
-            SyncConnection::new_session().expect("Session D-Bus connection failed")
+            SyncConnection::new_session()?
         } else {
-            SyncConnection::new_system().expect("System D-Bus connection failed")
+            SyncConnection::new_system()?
         };
 
-        SystemDConnection {
+        Ok(SystemDConnection {
             connection,
             dest: "org.freedesktop.systemd1",
             node: "/org/freedesktop/systemd1",
             interface: "org.freedesktop.systemd1.Manager",
-            timeout: Duration::from_millis(5000),
-        }
+            timeout: Duration::from_secs(5),
+        })
     }
 
     pub fn reload(&self) -> Result<(), dbus::Error> {
@@ -194,12 +181,26 @@ impl SystemDConnection {
         // create a wrapper struct around the connection that makes it easy
         // to send method calls to a specific destination and path.
         info!("Attempting to start unit {}", unit);
-        let proxy = self
+
+        /*let proxy = self
             .connection
             .with_proxy(self.dest, self.node, self.timeout);
         proxy
             .method_call(self.interface, "StartUnit", (unit, "fail"))
+            */
+        self.method_call("StartUnit", (unit, "fail"))
             .map(|r: (Path,)| r.0)
+    }
+
+    fn method_call<'m, R: ReadAll, A: AppendAll, M: Into<Member<'m>>>(
+        &self,
+        m: M,
+        args: A,
+    ) -> Result<R, dbus::Error> {
+        let proxy = self
+            .connection
+            .with_proxy(self.dest, self.node, self.timeout);
+        proxy.method_call(self.interface, m, args)
     }
 
     /// Takes a unit name as input and attempts to stop it.
@@ -231,8 +232,10 @@ impl SystemDConnection {
         );
         match result {
             Ok(reply) => {
-                let s = reply;
-                info!("Successfully loaded unit [{}] with result [{:?}]", unit, s);
+                info!(
+                    "Successfully loaded unit [{}] with result [{:?}]",
+                    unit, reply
+                );
                 Ok(())
             }
             Err(e) => {

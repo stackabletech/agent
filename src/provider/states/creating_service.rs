@@ -29,12 +29,12 @@ impl State<PodState> for CreatingService {
                 "Creating config directory for service [{}]: {:?}",
                 pod_state.service_name, service_directory
             );
-            match create_dir_all(service_directory) {
-                Ok(()) => {}
-                Err(error) => return Transition::Complete(Err(anyhow::Error::from(error))),
+            if let Err(error) = create_dir_all(service_directory) {
+                return Transition::Complete(Err(anyhow::Error::from(error)));
             }
         }
 
+        // This will create the service unit files on disk
         let service = match Service::new(pod, pod_state) {
             Ok(new_service) => new_service,
             Err(error) => {
@@ -46,6 +46,8 @@ impl State<PodState> for CreatingService {
             }
         };
 
+        // Each pod can map to multiple systemd units/services as each container will get its own systemd unit file/service.
+        // This will iterate over all of them and enable the services.
         for unit in service.systemd_units {
             let target_file = match service_directory
                 .join(service_name)
@@ -64,7 +66,7 @@ impl State<PodState> for CreatingService {
 
             match pod_state
                 .systemd_manager
-                .load(&target_file, &unit, UnitTypes::Service)
+                .enable(&target_file, &unit, UnitTypes::Service)
             {
                 Ok(()) => {}
                 Err(e) => {

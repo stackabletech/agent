@@ -2,27 +2,46 @@ use std::collections::HashMap;
 
 use kubelet::container::Container;
 use kubelet::pod::Pod;
-use phf::{phf_map, phf_ordered_set};
+use phf;
+use phf::{Map, OrderedSet};
 
 use crate::provider::error::StackableError;
 
 use crate::provider::error::StackableError::PodValidationError;
 use crate::provider::states::creating_config::CreatingConfig;
+use crate::provider::systemdmanager::manager::UnitTypes;
 use crate::provider::PodState;
 use log::{debug, error, trace, warn};
 
-static RESTART_POLICY_MAP: phf::Map<&'static str, &'static str> = phf_map! {
+static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
     "Always" => "always",
     "OnFailure" => "on-failure",
     "Never" => "no",
 };
 
+pub const SECTION_SERVICE: &str = "Service";
+pub const SECTION_UNIT: &str = "Unit";
+pub const SECTION_INSTALL: &str = "Install";
+
 // TODO: This will be used later to ensure the same ordering of known sections in
 // unit files, I'll leave it in for now
 #[allow(dead_code)]
-static SECTION_ORDER: phf::OrderedSet<&'static str> =
-    phf_ordered_set! {"Unit", "Service", "Install"};
+static SECTION_ORDER: OrderedSet<&'static str> =
+    phf::phf_ordered_set! {"Unit", "Service", "Install"};
 
+/// A struct representing all systemd units that this server needs to run for a pod that
+/// it was assigned.
+///
+/// There will be a 1:1 relationship between pods assigned to this node and objects of this
+/// struct.
+///
+/// Within the struct multiple systemd units can exist, depending on the container configuration
+/// in the pod.
+///
+/// Currently only service units are implemented, but we plan to extend this to other types of
+/// of units as well (mounts, ..)
+///
+/// Init Containers will be translated to service units as well (still TODO)
 pub struct Service {
     pub systemd_units: Vec<SystemDUnit>,
 }
@@ -30,7 +49,7 @@ pub struct Service {
 impl Service {
     pub fn new(pod: &Pod, pod_state: &PodState) -> Result<Self, StackableError> {
         // Create systemd unit template with values we need from the pod object
-        let pod_settings = SystemDUnit::new_from_pod(&pod);
+        let pod_settings = SystemDUnit::new_from_pod(&pod)?;
 
         // Convert all containers to systemd unit files
         let systemd_units: Result<Vec<SystemDUnit>, StackableError> = pod
@@ -45,9 +64,11 @@ impl Service {
     }
 }
 
+/// A struct that represents an individual systemd unit
 #[derive(Clone)]
 pub struct SystemDUnit {
     name: String,
+    unit_type: UnitTypes,
     sections: HashMap<String, HashMap<String, String>>,
     environment: HashMap<String, String>,
 }
@@ -55,7 +76,6 @@ pub struct SystemDUnit {
 impl SystemDUnit {
     /// Create a new unit which inherits all common elements from ['common_properties'] and parses
     /// everything else from the ['container']
-
     pub fn new(
         common_properties: &SystemDUnit,
         container: &Container,
@@ -64,10 +84,10 @@ impl SystemDUnit {
         let mut unit = common_properties.clone();
         unit.name = String::from(container.name());
 
-        unit.add_property("Unit", "Description", &unit.name.clone());
+        unit.add_property(SECTION_UNIT, "Description", &unit.name.clone());
 
         unit.add_property(
-            "Service",
+            SECTION_SERVICE,
             "ExecStart",
             &SystemDUnit::get_command(container, pod_state)?,
         );
@@ -78,34 +98,46 @@ impl SystemDUnit {
             unit.add_env_var(&name, &value);
         }
 
-        unit.add_property("Service", "StandardOutput", "journal");
-        unit.add_property("Service", "StandardError", "journal");
-        unit.add_property("Install", "WantedBy", "multi-user.target");
+        unit.add_property(SECTION_SERVICE, "StandardOutput", "journal");
+        unit.add_property(SECTION_SERVICE, "StandardError", "journal");
+        unit.add_property(SECTION_INSTALL, "WantedBy", "multi-user.target");
 
         Ok(unit)
     }
 
-    pub fn new_from_pod(pod: &Pod) -> Self {
+    pub fn new_from_pod(pod: &Pod) -> Result<Self, StackableError> {
         let mut unit = SystemDUnit {
             name: pod.name().to_string(),
+            unit_type: UnitTypes::Service,
             sections: Default::default(),
             environment: Default::default(),
         };
 
         let restart_policy = match &pod.as_kube_pod().spec {
+            // if no restart policy is present we default to "never"
             Some(spec) => spec.restart_policy.as_deref().unwrap_or("Never"),
             None => "Never",
         };
 
-        unit.add_property(
-            "Service",
-            "Restart",
-            RESTART_POLICY_MAP.get(restart_policy).unwrap(),
-        );
-        unit
+        // if however one is specified but we do not know about this policy then we do not default
+        // to never but fail the service instead to avoid unpredictable behavior
+        let restart_policy = match RESTART_POLICY_MAP.get(restart_policy) {
+            Some(policy) => policy,
+            None => {
+                return Err(PodValidationError {
+                    msg: format!(
+                        "Unknown value [{}] for RestartPolicy in pod [{}]",
+                        restart_policy, unit.name
+                    ),
+                })
+            }
+        };
+
+        unit.add_property(SECTION_SERVICE, "Restart", restart_policy);
+        Ok(unit)
     }
 
-    // Add a key=value entry to the specified section
+    /// Add a key=value entry to the specified section
     fn add_property(&mut self, section: &'static str, key: &str, value: &str) {
         let section = self
             .sections
@@ -128,7 +160,7 @@ impl SystemDUnit {
             for (key, value) in entries {
                 unit_file_content.push_str(&format!("{}={}\n", key, value));
             }
-            if section.eq("Service") {
+            if section == SECTION_SERVICE {
                 // Add environment variables to Service section
                 for (name, value) in &self.environment {
                     unit_file_content.push_str(&format!("Environment=\"{}={}\"\n", name, value));
@@ -213,6 +245,7 @@ impl SystemDUnit {
         Ok(env_variables)
     }
 
+    // Retrieve a copy of the command object in the pod, or return an error if it is missing
     fn get_command(container: &Container, pod_state: &PodState) -> Result<String, StackableError> {
         // Return an error if no command was specified in the container
         // TODO: We should discuss if there can be a valid scenario for this
@@ -232,7 +265,7 @@ impl SystemDUnit {
         let package_root = pod_state.get_service_package_directory();
 
         trace!(
-            "Commmand before replacing variables and adding packageroot: {:?}",
+            "Command before replacing variables and adding packageroot: {:?}",
             command
         );
         // Get a mutable reference to the first element of the command array as we might need to

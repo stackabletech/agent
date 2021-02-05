@@ -18,17 +18,16 @@ impl State<PodState> for Terminated {
             &pod_state.service_name
         );
 
-        // TODO: this can be written in a nicer way with .map() I think
-        return match pod_state.systemd_manager.stop(&pod_state.service_name) {
-            Ok(()) => match pod_state
-                .systemd_manager
-                .unload(&pod_state.service_name, UnitTypes::Service)
-            {
-                Ok(()) => Transition::Complete(Ok(())),
-                Err(e) => Transition::Complete(Err(e)),
-            }, // TODO: make nicer, but due to early return
+        if let Err(e) = pod_state.systemd_manager.stop(&pod_state.service_name) {
+            return Transition::Complete(Err(e));
+        }
+        match pod_state
+            .systemd_manager
+            .unload(&pod_state.service_name, UnitTypes::Service)
+        {
+            Ok(()) => Transition::Complete(Ok(())),
             Err(e) => Transition::Complete(Err(e)),
-        };
+        }
     }
 
     async fn json_status(

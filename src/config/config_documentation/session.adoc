@@ -1,7 +1,12 @@
 This parameter specifies whether to use a session or the system DBus connection when talking to systemd.
+For our purposps the difference between the two can be explained as the session bus being restricted to the current user, whereas the system bus rolls out services that are available for every user.
+In reality is is a bit more involved than that, please refer to the https://dbus.freedesktop.org/doc/dbus-specification.html[official docs] for more information.
 
-When this flag is used symlink for loaded services will be created in the currently active users home directory and no global changes made to the system.
+When this flag is specified it causes symlinks for loaded services to be created in the currently active users systemd directory `~/.config/systemd/user` instead of one of the globally valid locations:
 
-The default is to use the system bus, which is the machine wide systemd instance.
+- `/lib/systemd/system`
+- `/etc/systemd/system`
 
-This will mainly be useful for scenarios without root access and for testing.
+The default is to use the system bus, for which it is necessary that the agent either run as root or have passwordless sudo rights.
+
+Using the session bus will mainly be useful for scenarios without root access and for testing on developer machines.

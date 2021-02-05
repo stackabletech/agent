@@ -27,7 +27,6 @@ pub struct StackableProvider {
     parcel_directory: PathBuf,
     config_directory: PathBuf,
     log_directory: PathBuf,
-    //    systemd_manager: Arc<RwLock<Manager>>,
     session: bool,
 }
 
@@ -66,7 +65,12 @@ impl PodState {
         self.log_directory.join(&self.service_name)
     }
 
-    // I know, I know, the name sucks!
+    /// Resolve the directory in which the systemd unit files will be placed for this
+    /// service.
+    /// This defaults to "{{config_root}}/_service"
+    ///
+    /// From this place the unit files will be symlinked to the relevant systemd
+    /// unit directories so that they are picked up by systemd.
     pub fn get_service_service_directory(&self) -> PathBuf {
         self.get_service_config_directory().join("_service")
     }
@@ -80,11 +84,6 @@ impl StackableProvider {
         log_directory: PathBuf,
         session: bool,
     ) -> Result<Self, StackableError> {
-        /* let systemdmanager = RwLock::new(Manager::new(
-            PathBuf::from("/home/sliebau/IdeaProjects/agent/work/systemd"),
-            session,
-        ));*/
-
         let provider = StackableProvider {
             client,
             parcel_directory,
@@ -172,7 +171,7 @@ impl Provider for StackableProvider {
     }
 
     async fn initialize_pod_state(&self, pod: &Pod) -> anyhow::Result<Self::PodState> {
-        let service_name = pod.name();
+        let service_name = format!("{}-{}", pod.namespace(), pod.name());
 
         // Extract uid from pod object, if this fails we return an error -
         // this should not happen, as all objects we get from Kubernetes should have
@@ -200,10 +199,17 @@ impl Provider for StackableProvider {
         }
 
         // TODO: investigate if we can share one DBus connection across all pods
-        let systemd_manager = Manager::new(
-            PathBuf::from("/home/sliebau/IdeaProjects/agent/work/systemd"),
-            session,
-        );
+        // Depending on whether we are supposed to run in user space or system-wide
+        // we'll pick the default directory to initialize the systemd manager with
+        // This allows creating unit files either directly in the systemd folder by
+        // passing in just a filename, or symlink them by passing in an absolute
+        // path
+        let unit_directory = if self.session {
+            PathBuf::from("/lib/systemd/system")
+        } else {
+            PathBuf::from("~/.config/systemd/user")
+        };
+        let systemd_manager = Manager::new(unit_directory, session)?;
 
         Ok(PodState {
             client: self.client.clone(),
