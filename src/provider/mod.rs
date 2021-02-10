@@ -153,9 +153,6 @@ impl Provider for StackableProvider {
     const ARCH: &'static str = "stackable-linux";
 
     async fn node(&self, builder: &mut Builder) -> anyhow::Result<()> {
-        println!(
-            "======================================================================\n\n\n\n\n\n"
-        );
         builder.set_architecture(Self::ARCH);
         builder.set_pod_cidr(&self.pod_cidr);
         builder.add_taint("NoSchedule", "kubernetes.io/arch", Self::ARCH);
