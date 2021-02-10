@@ -151,6 +151,7 @@ impl Provider for StackableProvider {
 
     async fn node(&self, builder: &mut Builder) -> anyhow::Result<()> {
         builder.set_architecture(Self::ARCH);
+        builder.set_pod_cidr("");
         builder.add_taint("NoSchedule", "kubernetes.io/arch", Self::ARCH);
         builder.add_taint("NoExecute", "kubernetes.io/arch", Self::ARCH);
         Ok(())
