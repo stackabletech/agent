@@ -19,8 +19,10 @@ use crate::provider::error::StackableError::{
 use crate::provider::repository::package::Package;
 use crate::provider::states::downloading::Downloading;
 use crate::provider::states::terminated::Terminated;
-use crate::provider::systemdmanager::manager::Manager;
+use crate::provider::systemdmanager::manager::SystemdManager;
+use crate::provider::systemdmanager::service::Service;
 use kube::error::ErrorResponse;
+use std::time::Duration;
 
 pub struct StackableProvider {
     client: Client,
@@ -47,7 +49,8 @@ pub struct PodState {
     service_name: String,
     service_uid: String,
     package: Package,
-    systemd_manager: Manager,
+    systemd_manager: SystemdManager,
+    service_units: Option<Service>,
 }
 
 impl PodState {
@@ -199,17 +202,7 @@ impl Provider for StackableProvider {
         }
 
         // TODO: investigate if we can share one DBus connection across all pods
-        // Depending on whether we are supposed to run in user space or system-wide
-        // we'll pick the default directory to initialize the systemd manager with
-        // This allows creating unit files either directly in the systemd folder by
-        // passing in just a filename, or symlink them by passing in an absolute
-        // path
-        let unit_directory = if self.session {
-            PathBuf::from("/lib/systemd/system")
-        } else {
-            PathBuf::from("~/.config/systemd/user")
-        };
-        let systemd_manager = Manager::new(unit_directory, session)?;
+        let systemd_manager = SystemdManager::new(session, Duration::from_secs(5))?;
 
         Ok(PodState {
             client: self.client.clone(),
@@ -218,12 +211,13 @@ impl Provider for StackableProvider {
             log_directory,
             config_directory: self.config_directory.clone(),
             package_download_backoff_strategy: ExponentialBackoffStrategy::default(),
-            service_name: String::from(service_name),
+            service_name,
             service_uid,
             package,
             // TODO: Check if we can work with a reference or a Mutex Guard here to only keep
             // one connection open to DBus instead of one per tracked Pod
             systemd_manager,
+            service_units: None,
         })
     }
 

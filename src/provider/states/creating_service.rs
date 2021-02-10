@@ -5,11 +5,11 @@ use log::{debug, error, info};
 
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::states::starting::Starting;
-use crate::provider::systemdmanager::manager::UnitTypes;
 use crate::provider::systemdmanager::service::Service;
 use crate::provider::PodState;
 use anyhow::anyhow;
 use std::fs::create_dir_all;
+use std::path::PathBuf;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Starting, SetupFailed)]
@@ -34,7 +34,11 @@ impl State<PodState> for CreatingService {
             }
         }
 
-        // This will create the service unit files on disk
+        // Naming schema
+        //  Service name: namespace-podname
+        //  SystemdUnit: namespace-podname-containername
+        // TODO: add this to the docs in more detail
+        // Create service containing all systemd units from pod spec
         let service = match Service::new(pod, pod_state) {
             Ok(new_service) => new_service,
             Err(error) => {
@@ -46,9 +50,11 @@ impl State<PodState> for CreatingService {
             }
         };
 
-        // Each pod can map to multiple systemd units/services as each container will get its own systemd unit file/service.
-        // This will iterate over all of them and enable the services.
-        for unit in service.systemd_units {
+        // Each pod can map to multiple systemd units/services as each container will get its own
+        // systemd unit file/service.
+        // This will iterate over all of them, write the service files to disk and link
+        // the service to systemd.
+        for unit in &service.systemd_units {
             let target_file = match service_directory
                 .join(service_name)
                 .into_os_string()
@@ -64,19 +70,28 @@ impl State<PodState> for CreatingService {
                 }
             };
 
+            //Some(PathBuf::from(service_directory)),
+
+            // Create the service
             match pod_state
                 .systemd_manager
-                .enable(&target_file, &unit, UnitTypes::Service)
+                .create_unit(&unit, None, true, true)
             {
                 Ok(()) => {}
                 Err(e) => {
                     // TODO: We need to discuss what to do here, in theory we could have loaded
                     // other services already, do we want to stop those?
-                    error!("Failed to load service unit for service [{}]", service_name);
+                    error!(
+                        "Failed to create systemd unit for service [{}]",
+                        service_name
+                    );
                     return Transition::Complete(Err(e));
                 }
             }
+            // Done for now, if the service was created successfully we are happy
+            // Starting and enabling comes in a later state after all service have been createddy
         }
+        pod_state.service_units = Some(service);
 
         // All services were loaded successfully, otherwise we'd have returned early above
         Transition::next(self, Starting)

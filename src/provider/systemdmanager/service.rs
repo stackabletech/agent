@@ -12,6 +12,8 @@ use crate::provider::states::creating_config::CreatingConfig;
 use crate::provider::systemdmanager::manager::UnitTypes;
 use crate::provider::PodState;
 use log::{debug, error, trace, warn};
+use std::fmt;
+use std::fmt::{Display, Formatter};
 
 static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
     "Always" => "always",
@@ -24,7 +26,7 @@ pub const SECTION_UNIT: &str = "Unit";
 pub const SECTION_INSTALL: &str = "Install";
 
 // TODO: This will be used later to ensure the same ordering of known sections in
-// unit files, I'll leave it in for now
+//  unit files, I'll leave it in for now
 #[allow(dead_code)]
 static SECTION_ORDER: OrderedSet<&'static str> =
     phf::phf_ordered_set! {"Unit", "Service", "Install"};
@@ -42,6 +44,8 @@ static SECTION_ORDER: OrderedSet<&'static str> =
 /// of units as well (mounts, ..)
 ///
 /// Init Containers will be translated to service units as well (still TODO)
+// TODO: This is actually purely a stackable thing and should be removed from the systemd-specific
+//  code in preparation of pulling that out in a crate
 pub struct Service {
     pub systemd_units: Vec<SystemDUnit>,
 }
@@ -51,11 +55,17 @@ impl Service {
         // Create systemd unit template with values we need from the pod object
         let pod_settings = SystemDUnit::new_from_pod(&pod)?;
 
+        let kube_pod = pod.as_kube_pod();
+        let namespace = kube_pod.metadata.namespace.as_ref().unwrap();
+        let pod_name = kube_pod.metadata.name.as_ref().unwrap();
+
+        let prefix = format!("{}-{}-", namespace, pod_name);
+
         // Convert all containers to systemd unit files
         let systemd_units: Result<Vec<SystemDUnit>, StackableError> = pod
             .containers()
             .iter()
-            .map(|container| SystemDUnit::new(&pod_settings, container, pod_state))
+            .map(|container| SystemDUnit::new(&pod_settings, &prefix, container, pod_state))
             .collect();
 
         systemd_units.map(|units| Self {
@@ -67,22 +77,35 @@ impl Service {
 /// A struct that represents an individual systemd unit
 #[derive(Clone)]
 pub struct SystemDUnit {
-    name: String,
-    unit_type: UnitTypes,
-    sections: HashMap<String, HashMap<String, String>>,
-    environment: HashMap<String, String>,
+    pub name: String,
+    pub unit_type: UnitTypes,
+    pub sections: HashMap<String, HashMap<String, String>>,
+    pub environment: HashMap<String, String>,
 }
 
+// TODO: The parsing code is also highly stackable specific, we should
+//  at some point consider splitting this out and have systemdunit live
+//  inside the systemd crate and the parsing in the agent
 impl SystemDUnit {
     /// Create a new unit which inherits all common elements from ['common_properties'] and parses
     /// everything else from the ['container']
     pub fn new(
         common_properties: &SystemDUnit,
+        name_prefix: &str,
         container: &Container,
         pod_state: &PodState,
     ) -> Result<Self, StackableError> {
         let mut unit = common_properties.clone();
-        unit.name = String::from(container.name());
+
+        let trimmed_name = match container
+            .name()
+            .strip_suffix(common_properties.get_type_string())
+        {
+            None => container.name().to_string(),
+            Some(name_without_suffix) => name_without_suffix.to_string(),
+        };
+
+        unit.name = format!("{}{}", name_prefix, trimmed_name);
 
         unit.add_property(SECTION_UNIT, "Description", &unit.name.clone());
 
@@ -137,6 +160,10 @@ impl SystemDUnit {
         Ok(unit)
     }
 
+    pub fn get_name(&self) -> String {
+        format!("{}.service", self.name)
+    }
+
     /// Add a key=value entry to the specified section
     fn add_property(&mut self, section: &'static str, key: &str, value: &str) {
         let section = self
@@ -171,6 +198,11 @@ impl SystemDUnit {
         unit_file_content
     }
 
+    fn get_type_string(&self) -> &str {
+        match &self.unit_type {
+            Service => ".service",
+        }
+    }
     fn get_environment(
         container: &Container,
         pod_state: &PodState,
@@ -350,5 +382,11 @@ impl SystemDUnit {
         );
 
         Ok(command_render_result.join(" "))
+    }
+}
+
+impl Display for SystemDUnit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.get_name())
     }
 }
