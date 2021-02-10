@@ -38,6 +38,27 @@ After rust is installed simply run
 
 To create the binary file in _target/debug_.
 
+==== Build dependencies
+The agent depends on native dbus libraries to communicate with systemd.
+For the build process to work these need to be installed on the build system.
+
+
+
+|===
+|Distribution |Package Names
+
+|Ubuntu
+a|- libdbus-1-dev
+- pkg-config
+- libdbus-1-3
+
+|Centos
+a|- dbus-devel
+
+|===
+
+
+
 === Download binary
 We do not at this time provide pre-compiled binaries, as we are still in the process of setting up the build jobs to create these.
 This readme will be updated as soon as binary downloads are available!
