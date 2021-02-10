@@ -68,8 +68,8 @@ async fn main() -> anyhow::Result<()> {
         hostname: agent_config.hostname.clone(),
         node_name: agent_config.hostname,
         server_config,
-        data_dir: agent_config.data_directory,
-        plugins_dir: Default::default(),
+        data_dir: agent_config.data_directory.clone(),
+        plugins_dir: agent_config.data_directory.join("plugins"),
         node_labels: agent_config.tags,
         // TODO: Discuss whether we want this configurable or leave it at a high number for now
         max_pods: 110,
@@ -87,6 +87,7 @@ async fn main() -> anyhow::Result<()> {
         agent_config.parcel_directory.clone(),
         agent_config.config_directory.clone(),
         agent_config.log_directory.clone(),
+        agent_config.pod_cidr,
     )
     .await
     .expect("Error initializing provider.");

@@ -27,6 +27,7 @@ pub struct StackableProvider {
     parcel_directory: PathBuf,
     config_directory: PathBuf,
     log_directory: PathBuf,
+    pod_cidr: String,
 }
 
 pub const CRDS: &[&str] = &["repositories.stable.stackable.de"];
@@ -70,12 +71,14 @@ impl StackableProvider {
         parcel_directory: PathBuf,
         config_directory: PathBuf,
         log_directory: PathBuf,
+        pod_cidr: String,
     ) -> Result<Self, StackableError> {
         let provider = StackableProvider {
             client,
             parcel_directory,
             config_directory,
             log_directory,
+            pod_cidr,
         };
         let missing_crds = provider.check_crds().await?;
         return if missing_crds.is_empty() {
@@ -150,8 +153,11 @@ impl Provider for StackableProvider {
     const ARCH: &'static str = "stackable-linux";
 
     async fn node(&self, builder: &mut Builder) -> anyhow::Result<()> {
+        println!(
+            "======================================================================\n\n\n\n\n\n"
+        );
         builder.set_architecture(Self::ARCH);
-        builder.set_pod_cidr("");
+        builder.set_pod_cidr(&self.pod_cidr);
         builder.add_taint("NoSchedule", "kubernetes.io/arch", Self::ARCH);
         builder.add_taint("NoExecute", "kubernetes.io/arch", Self::ARCH);
         Ok(())
