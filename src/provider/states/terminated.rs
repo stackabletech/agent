@@ -20,7 +20,7 @@ impl State<PodState> for Terminated {
         // TODO: We need some additional error handling here, wait for the services to actually
         //  shut down and try to remove the rest of the services if one fails (tbd, do we want that?)
         if let Some(systemd_units) = &pod_state.service_units {
-            for unit in &systemd_units.systemd_units {
+            for unit in systemd_units {
                 info!("Stopping systemd unit [{}]", unit);
                 if let Err(stop_error) = pod_state.systemd_manager.stop(&unit.get_name()) {
                     error!(

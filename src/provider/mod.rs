@@ -20,7 +20,7 @@ use crate::provider::repository::package::Package;
 use crate::provider::states::downloading::Downloading;
 use crate::provider::states::terminated::Terminated;
 use crate::provider::systemdmanager::manager::SystemdManager;
-use crate::provider::systemdmanager::service::Service;
+use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use kube::error::ErrorResponse;
 use std::time::Duration;
 
@@ -50,7 +50,7 @@ pub struct PodState {
     service_uid: String,
     package: Package,
     systemd_manager: SystemdManager,
-    service_units: Option<Service>,
+    service_units: Option<Vec<SystemDUnit>>,
 }
 
 impl PodState {

@@ -16,7 +16,7 @@ pub struct Starting;
 impl State<PodState> for Starting {
     async fn next(self: Box<Self>, pod_state: &mut PodState, _: &Pod) -> Transition<PodState> {
         if let Some(systemd_units) = &pod_state.service_units {
-            for unit in &systemd_units.systemd_units {
+            for unit in systemd_units {
                 info!("Starting systemd unit [{}]", unit);
                 if let Err(start_error) = pod_state.systemd_manager.start(&unit.get_name()) {
                     error!(

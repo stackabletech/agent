@@ -1,6 +1,6 @@
 //! A manager that allows managing systemd units
 
-use crate::provider::systemdmanager::service::SystemDUnit;
+use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use anyhow::anyhow;
 use dbus::arg::{AppendAll, ReadAll};
 use dbus::blocking::SyncConnection;

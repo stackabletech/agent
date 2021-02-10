@@ -5,7 +5,7 @@ use log::{debug, error, info};
 
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::states::starting::Starting;
-use crate::provider::systemdmanager::service::Service;
+use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::PodState;
 use std::fs::create_dir_all;
 
@@ -33,28 +33,43 @@ impl State<PodState> for CreatingService {
         }
 
         // Naming schema
-        //  Service name: namespace-podname
-        //  SystemdUnit: namespace-podname-containername
+        //  Service name: `namespace-podname`
+        //  SystemdUnit: `namespace-podname-containername`
         // TODO: add this to the docs in more detail
-        // Create service containing all systemd units from pod spec
-        let service = match Service::new(pod, pod_state) {
-            Ok(new_service) => new_service,
-            Err(error) => {
+        let service_prefix = format!("{}-{}-", pod.namespace(), pod.name());
+
+        // Create a template from those settings that are derived directly from the pod, not
+        // from container objects
+        let unit_template = match SystemDUnit::new_from_pod(&pod) {
+            Ok(unit) => unit,
+            Err(pod_error) => {
                 error!(
-                    "Failed to create service units from pod [{}], aborting.",
-                    pod_state.service_name
+                    "Unable to create systemd unit template from pod [{}]: [{}]",
+                    service_name, pod_error
                 );
-                return Transition::Complete(Err(anyhow::Error::from(error)));
+                return Transition::Complete(Err(anyhow::Error::from(pod_error)));
             }
         };
 
         // Each pod can map to multiple systemd units/services as each container will get its own
         // systemd unit file/service.
-        // This will iterate over all of them, write the service files to disk and link
-        // the service to systemd.
-        for unit in &service.systemd_units {
-            // Create the service
+        // Map every container from the pod object to a systemdunit
+        let systemd_units: Vec<SystemDUnit> = match pod
+            .containers()
+            .iter()
+            .map(|container| {
+                SystemDUnit::new(&unit_template, &service_prefix, container, pod_state)
+            })
+            .collect()
+        {
+            Ok(units) => units,
+            Err(err) => return Transition::Complete(Err(anyhow::Error::from(err))),
+        };
 
+        // This will iterate over all systemd units, write the service files to disk and link
+        // the service to systemd.
+        for unit in &systemd_units {
+            // Create the service
             // As per ADR005 we currently write the unit files directly in the systemd
             // unit directory (by passing None as [unit_file_path]).
             match pod_state
@@ -75,7 +90,7 @@ impl State<PodState> for CreatingService {
             // Done for now, if the service was created successfully we are happy
             // Starting and enabling comes in a later state after all service have been createddy
         }
-        pod_state.service_units = Some(service);
+        pod_state.service_units = Some(systemd_units);
 
         // All services were loaded successfully, otherwise we'd have returned early above
         Transition::next(self, Starting)

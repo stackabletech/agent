@@ -30,49 +30,6 @@ pub const SECTION_INSTALL: &str = "Install";
 static SECTION_ORDER: OrderedSet<&'static str> =
     phf::phf_ordered_set! {"Unit", "Service", "Install"};
 
-/// A struct representing all systemd units that this server needs to run for a pod that
-/// it was assigned.
-///
-/// There will be a 1:1 relationship between pods assigned to this node and objects of this
-/// struct.
-///
-/// Within the struct multiple systemd units can exist, depending on the container configuration
-/// in the pod.
-///
-/// Currently only service units are implemented, but we plan to extend this to other types of
-/// of units as well (mounts, ..)
-///
-/// Init Containers will be translated to service units as well (still TODO)
-// TODO: This is actually purely a stackable thing and should be removed from the systemd-specific
-//  code in preparation of pulling that out in a crate
-pub struct Service {
-    pub systemd_units: Vec<SystemDUnit>,
-}
-
-impl Service {
-    pub fn new(pod: &Pod, pod_state: &PodState) -> Result<Self, StackableError> {
-        // Create systemd unit template with values we need from the pod object
-        let pod_settings = SystemDUnit::new_from_pod(&pod)?;
-
-        let kube_pod = pod.as_kube_pod();
-        let namespace = kube_pod.metadata.namespace.as_ref().unwrap();
-        let pod_name = kube_pod.metadata.name.as_ref().unwrap();
-
-        let prefix = format!("{}-{}-", namespace, pod_name);
-
-        // Convert all containers to systemd unit files
-        let systemd_units: Result<Vec<SystemDUnit>, StackableError> = pod
-            .containers()
-            .iter()
-            .map(|container| SystemDUnit::new(&pod_settings, &prefix, container, pod_state))
-            .collect();
-
-        systemd_units.map(|units| Self {
-            systemd_units: units,
-        })
-    }
-}
-
 /// A struct that represents an individual systemd unit
 #[derive(Clone)]
 pub struct SystemDUnit {
@@ -120,8 +77,10 @@ impl SystemDUnit {
             unit.add_env_var(&name, &value);
         }
 
+        // These are currently hard-coded, as this is not something we expect to change soon
         unit.add_property(SECTION_SERVICE, "StandardOutput", "journal");
         unit.add_property(SECTION_SERVICE, "StandardError", "journal");
+        // This one is mandatory, as otherwise enabling the unit fails
         unit.add_property(SECTION_INSTALL, "WantedBy", "multi-user.target");
 
         Ok(unit)
