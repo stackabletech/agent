@@ -6,7 +6,7 @@ use dbus::arg::{AppendAll, ReadAll};
 use dbus::blocking::SyncConnection;
 use dbus::strings::Member;
 use dbus::Path;
-use log::{debug, warn};
+use log::debug;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
@@ -192,11 +192,15 @@ impl SystemdManager {
                 "Error disabling systemd unit [{}]: [{}]",
                 unit, disable_error
             );
-            return Err(anyhow::Error::from(disable_error));
+            return Err(disable_error);
         }
 
         debug!("Removing unit [{}] from systemd", unit);
         self.delete_unit_file(&unit)?;
+
+        if daemon_reload {
+            self.reload()?;
+        }
         Ok(())
     }
 

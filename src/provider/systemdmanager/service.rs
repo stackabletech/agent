@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use kubelet::container::Container;
 use kubelet::pod::Pod;
-use phf;
 use phf::{Map, OrderedSet};
 
 use crate::provider::error::StackableError;
@@ -200,7 +199,7 @@ impl SystemDUnit {
 
     fn get_type_string(&self) -> &str {
         match &self.unit_type {
-            Service => ".service",
+            UnitTypes::Service => ".service",
         }
     }
     fn get_environment(

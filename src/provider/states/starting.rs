@@ -6,7 +6,7 @@ use crate::provider::states::failed::Failed;
 use crate::provider::states::running::Running;
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::PodState;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Running, Failed, SetupFailed)]

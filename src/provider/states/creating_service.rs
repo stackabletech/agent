@@ -7,9 +7,7 @@ use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::states::starting::Starting;
 use crate::provider::systemdmanager::service::Service;
 use crate::provider::PodState;
-use anyhow::anyhow;
 use std::fs::create_dir_all;
-use std::path::PathBuf;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Starting, SetupFailed)]
@@ -55,24 +53,10 @@ impl State<PodState> for CreatingService {
         // This will iterate over all of them, write the service files to disk and link
         // the service to systemd.
         for unit in &service.systemd_units {
-            let target_file = match service_directory
-                .join(service_name)
-                .into_os_string()
-                .into_string()
-            {
-                Ok(path) => path,
-                Err(_) => {
-                    // TODO: output proper error message with information
-                    return Transition::Complete(Err(anyhow!(
-                        "Failed to convert path for service unit file [{}]",
-                        service_name
-                    )));
-                }
-            };
-
-            //Some(PathBuf::from(service_directory)),
-
             // Create the service
+
+            // As per ADR005 we currently write the unit files directly in the systemd
+            // unit directory (by passing None as [unit_file_path]).
             match pod_state
                 .systemd_manager
                 .create_unit(&unit, None, true, true)
