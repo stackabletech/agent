@@ -14,6 +14,7 @@ use log::{debug, error, trace, warn};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
+// This is used to map from Kubernetes restart lingo to systemd restart terms
 static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
     "Always" => "always",
     "OnFailure" => "on-failure",
@@ -86,6 +87,10 @@ impl SystemDUnit {
         Ok(unit)
     }
 
+    /// Parse a pod object and retrieve the generic settings which will be the same across
+    /// all service units created for containers in this pod.
+    /// This is designed to then be used as `common_properties` parameter when calling
+    ///[`SystemdUnit::new`]
     pub fn new_from_pod(pod: &Pod) -> Result<Self, StackableError> {
         let mut unit = SystemDUnit {
             name: pod.name().to_string(),
@@ -118,8 +123,11 @@ impl SystemDUnit {
         Ok(unit)
     }
 
+    /// Convenience function to retrieve the _fully qualified_ systemd name, which includes the
+    /// `.servicetype` part.
     pub fn get_name(&self) -> String {
-        format!("{}.service", self.name)
+        let lower_type = format!("{:?}", self.unit_type).to_lowercase();
+        format!("{}.{}", self.name, lower_type)
     }
 
     /// Add a key=value entry to the specified section
@@ -136,6 +144,7 @@ impl SystemDUnit {
             .insert(String::from(name), String::from(value));
     }
 
+    /// Retrieve content of the unit file as it should be written to disk
     pub fn get_unit_file_content(&self) -> String {
         let mut unit_file_content = String::new();
 

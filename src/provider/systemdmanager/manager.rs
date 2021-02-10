@@ -1,5 +1,8 @@
-//! A manager that allows managing systemd units
-
+//! A module to allow managing systemd units - mostly services currently
+//!
+//! The module offers the ability to create, remove, start, stop, enable and
+//! disable systemd units.
+//!
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use anyhow::anyhow;
 use dbus::arg::{AppendAll, ReadAll};
@@ -13,21 +16,28 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// Enum that lists the supported unit types
 #[derive(Clone, Debug)]
 pub enum UnitTypes {
     Service,
 }
 
-pub const SYSTEMD_DESTINATION: &str = "org.freedesktop.systemd1";
-pub const SYSTEMD_NODE: &str = "/org/freedesktop/systemd1";
-pub const SYSTEMD_MANAGER_INTERFACE: &str = "org.freedesktop.systemd1.Manager";
+const SYSTEMD_DESTINATION: &str = "org.freedesktop.systemd1";
+const SYSTEMD_NODE: &str = "/org/freedesktop/systemd1";
+const SYSTEMD_MANAGER_INTERFACE: &str = "org.freedesktop.systemd1.Manager";
 
+/// The main way of interacting with this module, this struct offers
+/// the public methods for managing service units.
+///
+/// Use [`SystemdManager::new`] to create a new instance.
 pub struct SystemdManager {
     units_directory: PathBuf,
     connection: SyncConnection, //TODO does this need to be closed?
     timeout: Duration,
 }
 
+/// By default the manager will connect to the system-wide instance of systemd,
+/// which requires root access to the os.
 impl Default for SystemdManager {
     fn default() -> Self {
         // If this panics we broke something in the code, as this is all constant values that
@@ -37,6 +47,8 @@ impl Default for SystemdManager {
 }
 
 impl SystemdManager {
+    /// Create a new instance, takes a flag whether to run within the user session or manage services
+    /// system-wide and a timeout value for dbus communications.
     pub fn new(user_mode: bool, timeout: Duration) -> Result<Self, anyhow::Error> {
         // Connect to session or system bus depending on the value of [user_mode]
         let connection = if user_mode {
@@ -231,7 +243,8 @@ impl SystemdManager {
         }
     }
 
-    // Stop and disable the service, then delete the unit file from disk
+    // Disable the systemd unit - which effectively means removing the symlink from the
+    // multi-user.target subdirectory.
     pub fn disable(&self, unit: &str) -> Result<Vec<(String, String, String)>, anyhow::Error> {
         debug!("Trying to disable systemd unit [{}]", unit);
         match self
