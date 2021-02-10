@@ -68,8 +68,8 @@ async fn main() -> anyhow::Result<()> {
         hostname: agent_config.hostname.clone(),
         node_name: agent_config.hostname,
         server_config,
-        data_dir: agent_config.data_directory.clone(),
-        plugins_dir: agent_config.data_directory.join("plugins"),
+        data_dir: agent_config.data_directory,
+        plugins_dir: Default::default(),
         node_labels: agent_config.tags,
         // TODO: Discuss whether we want this configurable or leave it at a high number for now
         max_pods: 110,
