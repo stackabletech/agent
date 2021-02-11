@@ -170,6 +170,7 @@ impl SystemDUnit {
             UnitTypes::Service => ".service",
         }
     }
+
     fn get_environment(
         container: &Container,
         pod_state: &PodState,

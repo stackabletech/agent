@@ -38,14 +38,17 @@ impl State<PodState> for Terminated {
                     .remove_unit(&unit.get_name(), false)
                 {
                     error!(
-                        "Error occurred stopping systemd unit [{}]: [{}]",
+                        "Error occurred removing systemd unit [{}]: [{}]",
                         unit, remove_error
                     );
                     return Transition::Complete(Err(remove_error));
                 }
             }
         } else {
-            warn!("No unit definitions found, not starting anything!");
+            warn!(
+                "No unit definitions found, not stopping anything for pod [{}]!",
+                pod_state.service_name
+            );
         }
 
         info!("Performing daemon-reload");

@@ -130,7 +130,7 @@ impl SystemdManager {
     ) -> Result<(), anyhow::Error> {
         // Appends .service to name if necessary
         let linked_unit_file = unit_file_path.is_some();
-        let unit_name = SystemdManager::get_unit_file_name(unit.name.as_ref(), &unit.unit_type)?;
+        let unit_name = SystemdManager::get_unit_file_name(&unit.name, &unit.unit_type)?;
 
         // Check if a path was provided for the unit file, otherwise use the base directory
         let target_file = if let Some(path) = unit_file_path {
@@ -146,7 +146,18 @@ impl SystemdManager {
             &unit_name, &target_file
         );
 
-        // If no external file was created check if the file currently exists
+        // The following behavior distinguishes between a systemd unit that is defined in a file
+        // external to the systemd units directory which is then symlinked to and a file that is
+        // created directly in the systemd units dir.
+        //
+        // For the first case the _external_ file that will be symlinked to should have been written
+        // or potentially overwritten above, which is why we bypass this entire conditional in that
+        // case.
+        // For the case where we need to symlink we check if a symlink already exists and if so
+        // if force has been specified - only then do we remove an existing link before recreating
+        // it.
+        // In theory the dbus call to systemd has a `force` parameter that should have the same
+        // effect, but that did not work during testing, so I've implemented this workaround for now.
         if !linked_unit_file {
             debug!("Target file [{:?}] already exists", &target_file);
             if target_file.exists() {
@@ -253,12 +264,11 @@ impl SystemdManager {
         {
             Ok(result) => {
                 debug!("Successfully disabled service [{}]", unit);
-                println!("{:?}", result);
                 Ok(result)
             }
             Err(e) => {
                 debug!("Error: [{}]", e);
-                Err(anyhow!("Error starting service [{}]: {}", unit, e))
+                Err(anyhow!("Error disabling service [{}]: {}", unit, e))
             }
         }
     }
@@ -302,7 +312,7 @@ impl SystemdManager {
             }
             Err(e) => {
                 debug!("Error: [{}]", e);
-                Err(anyhow!("Error s service [{}]: {}", unit, e))
+                Err(anyhow!("Error stopping service [{}]: {}", unit, e))
             }
         }
     }

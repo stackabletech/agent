@@ -27,7 +27,7 @@ impl State<PodState> for Starting {
                     return Transition::Complete(Err(start_error));
                 }
 
-                info!("Enabling systed unit [{}]", unit);
+                info!("Enabling systemd unit [{}]", unit);
                 if let Err(enable_error) = pod_state.systemd_manager.enable(&unit.get_name()) {
                     error!(
                         "Error occurred starting systemd unit [{}]: [{}]",
@@ -38,7 +38,10 @@ impl State<PodState> for Starting {
                 }
             }
         } else {
-            warn!("No unit definitions found, not starting anything!");
+            warn!(
+                "No unit definitions found, not starting anything for pod [{}]!",
+                pod_state.service_name
+            );
         }
         Transition::next(
             self,
