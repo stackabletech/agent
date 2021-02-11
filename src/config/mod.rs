@@ -164,7 +164,7 @@ impl AgentConfig {
         default: Some(""),
         required: false,
         takes_argument: true,
-        help: "An ip range in CIDR notation which designates the range that pods assigned to this node should have their ip addresses in.",
+        help: "An IP range in CIDR notation which designates the range that pods assigned to this node should have their ip addresses in.",
         documentation: include_str!("config_documentation/pod_cidr.adoc"),
         list: false
     };

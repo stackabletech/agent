@@ -3,3 +3,5 @@ The effect of this setting is that Kubernetes will reserve address blocks from w
 Depending on the setting for maximum pods per node, these will be larger or smaller ranges, and influence the maximum number of nodes for the cluster.
 
 The agent does not require any pod address ranges, and by default doesn't specify anything for this setting.
+
+WARNING: There should almost never be a reason to use this setting, this is mostly here for very special circumstances. Do not touch it unless you really know what you're doing.
