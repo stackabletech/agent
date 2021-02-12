@@ -1,7 +1,6 @@
 use std::convert::TryFrom;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Child;
 
 use anyhow::anyhow;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
@@ -20,13 +19,17 @@ use crate::provider::error::StackableError::{
 use crate::provider::repository::package::Package;
 use crate::provider::states::downloading::Downloading;
 use crate::provider::states::terminated::Terminated;
+use crate::provider::systemdmanager::manager::SystemdManager;
+use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use kube::error::ErrorResponse;
+use std::time::Duration;
 
 pub struct StackableProvider {
     client: Client,
     parcel_directory: PathBuf,
     config_directory: PathBuf,
     log_directory: PathBuf,
+    session: bool,
     pod_cidr: String,
 }
 
@@ -35,6 +38,7 @@ pub const CRDS: &[&str] = &["repositories.stable.stackable.de"];
 mod error;
 mod repository;
 mod states;
+mod systemdmanager;
 
 pub struct PodState {
     client: Client,
@@ -46,7 +50,8 @@ pub struct PodState {
     service_name: String,
     service_uid: String,
     package: Package,
-    process_handle: Option<Child>,
+    systemd_manager: SystemdManager,
+    service_units: Option<Vec<SystemDUnit>>,
 }
 
 impl PodState {
@@ -63,6 +68,16 @@ impl PodState {
     pub fn get_service_log_directory(&self) -> PathBuf {
         self.log_directory.join(&self.service_name)
     }
+
+    /// Resolve the directory in which the systemd unit files will be placed for this
+    /// service.
+    /// This defaults to "{{config_root}}/_service"
+    ///
+    /// From this place the unit files will be symlinked to the relevant systemd
+    /// unit directories so that they are picked up by systemd.
+    pub fn get_service_service_directory(&self) -> PathBuf {
+        self.get_service_config_directory().join("_service")
+    }
 }
 
 impl StackableProvider {
@@ -71,6 +86,7 @@ impl StackableProvider {
         parcel_directory: PathBuf,
         config_directory: PathBuf,
         log_directory: PathBuf,
+        session: bool,
         pod_cidr: String,
     ) -> Result<Self, StackableError> {
         let provider = StackableProvider {
@@ -78,6 +94,7 @@ impl StackableProvider {
             parcel_directory,
             config_directory,
             log_directory,
+            session,
             pod_cidr,
         };
         let missing_crds = provider.check_crds().await?;
@@ -161,7 +178,7 @@ impl Provider for StackableProvider {
     }
 
     async fn initialize_pod_state(&self, pod: &Pod) -> anyhow::Result<Self::PodState> {
-        let service_name = pod.name();
+        let service_name = format!("{}-{}", pod.namespace(), pod.name());
 
         // Extract uid from pod object, if this fails we return an error -
         // this should not happen, as all objects we get from Kubernetes should have
@@ -178,6 +195,7 @@ impl Provider for StackableProvider {
         let download_directory = parcel_directory.join("_download");
         let config_directory = self.config_directory.clone();
         let log_directory = self.log_directory.clone();
+        let session = self.session;
 
         let package = Self::get_package(pod)?;
         if !(&download_directory.is_dir()) {
@@ -187,6 +205,9 @@ impl Provider for StackableProvider {
             fs::create_dir_all(&config_directory)?;
         }
 
+        // TODO: investigate if we can share one DBus connection across all pods
+        let systemd_manager = SystemdManager::new(session, Duration::from_secs(5))?;
+
         Ok(PodState {
             client: self.client.clone(),
             parcel_directory,
@@ -194,10 +215,13 @@ impl Provider for StackableProvider {
             log_directory,
             config_directory: self.config_directory.clone(),
             package_download_backoff_strategy: ExponentialBackoffStrategy::default(),
-            service_name: String::from(service_name),
+            service_name,
             service_uid,
             package,
-            process_handle: None,
+            // TODO: Check if we can work with a reference or a Mutex Guard here to only keep
+            // one connection open to DBus instead of one per tracked Pod
+            systemd_manager,
+            service_units: None,
         })
     }
 

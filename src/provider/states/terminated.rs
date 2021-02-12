@@ -1,6 +1,5 @@
-use anyhow::anyhow;
 use kubelet::state::prelude::*;
-use log::{debug, error, info};
+use log::{error, info, warn};
 
 use crate::provider::PodState;
 
@@ -14,28 +13,50 @@ pub struct Terminated {
 impl State<PodState> for Terminated {
     async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
         info!(
-            "Pod {} was terminated, stopping process!",
+            "Pod {} was terminated, stopping service!",
             &pod_state.service_name
         );
-        // Obtain a mutable reference to the process handle
-        let child = if let Some(testproc) = pod_state.process_handle.as_mut() {
-            testproc
-        } else {
-            return Transition::Complete(Err(anyhow!("Unable to retrieve process handle")));
-        };
 
-        return match child.kill() {
-            Ok(()) => {
-                debug!("Successfully killed process {}", pod_state.service_name);
-                Transition::Complete(Ok(()))
+        // TODO: We need some additional error handling here, wait for the services to actually
+        //  shut down and try to remove the rest of the services if one fails (tbd, do we want that?)
+        if let Some(systemd_units) = &pod_state.service_units {
+            for unit in systemd_units {
+                info!("Stopping systemd unit [{}]", unit);
+                if let Err(stop_error) = pod_state.systemd_manager.stop(&unit.get_name()) {
+                    error!(
+                        "Error occurred stopping systemd unit [{}]: [{}]",
+                        unit.get_name(),
+                        stop_error
+                    );
+                    return Transition::Complete(Err(stop_error));
+                }
+
+                // Daemon reload is false here, we'll do that once after all units have been removed
+                info!("Removing systemd unit [{}]", &unit);
+                if let Err(remove_error) = pod_state
+                    .systemd_manager
+                    .remove_unit(&unit.get_name(), false)
+                {
+                    error!(
+                        "Error occurred removing systemd unit [{}]: [{}]",
+                        unit, remove_error
+                    );
+                    return Transition::Complete(Err(remove_error));
+                }
             }
-            Err(e) => {
-                error!(
-                    "Failed to stop process with pid {} due to: {:?}",
-                    child.id(),
-                    e
-                );
-                Transition::Complete(Err(anyhow::Error::new(e)))
+        } else {
+            warn!(
+                "No unit definitions found, not stopping anything for pod [{}]!",
+                pod_state.service_name
+            );
+        }
+
+        info!("Performing daemon-reload");
+        return match pod_state.systemd_manager.reload() {
+            Ok(()) => Transition::Complete(Ok(())),
+            Err(reload_error) => {
+                error!("Failed to perform daemon-reload: [{}]", reload_error);
+                Transition::Complete(Err(reload_error))
             }
         };
     }

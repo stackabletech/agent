@@ -1,4 +1,4 @@
-/// This is a helper binary which generates the file _documentation/commandline_args.adoc_ which
+/// This is a helper binary which generates the file `documentation/commandline_args.adoc` which
 /// contains documentation of the available command line options for the agent binary.
 ///
 /// It gets the content by calling [`stackable_agent::config::AgentConfig::get_documentation()`]

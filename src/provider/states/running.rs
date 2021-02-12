@@ -4,18 +4,17 @@ use k8s_openapi::api::core::v1::{
 use kubelet::pod::Pod;
 use kubelet::state::prelude::*;
 use kubelet::state::{State, Transition};
-use log::{debug, error, trace};
+use log::{debug, trace};
 
 use crate::provider::states::failed::Failed;
 use crate::provider::states::installing::Installing;
 use crate::provider::states::make_status_with_containers_and_condition;
-use crate::provider::states::stopping::Stopping;
 use crate::provider::PodState;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use k8s_openapi::chrono;
 
 #[derive(Debug, TransitionTo)]
-#[transition_to(Stopping, Failed, Running, Installing)]
+#[transition_to(Failed, Running, Installing)]
 pub struct Running {
     pub transition_time: Time,
 }
@@ -37,43 +36,12 @@ impl State<PodState> for Running {
     ) -> Transition<PodState> {
         loop {
             tokio::select! {
-                _ = tokio::time::delay_for(std::time::Duration::from_secs(1))  => {
+                _ = tokio::time::delay_for(std::time::Duration::from_secs(10))  => {
                     trace!("Checking if service {} is still running.", &pod_state.service_name);
                 }
             }
-
-            // Obtain a mutable reference to the process handle
-            let child = if let Some(testproc) = pod_state.process_handle.as_mut() {
-                testproc
-            } else {
-                return Transition::next(
-                    self,
-                    Failed {
-                        message: "Unable to obtain process handle from podstate!".to_string(),
-                    },
-                );
-            };
-
-            // Check if an exit code is available for the process - if yes, it exited
-            match child.try_wait() {
-                Ok(None) => debug!(
-                    "Service {} is still running with pid {}",
-                    &pod_state.service_name,
-                    child.id()
-                ),
-                _ => {
-                    error!(
-                        "Service {} died unexpectedly, moving to failed state",
-                        pod_state.service_name
-                    );
-                    return Transition::next(
-                        self,
-                        Failed {
-                            message: "ProcessDiedUnexpectedly".to_string(),
-                        },
-                    );
-                }
-            }
+            // TODO: We are not watching the service yet, need to subscribe to events and
+            // react to those
         }
     }
 
@@ -88,14 +56,14 @@ impl State<PodState> for Running {
         };
 
         let container = &pod.containers()[0];
-        let mut container_status = vec![];
-        container_status.push(KubeContainerStatus {
+        // TODO: Change to support multiple containers
+        let container_status = vec![KubeContainerStatus {
             name: container.name().to_string(),
             ready: true,
             started: Some(false),
             state: Some(state),
             ..Default::default()
-        });
+        }];
         let condition = PodCondition {
             last_probe_time: None,
             last_transition_time: Some(self.transition_time.clone()),

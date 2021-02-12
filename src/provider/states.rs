@@ -11,8 +11,6 @@ pub(crate) mod installing;
 pub(crate) mod running;
 pub(crate) mod setup_failed;
 pub(crate) mod starting;
-pub(crate) mod stopped;
-pub(crate) mod stopping;
 pub(crate) mod terminated;
 pub(crate) mod waiting_config_map;
 

@@ -51,6 +51,8 @@ struct StackablePackage {
 }
 
 impl StackableRepoProvider {
+    // This is only used in a test case and hence warned about as dead code
+    #[allow(dead_code)]
     pub fn new(name: String, base_url: String) -> Result<StackableRepoProvider, StackableError> {
         let base_url = Url::parse(&base_url)?;
 

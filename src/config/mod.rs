@@ -33,6 +33,7 @@ pub struct AgentConfig {
     pub server_cert_file: Option<PathBuf>,
     pub server_key_file: Option<PathBuf>,
     pub tags: HashMap<String, String>,
+    pub session: bool,
     pub pod_cidr: String,
 }
 
@@ -159,6 +160,16 @@ impl AgentConfig {
         list: true
     };
 
+    pub const SESSION_SYSTEMD: ConfigOption = ConfigOption {
+        name: "session",
+        default: None,
+        required: false,
+        takes_argument: false,
+        help: "When specified causes the agent to run services in the session instance of systemd, not the system wide systemd.",
+        documentation: include_str!("config_documentation/session.adoc"),
+        list: false
+    };
+
     pub const POD_CIDR: ConfigOption = ConfigOption {
         name: "pod-cidr",
         default: Some(""),
@@ -183,6 +194,7 @@ impl AgentConfig {
             AgentConfig::NO_CONFIG,
             AgentConfig::TAG,
             AgentConfig::BOOTSTRAP_FILE,
+            AgentConfig::SESSION_SYSTEMD,
             AgentConfig::POD_CIDR,
         ]
         .iter()
@@ -259,6 +271,7 @@ impl AgentConfig {
 
     /// This tries to find the first non loopback interface with an ip address assigned.
     /// This should usually be the default interface according to:
+    ///
     ///
     /// https://docs.rs/pnet/0.27.2/pnet/datalink/fn.interfaces.html
     fn get_default_ipaddress() -> Option<IpAddr> {
@@ -447,6 +460,15 @@ impl Configurable for AgentConfig {
             }
         }
 
+        // The first unwrap defaults to none in case the option is not se
+
+        let final_session = parsed_values
+            .get(&AgentConfig::SESSION_SYSTEMD)
+            .expect(
+                "No value for session parameter found in parsed values, this should not happen!",
+            )
+            .is_some();
+
         // Panic if we encountered any errors during parsing of the values
         if !error_list.is_empty() {
             panic!(
@@ -473,6 +495,7 @@ impl Configurable for AgentConfig {
             server_cert_file: final_server_cert_file,
             server_key_file: final_server_key_file,
             tags: final_tags,
+            session: final_session,
             pod_cidr: final_pod_cidr.unwrap(),
         })
     }
