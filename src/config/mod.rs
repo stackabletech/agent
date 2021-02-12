@@ -34,6 +34,7 @@ pub struct AgentConfig {
     pub server_key_file: Option<PathBuf>,
     pub tags: HashMap<String, String>,
     pub session: bool,
+    pub pod_cidr: String,
 }
 
 impl AgentConfig {
@@ -169,6 +170,16 @@ impl AgentConfig {
         list: false
     };
 
+    pub const POD_CIDR: ConfigOption = ConfigOption {
+        name: "pod-cidr",
+        default: Some(""),
+        required: false,
+        takes_argument: true,
+        help: "An IP range in CIDR notation which designates the range that pods assigned to this node should have their ip addresses in.",
+        documentation: include_str!("config_documentation/pod_cidr.adoc"),
+        list: false
+    };
+
     fn get_options() -> HashSet<ConfigOption> {
         [
             AgentConfig::HOSTNAME,
@@ -184,6 +195,7 @@ impl AgentConfig {
             AgentConfig::TAG,
             AgentConfig::BOOTSTRAP_FILE,
             AgentConfig::SESSION_SYSTEMD,
+            AgentConfig::POD_CIDR,
         ]
         .iter()
         .cloned()
@@ -389,6 +401,13 @@ impl Configurable for AgentConfig {
             error_list.as_mut(),
         );
 
+        // Parse pod cidr
+        let final_pod_cidr: Result<String, anyhow::Error> = AgentConfig::get_with_default(
+            &parsed_values,
+            &AgentConfig::POD_CIDR,
+            error_list.as_mut(),
+        );
+
         // Parse cert file
         let final_server_cert_file = if let Ok(server_cert_file) =
             AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::SERVER_CERT_FILE)
@@ -477,6 +496,7 @@ impl Configurable for AgentConfig {
             server_key_file: final_server_key_file,
             tags: final_tags,
             session: final_session,
+            pod_cidr: final_pod_cidr.unwrap(),
         })
     }
 }

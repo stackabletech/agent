@@ -88,6 +88,7 @@ async fn main() -> anyhow::Result<()> {
         agent_config.config_directory.clone(),
         agent_config.log_directory.clone(),
         agent_config.session,
+        agent_config.pod_cidr,
     )
     .await
     .expect("Error initializing provider.");
