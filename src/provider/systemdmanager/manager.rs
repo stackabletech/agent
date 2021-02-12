@@ -183,7 +183,7 @@ impl SystemdManager {
         }
 
         // We have handled the special case above, if the target file does not exist
-        // at this point in time we write the file - doesn't matter if inside or outsite
+        // at this point in time we write the file - doesn't matter if inside or outside
         // the systemd folder
         if !target_file.exists() {
             // Write unit file, no matter where
@@ -233,9 +233,9 @@ impl SystemdManager {
             return Err(disable_error);
         }
 
-        // If we are not linking to the unit file but writting it directly in the
-        // units folder it won't be removed by the call to unlinkunitfiles, so we
-        // delete explicitly
+        // If we are not linking to the unit file but writing it directly in the
+        // units folder it won't be removed by the dbus method call to `DisableUnitFiles`
+        //from [disable], so we delete explicitly
         let unit_file = self.units_directory.join(&unit);
         if unit_file.exists() {
             debug!("Removing unit [{}] from systemd", unit);
