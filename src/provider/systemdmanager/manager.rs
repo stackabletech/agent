@@ -113,7 +113,7 @@ impl SystemdManager {
     /// with, which is either /lib/systemd/system or ~/.config/systemd/user depending on the value of
     /// [session].
     /// * Some<PathBuf>, the unit file will be created at this location and linked into the proper
-    /// systemd unit directory TODO: this is not implemented yet
+    /// systemd unit directory
     ///
     /// [force] determines if an existing unit file should be overwritten, if no  external unit file
     /// path is specified in [unit_file_path]. If this is false and the target file exists an error
@@ -156,40 +156,55 @@ impl SystemdManager {
         // For the case where we need to symlink we check if a symlink already exists and if so
         // if force has been specified - only then do we remove an existing link before recreating
         // it.
-        // In theory the dbus call to systemd has a `force` parameter that should have the same
-        // effect, but that did not work during testing, so I've implemented this workaround for now.
-        if !linked_unit_file {
-            debug!("Target file [{:?}] already exists", &target_file);
-            if target_file.exists() {
-                // Target file already exists, remove if force is supplied, otherwise abort
-                if force {
-                    self.delete_unit_file(&unit_name)?;
-                } else {
-                    return Err(anyhow!(
-                        "Target unit file [{:?}] exists and force parameter was not specified.",
-                        target_file
-                    ));
-                }
-            }
+
+        // Perform some pre-flight checks to ensure that writing the unit file doesn't clash
+        // with any existing files
+        if !linked_unit_file
+            && target_file.exists()
+            && fs::symlink_metadata(&target_file)?.file_type().is_symlink()
+        {
+            // Handle the special case where we need to replace a symlink with an actual file
+            // This only occurs when switching from using a linked file to writing the file
+            // directly into the units folder - should not happen in practice
+            // In this case we need to remove the symlink
+            fs::remove_file(&target_file)?;
         }
 
-        // Write unit file
-        let mut unit_file = match File::create(&target_file) {
-            Ok(file) => file,
-            Err(e) => {
-                debug!(
-                    "Error occurred when creating unit file [{}]: [{}]",
-                    unit_name, e
-                );
-                return Err(anyhow::Error::from(e));
-            }
-        };
-        unit_file.write_all(unit.get_unit_file_content().as_bytes())?;
-        unit_file.flush()?;
+        let unit_file = self.units_directory.join(&unit_name);
+        if linked_unit_file
+            && unit_file.exists()
+            && unit_file.symlink_metadata()?.file_type().is_file()
+        {
+            // Handle the special case where we need to replace an actual file with a symlink
+            // This only occurs when switching from writing the file
+            // directly into the units folder to using a linked file - should not happen in practice
+            // In this case we need to remove the file
+            fs::remove_file(&unit_file)?;
+        }
+
+        // We have handled the special case above, if the target file does not exist
+        // at this point in time we write the file - doesn't matter if inside or outsite
+        // the systemd folder
+        if !target_file.exists() {
+            // Write unit file, no matter where
+            // TODO: implement check for content equality
+            let mut unit_file = match File::create(&target_file) {
+                Ok(file) => file,
+                Err(e) => {
+                    debug!(
+                        "Error occurred when creating unit file [{}]: [{}]",
+                        unit_name, e
+                    );
+                    return Err(anyhow::Error::from(e));
+                }
+            };
+            unit_file.write_all(unit.get_unit_file_content().as_bytes())?;
+            unit_file.flush()?;
+        }
 
         // If this is a linked unit file we need to call out to systemd to link this file
         if linked_unit_file {
-            self.link_unit_file(&target_file.into_os_string().to_string_lossy())?;
+            self.link_unit_file(&target_file.into_os_string().to_string_lossy(), force)?;
         }
 
         // Perform daemon reload if requested
@@ -218,8 +233,14 @@ impl SystemdManager {
             return Err(disable_error);
         }
 
-        debug!("Removing unit [{}] from systemd", unit);
-        self.delete_unit_file(&unit)?;
+        // If we are not linking to the unit file but writting it directly in the
+        // units folder it won't be removed by the call to unlinkunitfiles, so we
+        // delete explicitly
+        let unit_file = self.units_directory.join(&unit);
+        if unit_file.exists() {
+            debug!("Removing unit [{}] from systemd", unit);
+            self.delete_unit_file(&unit)?;
+        }
 
         if daemon_reload {
             self.reload()?;
@@ -339,9 +360,9 @@ impl SystemdManager {
     // Symlink a unit file into the systemd unit folder
     // This is not public on purpose, as [create] should be the normal way to link unit files
     // when using this crate
-    fn link_unit_file(&self, unit: &str) -> Result<(), dbus::Error> {
+    fn link_unit_file(&self, unit: &str, force: bool) -> Result<(), dbus::Error> {
         debug!("Linking [{}]", unit);
-        self.method_call("LinkUnitFiles", (&[unit][..], false, true))
+        self.method_call("LinkUnitFiles", (&[unit][..], false, force))
             .map(|_: ()| ())
     }
 
