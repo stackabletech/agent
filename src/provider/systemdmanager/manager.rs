@@ -360,7 +360,6 @@ impl SystemdManager {
             .method_call("GetUnit", (&unit,))
             .map(|r: (Path,)| r.0)?;
 
-        //let unit_node = format!("{}/unit/{}", SYSTEMD_NODE, unit);
         let proxy = self
             .connection
             .with_proxy(SYSTEMD_DESTINATION, &unit_node, self.timeout);
@@ -390,6 +389,7 @@ impl SystemdManager {
     // Check if the unit name is valid and append .service if needed
     // Cannot currently fail, I'll need to dig into what is a valid unit
     // name before adding checks
+    #[allow(clippy::unnecessary_wraps)]
     fn get_unit_file_name(name: &str, unit_type: &UnitTypes) -> Result<String, anyhow::Error> {
         // TODO: what are valid systemd unit names?
 

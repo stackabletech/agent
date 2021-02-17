@@ -1259,7 +1259,7 @@ dependencies = [
 [[package]]
 name = "kubelet"
 version = "0.5.0"
-source = "git+https://github.com/deislabs/krustlet.git?rev=ac218b38ba564de806568e49d9e38aaef9f41537#ac218b38ba564de806568e49d9e38aaef9f41537"
+source = "git+https://github.com/stackabletech/krustlet.git?rev=bb8bb42c9400a565df4be04f357e61934fb277c6#bb8bb42c9400a565df4be04f357e61934fb277c6"
 dependencies = [
  "anyhow",
  "async-stream 0.3.0",
@@ -1308,7 +1308,7 @@ dependencies = [
 [[package]]
 name = "kubelet-derive"
 version = "0.1.0"
-source = "git+https://github.com/deislabs/krustlet.git?rev=ac218b38ba564de806568e49d9e38aaef9f41537#ac218b38ba564de806568e49d9e38aaef9f41537"
+source = "git+https://github.com/stackabletech/krustlet.git?rev=bb8bb42c9400a565df4be04f357e61934fb277c6#bb8bb42c9400a565df4be04f357e61934fb277c6"
 dependencies = [
  "quote 1.0.7",
  "syn 1.0.50",
@@ -1586,7 +1586,7 @@ dependencies = [
 [[package]]
 name = "oci-distribution"
 version = "0.4.0"
-source = "git+https://github.com/deislabs/krustlet.git?rev=ac218b38ba564de806568e49d9e38aaef9f41537#ac218b38ba564de806568e49d9e38aaef9f41537"
+source = "git+https://github.com/stackabletech/krustlet.git?rev=bb8bb42c9400a565df4be04f357e61934fb277c6#bb8bb42c9400a565df4be04f357e61934fb277c6"
 dependencies = [
  "anyhow",
  "futures-util",
