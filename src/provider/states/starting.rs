@@ -43,7 +43,11 @@ impl State<PodState> for Starting {
                 let start_time = Instant::now();
                 // TODO: does this need to be configurable, or ar we happy with a hard coded value
                 //  for now. I've briefly looked at the podspec and couldn't identify a good field
-                //  to use for this
+                //  to use for this - also, currently this starts containers (= systemd units) in
+                //  order and waits 10 seconds for every unit, so a service with five containers
+                //  would take 50 seconds until it reported running - which is totally fine in case
+                //  the units actually depend on each other, but a case could be made for waiting
+                //  once at the end
                 while start_time.elapsed().as_secs() < 10 {
                     tokio::time::delay_for(Duration::from_secs(1)).await;
                     debug!(
