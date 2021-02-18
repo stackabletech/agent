@@ -37,7 +37,7 @@ impl State<PodState> for Starting {
                             &pod_state.service_name,
                             dbus_error
                         );
-                        return Transition::Complete(Err(anyhow::Error::from(dbus_error)));
+                        return Transition::Complete(Err(dbus_error));
                     }
                     _ => { // nothing to do, just keep going
                     }
