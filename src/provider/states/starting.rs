@@ -6,7 +6,10 @@ use crate::provider::states::failed::Failed;
 use crate::provider::states::running::Running;
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::PodState;
-use log::{error, info, warn};
+use anyhow::anyhow;
+use log::{debug, error, info, warn};
+use std::time::Instant;
+use tokio::time::Duration;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Running, Failed, SetupFailed)]
@@ -35,6 +38,37 @@ impl State<PodState> for Starting {
                         enable_error
                     );
                     return Transition::Complete(Err(enable_error));
+                }
+
+                let start_time = Instant::now();
+                // TODO: does this need to be configurable, or ar we happy with a hard coded value
+                //  for now. I've briefly looked at the podspec and couldn't identify a good field
+                //  to use for this - also, currently this starts containers (= systemd units) in
+                //  order and waits 10 seconds for every unit, so a service with five containers
+                //  would take 50 seconds until it reported running - which is totally fine in case
+                //  the units actually depend on each other, but a case could be made for waiting
+                //  once at the end
+                while start_time.elapsed().as_secs() < 10 {
+                    tokio::time::delay_for(Duration::from_secs(1)).await;
+                    debug!(
+                        "Checking if unit [{}] is still up and running.",
+                        &unit.get_name()
+                    );
+                    match pod_state.systemd_manager.is_running(&unit.get_name()) {
+                        Ok(true) => debug!(
+                            "Service [{}] still running after [{}] seconds",
+                            &unit.get_name(),
+                            start_time.elapsed().as_secs()
+                        ),
+                        Ok(false) => {
+                            return Transition::Complete(Err(anyhow!(format!(
+                                "Unit [{}] stopped unexpectedly during startup after [{}] seconds.",
+                                &unit.get_name(),
+                                start_time.elapsed().as_secs()
+                            ))))
+                        }
+                        Err(dbus_error) => return Transition::Complete(Err(dbus_error)),
+                    }
                 }
             }
         } else {

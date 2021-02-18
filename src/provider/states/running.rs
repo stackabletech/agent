@@ -1,10 +1,11 @@
+use anyhow::anyhow;
 use k8s_openapi::api::core::v1::{
     ContainerState, ContainerStateRunning, ContainerStatus as KubeContainerStatus, PodCondition,
 };
 use kubelet::pod::Pod;
 use kubelet::state::prelude::*;
 use kubelet::state::{State, Transition};
-use log::{debug, trace};
+use log::{debug, info, trace};
 
 use crate::provider::states::failed::Failed;
 use crate::provider::states::installing::Installing;
@@ -12,6 +13,7 @@ use crate::provider::states::make_status_with_containers_and_condition;
 use crate::provider::PodState;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use k8s_openapi::chrono;
+use tokio::time::Duration;
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(Failed, Running, Installing)]
@@ -34,17 +36,57 @@ impl State<PodState> for Running {
         pod_state: &mut PodState,
         _pod: &Pod,
     ) -> Transition<PodState> {
+        // We loop here indefinitely and "wake up" periodically to check if the service is still
+        // up and running
+        // Interruption of this loop is triggered externally by the Krustlet code when
+        //   - the pod which this state machine refers to gets deleted
+        //   - Krustlet shuts down
         loop {
-            tokio::select! {
-                _ = tokio::time::delay_for(std::time::Duration::from_secs(10))  => {
-                    trace!("Checking if service {} is still running.", &pod_state.service_name);
+            tokio::time::delay_for(Duration::from_secs(10)).await;
+            trace!(
+                "Checking if service {} is still running.",
+                &pod_state.service_name
+            );
+
+            // Iterate over all units and check their state
+            // if the [`service_units`] Option is a None variant, return a failed state
+            // as we need to run something otherwise we are not doing anything
+            let systemd_units = match &pod_state.service_units {
+                Some(units) => units,
+                None => return Transition::Complete(Err(anyhow!(format!("No systemd units found for service [{}], this should not happen, please report a bug for this!", pod_state.service_name)))),
+            };
+
+            for unit in systemd_units {
+                match pod_state.systemd_manager.is_running(&unit.get_name()) {
+                    Ok(true) => trace!(
+                        "Unit [{}] of service [{}] still running ...",
+                        &unit.get_name(),
+                        pod_state.service_name
+                    ),
+                    Ok(false) => {
+                        info!("Unit [{}] for service [{}] failed unexpectedly, transitioning to failed state.", pod_state.service_name, unit.get_name());
+                        return Transition::next(
+                            self,
+                            Failed {
+                                message: "".to_string(),
+                            },
+                        );
+                    }
+                    Err(dbus_error) => {
+                        info!(
+                            "Error querying ActiveState for Unit [{}] of service [{}]: [{}].",
+                            pod_state.service_name,
+                            unit.get_name(),
+                            dbus_error
+                        );
+                        return Transition::Complete(Err(dbus_error));
+                    }
                 }
             }
-            // TODO: We are not watching the service yet, need to subscribe to events and
-            // react to those
         }
     }
 
+    // test
     async fn json_status(
         &self,
         pod_state: &mut PodState,
