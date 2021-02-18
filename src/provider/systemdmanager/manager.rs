@@ -5,7 +5,7 @@
 //!
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use anyhow::anyhow;
-use dbus::arg::{AppendAll, ReadAll};
+use dbus::arg::{AppendAll, ReadAll, Variant};
 use dbus::blocking::SyncConnection;
 use dbus::strings::Member;
 use dbus::Path;
@@ -25,6 +25,7 @@ pub enum UnitTypes {
 const SYSTEMD_DESTINATION: &str = "org.freedesktop.systemd1";
 const SYSTEMD_NODE: &str = "/org/freedesktop/systemd1";
 const SYSTEMD_MANAGER_INTERFACE: &str = "org.freedesktop.systemd1.Manager";
+const DBUS_PROPERTIES_INTERFACE: &str = "org.freedesktop.DBus.Properties";
 
 /// The main way of interacting with this module, this struct offers
 /// the public methods for managing service units.
@@ -171,10 +172,7 @@ impl SystemdManager {
         }
 
         let unit_file = self.units_directory.join(&unit_name);
-        if linked_unit_file
-            && unit_file.exists()
-            && unit_file.symlink_metadata()?.file_type().is_file()
-        {
+        if unit_file.exists() && unit_file.symlink_metadata()?.file_type().is_file() {
             // Handle the special case where we need to replace an actual file with a symlink
             // This only occurs when switching from writing the file
             // directly into the units folder to using a linked file - should not happen in practice
@@ -355,6 +353,28 @@ impl SystemdManager {
                 Err(anyhow!("Error performing daemon-reload: [{}]", e))
             }
         }
+    }
+
+    pub fn is_running(&self, unit: &str) -> Result<bool, anyhow::Error> {
+        let unit_node = self
+            .method_call("GetUnit", (&unit,))
+            .map(|r: (Path,)| r.0)?;
+
+        let proxy = self
+            .connection
+            .with_proxy(SYSTEMD_DESTINATION, &unit_node, self.timeout);
+
+        let active_state = proxy
+            .method_call(
+                DBUS_PROPERTIES_INTERFACE,
+                "Get",
+                ("org.freedesktop.systemd1.Unit", "ActiveState"),
+            )
+            .map(|r: (Variant<String>,)| r.0)?;
+
+        // TODO: I think this can panic, there should be a get() method on Variant that returns
+        //   an option, but I've not yet been able to get that to work
+        Ok(active_state.0 == "active")
     }
 
     // Symlink a unit file into the systemd unit folder
