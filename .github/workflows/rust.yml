@@ -46,7 +46,6 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
 
-
   security_audit:
     name: Run security audit
     runs-on: ubuntu-latest
