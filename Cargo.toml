@@ -3,8 +3,6 @@ name = "stackable-agent"
 version = "0.1.0"
 authors = ["Sönke Liebau <soenke.liebau@stackable.de>"]
 edition = "2018"
-description = "Test"
-license = "Apache-2.0"
 
 [dependencies]
 # We are currently referencing the Krustlet directly from the repository, because some features that we are using have
@@ -45,13 +43,3 @@ serde_yaml = "0.8"
 opt-level = "s"
 lto = true
 codegen-units = 1
-
-[package.metadata.rpm]
-package = "stackable-agent"
-
-[package.metadata.rpm.cargo]
-buildflags = ["--release"]
-
-[package.metadata.rpm.targets]
-"./src/bin/agent" = { path = "/usr/bin/./src/bin/agent" }
-"./src/bin/generate_doc" = { path = "/usr/bin/./src/bin/generate_doc" }
