@@ -1,4 +1,4 @@
-name: Rust
+name: Centos8-Nightly
 
 on:
   push:
