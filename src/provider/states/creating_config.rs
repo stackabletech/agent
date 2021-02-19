@@ -67,7 +67,7 @@ impl CreatingConfig {
             )?,
         );
         render_data.insert(
-            String::from("packageroot"),
+            String::from("logroot"),
             CreatingConfig::pathbuf_to_string(
                 "service log directory",
                 pod_state.get_service_log_directory(),
