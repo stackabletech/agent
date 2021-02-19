@@ -1,0 +1,23 @@
+name: Centos8-Nightly
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  debian10:
+    runs-on: debian10
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: ~/.cargo/bin/cargo +nightly build --verbose --release
+      - name: Build apt package
+        run: ~/.cargo/bin/cargo deb
+      - name: Publish apt package
+        run: /usr/bin/curl -u 'github:${{ secrets.NEXUS_PASSWORD }}' -H "Content-Type: multipart/form-data" --data-binary "@./target/debian/stackable-agent_0.1.0-nightly_amd64.deb" "https://repo.stackable.tech/repository/deb-nightly/"
