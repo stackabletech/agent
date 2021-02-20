@@ -23,4 +23,4 @@ jobs:
           cp target/release/agent target/rpm/SOURCES
           tar czvf target/rpm/SOURCES/stackable-agent-0.1.0.tar.gz target/rpm/SOURCES/stackable-agent-0.1.0
       - name: Build RPM
-        run: /usr/bin/rpmbuild --define "_topdir ``/target/rpm" -v -ba target/SPECS/stackable-agent-0.1.0.spec
+        run: /usr/bin/rpmbuild --define "_topdir ``/target/rpm" -v -ba target/rpm/SPECS/stackable-agent-0.1.0.spec
