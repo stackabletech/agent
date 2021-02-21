@@ -1,4 +1,6 @@
+%define debug_package %{nil}
 BuildRequires: systemd-rpm-macros
+
 
 Name:       stackable-agent
 Version:    0.1.0
@@ -27,4 +29,9 @@ cp -rfa * %{buildroot}
 
 
 %files
-/*
+/opt/stackable-agent/agent
+/etc/stackable-agent/agent.conf
+/etc/systemd/system/stackable-agent.service
+%dir /var/lib/stackable/data
+%dir /var/lib/stackable/config
+%dir /var/lib/stackable/packages
