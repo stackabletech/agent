@@ -23,9 +23,8 @@ Testing package.
 cp -rfa * %{buildroot}
 
 %post
-%systemd_post %{pkgname}.service
+%systemd_post stackable-agent.service
     /usr/bin/systemctl daemon-reload
-    /usr/bin/systemctl start %{pkgname}.service
 
 
 %files
