@@ -19,7 +19,6 @@ jobs:
         run: ~/.cargo/bin/cargo build --verbose --release
       - name: Create RPM scaffolding
         run: |
-          echo ${{ secrets.NEXUS_PASSWORD }} > pass
           cp -r rpm target/
           cp target/release/agent target/rpm/SOURCES/stackable-agent-0.1.0/opt/stackable-agent
           find target/rpm/SOURCES/ -name ".gitkeep" -type f -delete
