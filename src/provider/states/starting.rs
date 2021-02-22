@@ -20,6 +20,28 @@ impl State<PodState> for Starting {
     async fn next(self: Box<Self>, pod_state: &mut PodState, _: &Pod) -> Transition<PodState> {
         if let Some(systemd_units) = &pod_state.service_units {
             for unit in systemd_units {
+                match pod_state.systemd_manager.is_running(&unit.get_name()) {
+                    Ok(true) => {
+                        debug!(
+                            "Unit [{}] for service [{}] already running, nothing to do..",
+                            &unit.get_name(),
+                            &pod_state.service_name
+                        );
+                        // Skip rest of loop as the service is already running
+                        continue;
+                    }
+                    Err(dbus_error) => {
+                        debug!(
+                            "Error retrieving activestate of unit [{}] for service [{}]: [{}]",
+                            &unit.get_name(),
+                            &pod_state.service_name,
+                            dbus_error
+                        );
+                        return Transition::Complete(Err(dbus_error));
+                    }
+                    _ => { // nothing to do, just keep going
+                    }
+                }
                 info!("Starting systemd unit [{}]", unit);
                 if let Err(start_error) = pod_state.systemd_manager.start(&unit.get_name()) {
                     error!(
