@@ -11,8 +11,23 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  centos-8:
     runs-on: centos8
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: ~/.cargo/bin/cargo build --verbose --release
+      - name: Create RPM scaffolding
+        run: |
+          cp -r rpm target/
+          cp target/release/agent target/rpm/SOURCES/stackable-agent-0.1.0/opt/stackable-agent
+          find target/rpm/SOURCES/ -name ".gitkeep" -type f -delete
+          cd target/rpm/SOURCES &&  tar czvf stackable-agent-0.1.0.tar.gz stackable-agent-0.1.0
+      - name: Build RPM
+        run: /usr/bin/rpmbuild --define "_topdir `pwd`/target/rpm" -v -ba target/rpm/SPECS/stackable-agent-0.1.0.spec
+
+  centos-7:
+    runs-on: centos7
     steps:
       - uses: actions/checkout@v2
       - name: Build
