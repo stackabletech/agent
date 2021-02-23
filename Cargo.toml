@@ -50,3 +50,7 @@ codegen-units = 1
 [package.metadata.deb]
 maintainer-scripts = "debian/"
 systemd-units = { enable = false }
+assets = [
+    ["rpm/SOURCES/stackable-agent-0.1.0/etc/stackable-agent/agent.conf", "etc/stackable-agent/", "644"],
+    ["target/release/agent", "opt/stackable-agent/stackable-agent", "644"],
+]
