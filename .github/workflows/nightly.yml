@@ -11,6 +11,15 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  debian10:
+    runs-on: debian10
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: ~/.cargo/bin/cargo +nightly build --verbose --release
+      - name: Build apt package
+        run: ~/.cargo/bin/cargo deb --manifest-path server/Cargo.toml --no-build
+
   centos-8:
     runs-on: centos8
     steps:

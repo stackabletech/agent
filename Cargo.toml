@@ -1,6 +1,6 @@
 [package]
 name = "stackable-agent"
-version = "0.1.0"
+version = "0.1.0-nightly"
 authors = ["Sönke Liebau <soenke.liebau@stackable.de>"]
 edition = "2018"
 
@@ -52,5 +52,5 @@ maintainer-scripts = "debian/"
 systemd-units = { enable = false }
 assets = [
     ["rpm/SOURCES/stackable-agent-0.1.0/etc/stackable-agent/agent.conf", "etc/stackable-agent/", "644"],
-    ["target/release/agent", "opt/stackable-agent/stackable-agent", "644"],
+    ["target/release/agent", "opt/stackable-agent/stackable-agent", "755"],
 ]
