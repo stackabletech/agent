@@ -292,6 +292,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
 
 [[package]]
+name = "bytes"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
+
+[[package]]
 name = "cc"
 version = "1.0.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1186,6 +1192,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "k8s-openapi"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcc1f973542059e6d5a6d63de6a9539d0ec784f82b2327f3c1915d33200bc6a4"
+dependencies = [
+ "base64 0.13.0",
+ "bytes 1.0.1",
+ "chrono",
+ "serde",
+ "serde-value",
+ "serde_json",
+]
+
+[[package]]
 name = "kernel32-sys"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1210,7 +1230,7 @@ dependencies = [
  "futures",
  "futures-util",
  "http 0.2.1",
- "k8s-openapi",
+ "k8s-openapi 0.9.0",
  "log 0.4.11",
  "openssl",
  "pem",
@@ -1247,7 +1267,7 @@ dependencies = [
  "dashmap",
  "derivative",
  "futures",
- "k8s-openapi",
+ "k8s-openapi 0.9.0",
  "kube",
  "pin-project 0.4.27",
  "serde",
@@ -1273,7 +1293,7 @@ dependencies = [
  "hyper",
  "iovec",
  "json-patch",
- "k8s-openapi",
+ "k8s-openapi 0.9.0",
  "kernel32-sys",
  "kube",
  "kube-runtime",
@@ -2710,7 +2730,7 @@ dependencies = [
  "handlebars",
  "hostname",
  "indoc",
- "k8s-openapi",
+ "k8s-openapi 0.11.0",
  "kube",
  "kube-derive",
  "kubelet",
