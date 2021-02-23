@@ -1182,7 +1182,7 @@ dependencies = [
  "serde",
  "serde-value",
  "serde_json",
- "url 2.2.0",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -1222,7 +1222,7 @@ dependencies = [
  "thiserror",
  "time 0.2.23",
  "tokio",
- "url 2.2.0",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -1298,7 +1298,7 @@ dependencies = [
  "tonic",
  "tonic-build",
  "tower",
- "url 2.2.0",
+ "url 2.2.1",
  "uuid",
  "warp",
  "winapi 0.2.8",
@@ -2352,7 +2352,7 @@ dependencies = [
  "serde_urlencoded 0.7.0",
  "tokio",
  "tokio-tls",
- "url 2.2.0",
+ "url 2.2.1",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
@@ -2563,7 +2563,7 @@ dependencies = [
  "dtoa",
  "itoa",
  "serde",
- "url 2.2.0",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -2729,7 +2729,7 @@ dependencies = [
  "tar",
  "thiserror",
  "tokio",
- "url 2.2.0",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -2909,13 +2909,12 @@ dependencies = [
 
 [[package]]
 name = "tar"
-version = "0.4.30"
+version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "489997b7557e9a43e192c527face4feacc78bfbe6eed67fd55c4c9e381cba290"
+checksum = "c0bcfbd6a598361fda270d82469fff3d65089dc33e175c9a131f7b4cd395f228"
 dependencies = [
  "filetime",
  "libc",
- "redox_syscall 0.1.57",
  "xattr",
 ]
 
@@ -3449,7 +3448,7 @@ dependencies = [
  "log 0.4.11",
  "rand 0.7.3",
  "sha-1 0.9.2",
- "url 2.2.0",
+ "url 2.2.1",
  "utf-8",
 ]
 
@@ -3565,9 +3564,9 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.2.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5909f2b0817350449ed73e8bcd81c8c3c8d9a7a5d8acba4b27db277f1868976e"
+checksum = "9ccd964113622c8e9322cfac19eb1004a07e636c545f325da085d5cdde6f1f8b"
 dependencies = [
  "form_urlencoded",
  "idna 0.2.0",
