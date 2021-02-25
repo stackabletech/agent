@@ -107,5 +107,5 @@ fn export_env(var_name: &str, var_value: &str) {
 }
 
 fn notify_bootstrap(message: String) {
-    info!("Successfully bootstrapped tls certificate: {}", message);
+    info!("Successfully bootstrapped TLS certificate: {}", message);
 }
