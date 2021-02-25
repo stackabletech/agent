@@ -1,8 +1,6 @@
 use std::env;
 use std::ffi::OsString;
 
-use kube::config::Config as KubeConfig;
-use kube::config::KubeConfigOptions;
 use kubelet::config::{Config, ServerConfig};
 use kubelet::Kubelet;
 use log::{info, warn};
@@ -78,9 +76,15 @@ async fn main() -> anyhow::Result<()> {
         insecure_registries: None,
     };
 
-    let kubeconfig = KubeConfig::from_kubeconfig(&KubeConfigOptions::default())
-        .await
-        .expect("Failed to create Kubernetes Client!");
+    // Bootstrap a kubernetes config, if no valid config is found
+    // This also generates certificates for the webserver the krustlet
+    // runs
+    let kubeconfig = kubelet::bootstrap(
+        &krustlet_config,
+        &krustlet_config.bootstrap_file,
+        notify_bootstrap,
+    )
+    .await?;
 
     let provider = StackableProvider::new(
         kube::Client::new(kubeconfig.clone()),
@@ -100,4 +104,8 @@ async fn main() -> anyhow::Result<()> {
 fn export_env(var_name: &str, var_value: &str) {
     info!("Exporting {}={}", var_name, var_value);
     std::env::set_var(var_name, var_value);
+}
+
+fn notify_bootstrap(message: String) {
+    info!("Successfully bootstrapped tls certificate: {}", message);
 }
