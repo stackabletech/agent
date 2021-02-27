@@ -22,6 +22,7 @@ jobs:
       - name: Publish apt package
         run: >
           /usr/bin/curl
+          -vvvv
           -u 'github:${{ secrets.NEXUS_PASSWORD }}'
           -H "Content-Type: multipart/form-data"
           --data-binary "@./target/debian/stackable-agent_0.1.0-nightly_amd64.deb"
