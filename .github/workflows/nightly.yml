@@ -23,5 +23,5 @@ jobs:
           -vvvv
           -u 'github:${{ secrets.NEXUS_PASSWORD }}'
           -H "Content-Type: multipart/form-data"
-          --data-binary "@./target/debian/stackable-agent_0.1.0-nightly_amd64.deb"
+          --data-binary "$(find target/debian/ -name *.deb)"
           "https://repo.stackable.tech/repository/deb-nightly/"
