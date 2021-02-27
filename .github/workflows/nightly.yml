@@ -1,6 +1,10 @@
 name: Publish-Nightly-Packages
 
 on:
+  push:
+    branches:
+      - main
+    pull_request:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
@@ -21,6 +25,7 @@ jobs:
         run: >
           /usr/bin/curl
           -vvvv
+          --fail
           -u 'github:${{ secrets.NEXUS_PASSWORD }}'
           -H "Content-Type: multipart/form-data"
           --data-binary "$(find target/debian/ -name *.deb)"
