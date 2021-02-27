@@ -1,5 +1,6 @@
 [package]
 name = "stackable-agent"
+description = "Tha component of the Stackable Platform that manages installation of services on the workers"
 version = "0.1.0-nightly"
 authors = ["Sönke Liebau <soenke.liebau@stackable.de>"]
 edition = "2018"
