@@ -20,7 +20,7 @@ jobs:
       - name: Build apt package
         run: ~/.cargo/bin/cargo deb
       - name: Publish apt package
-        run: >-
+        run: |
         /usr/bin/curl
         -u 'github:${{ secrets.NEXUS_PASSWORD }}'
         -H 'Content-Type: multipart/form-data'
