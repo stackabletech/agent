@@ -4,6 +4,7 @@ description = "Tha component of the Stackable Platform that manages installation
 version = "0.1.0-nightly"
 authors = ["Sönke Liebau <soenke.liebau@stackable.de>"]
 edition = "2018"
+license = "Apache-2.0"
 
 [dependencies]
 # We are currently referencing the Krustlet directly from a Stackable fork of the official repository.
