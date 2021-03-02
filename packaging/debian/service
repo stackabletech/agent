@@ -9,6 +9,6 @@ Restart=on-abort
 StandardOutput=journal
 StandardError=journal
 Environment="CONFIG_FILE=/etc/stackable-agent/agent.conf"
-Environment="RUST_LOG=info,stackable_agent::provider::states=debug,stackable_agent::agentconfig=trace"
+Environment="RUST_LOG=info"
 [Install]
 WantedBy=multi-user.target

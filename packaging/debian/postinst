@@ -2,6 +2,6 @@
 
 mkdir -p /var/lib/stackable/packages
 mkdir -p /var/lib/stackable/config
-mkdir -p /var/lib/stackable/agentdata/config
+mkdir -p /var/lib/stackable/agent/config
 
 #DEBHELPER#
