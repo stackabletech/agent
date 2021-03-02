@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+mkdir -p /var/lib/stackable/packages
+mkdir -p /var/lib/stackable/config
+mkdir -p /var/lib/stackable/agent/config
+
+#DEBHELPER#
