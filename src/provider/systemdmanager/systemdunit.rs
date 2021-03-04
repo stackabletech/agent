@@ -10,7 +10,9 @@ use crate::provider::error::StackableError::PodValidationError;
 use crate::provider::states::creating_config::CreatingConfig;
 use crate::provider::systemdmanager::manager::UnitTypes;
 use crate::provider::PodState;
+use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
+use regex::Regex;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -24,6 +26,13 @@ static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
 pub const SECTION_SERVICE: &str = "Service";
 pub const SECTION_UNIT: &str = "Unit";
 pub const SECTION_INSTALL: &str = "Install";
+
+lazy_static! {
+    // TODO (sigi) Check if ^ and $ are necessary.
+    // Pattern for user names to fullfil the rules of systemd's strict mode
+    // see https://systemd.io/USER_NAMES/
+    static ref USER_NAME_PATTERN: Regex = Regex::new("[a-zA-Z_][a-zA-Z0-9_-]{0,30}").unwrap();
+}
 
 // TODO: This will be used later to ensure the same ordering of known sections in
 //  unit files, I'll leave it in for now
@@ -81,10 +90,47 @@ impl SystemDUnit {
         // These are currently hard-coded, as this is not something we expect to change soon
         unit.add_property(SECTION_SERVICE, "StandardOutput", "journal");
         unit.add_property(SECTION_SERVICE, "StandardError", "journal");
+
+        if let Some(user_name) =
+            SystemDUnit::get_user_name_from_security_context(container, &unit.name)?
+        {
+            // TODO (sigi) Do not add User if in session mode.
+            unit.add_property(SECTION_SERVICE, "User", user_name);
+        }
+
         // This one is mandatory, as otherwise enabling the unit fails
         unit.add_property(SECTION_INSTALL, "WantedBy", "multi-user.target");
 
         Ok(unit)
+    }
+
+    fn get_user_name_from_security_context<'a>(
+        container: &'a Container,
+        pod_name: &str,
+    ) -> Result<Option<&'a str>, StackableError> {
+        let validate = |user_name| {
+            if USER_NAME_PATTERN.is_match(user_name) {
+                Ok(user_name)
+            } else {
+                Err(PodValidationError {
+                    msg: format!(
+                        // TODO (sigi) Check if the regular expression should be quoted.
+                        // TODO (sigi) Ask if the nested brackets are okay.
+                        "The validation of the pod [{}] failed. \
+                        The user name [{}] in [spec.containers[name = {}].securityContext.windowsOptions.runAsUserName] must match the regular expression {}.",
+                        pod_name, user_name, container.name(), USER_NAME_PATTERN.to_string()
+                    )
+                })
+            }
+        };
+
+        container
+            .security_context()
+            .and_then(|security_context| security_context.windows_options.as_ref())
+            .and_then(|windows_options| windows_options.run_as_user_name.as_ref())
+            // TODO (sigi) Check why η-reduction is not possible.
+            .map(|user_name| validate(user_name))
+            .transpose()
     }
 
     /// Parse a pod object and retrieve the generic settings which will be the same across
@@ -120,7 +166,40 @@ impl SystemDUnit {
         };
 
         unit.add_property(SECTION_SERVICE, "Restart", restart_policy);
+
+        if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
+            // TODO (sigi) Do not add User if in session mode.
+            unit.add_property(SECTION_SERVICE, "User", user_name);
+        }
+
         Ok(unit)
+    }
+
+    fn get_user_name_from_pod_security_context(pod: &Pod) -> Result<Option<&str>, StackableError> {
+        let validate = |user_name| {
+            if USER_NAME_PATTERN.is_match(user_name) {
+                Ok(user_name)
+            } else {
+                Err(PodValidationError {
+                    msg: format!(
+                        // TODO (sigi) Check if the regular expression should be quoted.
+                        "The validation of the pod [{}] failed. \
+                        The user name [{}] in [spec.securityContext.windowsOptions.runAsUserName] must match the regular expression {}.",
+                        pod.name(), user_name, USER_NAME_PATTERN.to_string()
+                    )
+                })
+            }
+        };
+
+        pod.as_kube_pod()
+            .spec
+            .as_ref()
+            .and_then(|spec| spec.security_context.as_ref())
+            .and_then(|security_context| security_context.windows_options.as_ref())
+            .and_then(|windows_options| windows_options.run_as_user_name.as_ref())
+            // TODO (sigi) Check why η-reduction is not possible.
+            .map(|user_name| validate(user_name))
+            .transpose()
     }
 
     /// Convenience function to retrieve the _fully qualified_ systemd name, which includes the
@@ -358,3 +437,5 @@ impl Display for SystemDUnit {
         write!(f, "{}", self.get_name())
     }
 }
+
+// TODO (sigi) Write unit tests.
