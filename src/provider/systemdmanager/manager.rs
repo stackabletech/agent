@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 /// Enum that lists the supported unit types
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UnitTypes {
     Service,
 }

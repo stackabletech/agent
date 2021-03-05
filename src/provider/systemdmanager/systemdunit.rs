@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use kubelet::container::Container;
 use kubelet::pod::Pod;
-use phf::{Map, OrderedSet};
+use phf::Map;
 
 use crate::provider::error::StackableError;
 
@@ -15,6 +15,7 @@ use log::{debug, error, trace, warn};
 use regex::Regex;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::iter::once;
 
 // This is used to map from Kubernetes restart lingo to systemd restart terms
 static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
@@ -23,30 +24,47 @@ static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
     "Never" => "no",
 };
 
-pub const SECTION_SERVICE: &str = "Service";
-pub const SECTION_UNIT: &str = "Unit";
-pub const SECTION_INSTALL: &str = "Install";
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Section {
+    Unit,
+    Service,
+    Install,
+}
+
+impl fmt::Display for Section {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Section::Unit => "Unit",
+                Section::Service => "Service",
+                Section::Install => "Install",
+            }
+        )
+    }
+}
 
 lazy_static! {
     // TODO (sigi) Check if ^ and $ are necessary.
-    // Pattern for user names to fullfil the rules of systemd's strict mode
+    // Pattern for user names to comply with the strict mode of systemd
     // see https://systemd.io/USER_NAMES/
-    static ref USER_NAME_PATTERN: Regex = Regex::new("[a-zA-Z_][a-zA-Z0-9_-]{0,30}").unwrap();
+    static ref USER_NAME_PATTERN: Regex =
+        Regex::new("[a-zA-Z_][a-zA-Z0-9_-]{0,30}").unwrap();
+
+    static ref SECTION_ORDER: Vec<Section> = vec![
+        Section::Unit,
+        Section::Service,
+        Section::Install,
+    ];
 }
 
-// TODO: This will be used later to ensure the same ordering of known sections in
-//  unit files, I'll leave it in for now
-#[allow(dead_code)]
-static SECTION_ORDER: OrderedSet<&'static str> =
-    phf::phf_ordered_set! {"Unit", "Service", "Install"};
-
 /// A struct that represents an individual systemd unit
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SystemDUnit {
     pub name: String,
     pub unit_type: UnitTypes,
-    pub sections: HashMap<String, HashMap<String, String>>,
-    pub environment: HashMap<String, String>,
+    pub sections: HashMap<Section, HashMap<String, String>>,
 }
 
 // TODO: The parsing code is also highly stackable specific, we should
@@ -73,33 +91,37 @@ impl SystemDUnit {
 
         unit.name = format!("{}{}", name_prefix, trimmed_name);
 
-        unit.add_property(SECTION_UNIT, "Description", &unit.name.clone());
+        unit.add_property(Section::Unit, "Description", &unit.name.clone());
 
         unit.add_property(
-            SECTION_SERVICE,
+            Section::Service,
             "ExecStart",
             &SystemDUnit::get_command(container, pod_state)?,
         );
 
-        let env_vars = SystemDUnit::get_environment(container, pod_state)?;
-
-        for (name, value) in env_vars {
-            unit.add_env_var(&name, &value);
-        }
+        unit.add_property(
+            Section::Service,
+            "Environment",
+            &SystemDUnit::get_environment(container, pod_state)?
+                .iter()
+                .map(|(k, v)| format!("\"{}={}\"", k, v))
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
 
         // These are currently hard-coded, as this is not something we expect to change soon
-        unit.add_property(SECTION_SERVICE, "StandardOutput", "journal");
-        unit.add_property(SECTION_SERVICE, "StandardError", "journal");
+        unit.add_property(Section::Service, "StandardOutput", "journal");
+        unit.add_property(Section::Service, "StandardError", "journal");
 
         if let Some(user_name) =
             SystemDUnit::get_user_name_from_security_context(container, &unit.name)?
         {
             // TODO (sigi) Do not add User if in session mode.
-            unit.add_property(SECTION_SERVICE, "User", user_name);
+            unit.add_property(Section::Service, "User", user_name);
         }
 
         // This one is mandatory, as otherwise enabling the unit fails
-        unit.add_property(SECTION_INSTALL, "WantedBy", "multi-user.target");
+        unit.add_property(Section::Install, "WantedBy", "multi-user.target");
 
         Ok(unit)
     }
@@ -142,7 +164,6 @@ impl SystemDUnit {
             name: pod.name().to_string(),
             unit_type: UnitTypes::Service,
             sections: Default::default(),
-            environment: Default::default(),
         };
 
         let restart_policy = match &pod.as_kube_pod().spec {
@@ -165,11 +186,11 @@ impl SystemDUnit {
             }
         };
 
-        unit.add_property(SECTION_SERVICE, "Restart", restart_policy);
+        unit.add_property(Section::Service, "Restart", restart_policy);
 
         if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
             // TODO (sigi) Do not add User if in session mode.
-            unit.add_property(SECTION_SERVICE, "User", user_name);
+            unit.add_property(Section::Service, "User", user_name);
         }
 
         Ok(unit)
@@ -210,38 +231,32 @@ impl SystemDUnit {
     }
 
     /// Add a key=value entry to the specified section
-    fn add_property(&mut self, section: &'static str, key: &str, value: &str) {
-        let section = self
-            .sections
-            .entry(String::from(section))
-            .or_insert_with(HashMap::new);
+    fn add_property(&mut self, section: Section, key: &str, value: &str) {
+        let section = self.sections.entry(section).or_insert_with(HashMap::new);
         section.insert(String::from(key), String::from(value));
-    }
-
-    fn add_env_var(&mut self, name: &str, value: &str) {
-        self.environment
-            .insert(String::from(name), String::from(value));
     }
 
     /// Retrieve content of the unit file as it should be written to disk
     pub fn get_unit_file_content(&self) -> String {
-        let mut unit_file_content = String::new();
+        SECTION_ORDER
+            .iter()
+            .map(|section| self.sections.get_key_value(section))
+            .flatten()
+            .map(|(section, entries)| SystemDUnit::write_section(section, entries))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 
-        // Iterate over all sections and write out its header and content
-        for (section, entries) in &self.sections {
-            unit_file_content.push_str(&format!("[{}]\n", section));
-            for (key, value) in entries {
-                unit_file_content.push_str(&format!("{}={}\n", key, value));
-            }
-            if section == SECTION_SERVICE {
-                // Add environment variables to Service section
-                for (name, value) in &self.environment {
-                    unit_file_content.push_str(&format!("Environment=\"{}={}\"\n", name, value));
-                }
-            }
-            unit_file_content.push('\n');
-        }
-        unit_file_content
+    fn write_section(section: &Section, entries: &HashMap<String, String>) -> String {
+        let header = format!("[{}]", section);
+
+        let mut body = entries
+            .iter()
+            .map(|(key, value)| format!("{}={}", key, value))
+            .collect::<Vec<_>>();
+        body.sort();
+
+        once(header).chain(body).map(|l| l + "\n").collect()
     }
 
     fn get_type_string(&self) -> &str {
@@ -438,4 +453,51 @@ impl Display for SystemDUnit {
     }
 }
 
-// TODO (sigi) Write unit tests.
+#[cfg(test)]
+mod test {
+    use super::*;
+    use indoc::indoc;
+    use rstest::rstest;
+
+    #[rstest(pod_config, expected_unit_file_name, expected_unit_file_content,
+        case(indoc! {"
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: stackable
+                spec:
+                  containers: []
+                  securityContext:
+                    windowsOptions:
+                      runAsUserName: stackable-user1
+            "},
+            "stackable.service",
+            indoc! {"
+                [Service]
+                Restart=no
+                User=stackable-user1
+            "}
+        ),
+    )]
+    fn create_unit_from_pod(
+        pod_config: &str,
+        expected_unit_file_name: &str,
+        expected_unit_file_content: &str,
+    ) {
+        let pod = parse_pod_from_yaml(pod_config);
+
+        let result = SystemDUnit::new_from_pod(&pod);
+
+        if let Ok(unit) = result {
+            assert_eq!(expected_unit_file_name, unit.get_name());
+            assert_eq!(expected_unit_file_content, unit.get_unit_file_content());
+        } else {
+            panic!("Systemd unit expected but got {:?}", result);
+        }
+    }
+
+    fn parse_pod_from_yaml(pod_config: &str) -> Pod {
+        let kube_pod: k8s_openapi::api::core::v1::Pod = serde_yaml::from_str(pod_config).unwrap();
+        Pod::from(kube_pod)
+    }
+}
