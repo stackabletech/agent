@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
 
 use kubelet::container::Container;
 use kubelet::pod::Pod;
@@ -79,6 +80,40 @@ impl SystemDUnit {
         container: &Container,
         pod_state: &PodState,
     ) -> Result<Self, StackableError> {
+        // Create template data to be used when rendering template strings
+        let template_data = if let Ok(data) = CreatingConfig::create_render_data(&pod_state) {
+            data
+        } else {
+            error!("Unable to parse directories for command template as UTF8");
+            return Err(PodValidationError {
+                msg: format!(
+                    "Unable to parse directories for command template as UTF8 for container [{}].",
+                    container.name()
+                ),
+            });
+        };
+
+        let package_root = pod_state.get_service_package_directory();
+
+        SystemDUnit::new2(
+            common_properties,
+            name_prefix,
+            container,
+            &pod_state.service_name,
+            &template_data,
+            &package_root,
+        )
+    }
+
+    // TODO (sigi) rename
+    fn new2(
+        common_properties: &SystemDUnit,
+        name_prefix: &str,
+        container: &Container,
+        service_name: &str,
+        template_data: &BTreeMap<String, String>,
+        package_root: &PathBuf,
+    ) -> Result<Self, StackableError> {
         let mut unit = common_properties.clone();
 
         let trimmed_name = match container
@@ -96,13 +131,13 @@ impl SystemDUnit {
         unit.add_property(
             Section::Service,
             "ExecStart",
-            &SystemDUnit::get_command(container, pod_state)?,
+            &SystemDUnit::get_command(container, template_data, package_root)?,
         );
 
         unit.add_property(
             Section::Service,
             "Environment",
-            &SystemDUnit::get_environment(container, pod_state)?
+            &SystemDUnit::get_environment(container, service_name, template_data)?
                 .iter()
                 .map(|(k, v)| format!("\"{}={}\"", k, v))
                 .collect::<Vec<_>>()
@@ -244,7 +279,7 @@ impl SystemDUnit {
             .flatten()
             .map(|(section, entries)| SystemDUnit::write_section(section, entries))
             .collect::<Vec<_>>()
-            .join("\n")
+            .join("\n\n")
     }
 
     fn write_section(section: &Section, entries: &HashMap<String, String>) -> String {
@@ -256,7 +291,7 @@ impl SystemDUnit {
             .collect::<Vec<_>>();
         body.sort();
 
-        once(header).chain(body).map(|l| l + "\n").collect()
+        once(header).chain(body).collect::<Vec<_>>().join("\n")
     }
 
     fn get_type_string(&self) -> &str {
@@ -267,21 +302,9 @@ impl SystemDUnit {
 
     fn get_environment(
         container: &Container,
-        pod_state: &PodState,
+        service_name: &str,
+        template_data: &BTreeMap<String, String>,
     ) -> Result<Vec<(String, String)>, StackableError> {
-        // Create template data to be used when rendering template strings
-        let template_data = if let Ok(data) = CreatingConfig::create_render_data(&pod_state) {
-            data
-        } else {
-            error!("Unable to parse directories for command template as UTF8");
-            return Err(PodValidationError {
-                msg: format!(
-                    "Unable to parse directories for command template as UTF8 for container [{}].",
-                    container.name()
-                ),
-            });
-        };
-
         // Check if environment variables are set on the container - if some are present
         // we render all values as templates to replace configroot, packageroot and logroot
         // directories in case they are referenced in the values
@@ -296,10 +319,7 @@ impl SystemDUnit {
         // an Error. If any error occurred, iteration stops on the first error and returns
         // that in the outer result.
         let env_variables = if let Some(vars) = container.env() {
-            debug!(
-                "Got environment vars: {:?} service {}",
-                vars, pod_state.service_name
-            );
+            debug!("Got environment vars: {:?} service {}", vars, service_name);
             let render_result = vars
                 .iter()
                 .map(|env_var| {
@@ -325,22 +345,23 @@ impl SystemDUnit {
             }
         } else {
             // No environment variables present for this container -> empty vec
-            debug!(
-                "No environment vars set for service {}",
-                pod_state.service_name
-            );
+            debug!("No environment vars set for service {}", service_name);
             vec![]
         };
         debug!(
             "Setting environment for service {} to {:?}",
-            pod_state.service_name, &env_variables
+            service_name, &env_variables
         );
 
         Ok(env_variables)
     }
 
     // Retrieve a copy of the command object in the pod, or return an error if it is missing
-    fn get_command(container: &Container, pod_state: &PodState) -> Result<String, StackableError> {
+    fn get_command(
+        container: &Container,
+        template_data: &BTreeMap<String, String>,
+        package_root: &PathBuf,
+    ) -> Result<String, StackableError> {
         // Return an error if no command was specified in the container
         // TODO: We should discuss if there can be a valid scenario for this
         // This clones because we perform some in place mutations on the elements
@@ -355,8 +376,6 @@ impl SystemDUnit {
                 })
             }
         };
-
-        let package_root = pod_state.get_service_package_directory();
 
         trace!(
             "Command before replacing variables and adding packageroot: {:?}",
@@ -405,19 +424,6 @@ impl SystemDUnit {
             binary.replace_range(.., &binary_with_path);
         }
 
-        // Create template data to be used when rendering template strings
-        let template_data = if let Ok(data) = CreatingConfig::create_render_data(&pod_state) {
-            data
-        } else {
-            error!("Unable to parse directories for command template as UTF8");
-            return Err(PodValidationError {
-                msg: format!(
-                    "Unable to parse directories for command template as UTF8 for container [{}].",
-                    container.name()
-                ),
-            });
-        };
-
         // Append values from args array to command array
         // This is necessary as we only have the ExecStart field in a systemd service unit.
         // There is no specific place to put arguments separate from the command.
@@ -460,23 +466,62 @@ mod test {
     use rstest::rstest;
 
     #[rstest(pod_config, expected_unit_file_name, expected_unit_file_content,
-        case(indoc! {"
+        case::without_containers(
+            indoc! {"
                 apiVersion: v1
                 kind: Pod
                 metadata:
                   name: stackable
                 spec:
                   containers: []
+                  restartPolicy: Always
                   securityContext:
                     windowsOptions:
-                      runAsUserName: stackable-user1
-            "},
+                      runAsUserName: pod-user"},
             "stackable.service",
             indoc! {"
                 [Service]
+                Restart=always
+                User=pod-user"}
+        ),
+        // TODO (sigi) Check if all fields are tested.
+        case::with_container(indoc! {r#"
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: stackable
+                spec:
+                  containers:
+                    - name: test-container
+                      command:
+                        - start.sh
+                      args:
+                        - arg1
+                        - arg2
+                      env:
+                        - name: LOG_DIR
+                          value: "{{logroot}}"
+                      securityContext:
+                        windowsOptions:
+                          runAsUserName: container-user
+                  securityContext:
+                    windowsOptions:
+                      runAsUserName: pod-user"#},
+            "default-stackable-test-container.service",
+            indoc! {r#"
+                [Unit]
+                Description=default-stackable-test-container
+
+                [Service]
+                Environment="LOG_DIR=/var/log/default-stackable"
+                ExecStart=start.sh arg1 arg2
                 Restart=no
-                User=stackable-user1
-            "}
+                StandardError=journal
+                StandardOutput=journal
+                User=container-user
+
+                [Install]
+                WantedBy=multi-user.target"#}
         ),
     )]
     fn create_unit_from_pod(
@@ -486,7 +531,29 @@ mod test {
     ) {
         let pod = parse_pod_from_yaml(pod_config);
 
-        let result = SystemDUnit::new_from_pod(&pod);
+        let mut result = SystemDUnit::new_from_pod(&pod);
+
+        if let Ok(common_properties) = &result {
+            if let Some(container) = pod.containers().first() {
+                let service_name = format!("{}-{}", pod.namespace(), pod.name());
+                let name_prefix = format!("{}-", service_name);
+                let mut template_data = BTreeMap::new();
+                template_data.insert(
+                    String::from("logroot"),
+                    format!("/var/log/{}", &service_name),
+                );
+                let package_root = PathBuf::new();
+
+                result = SystemDUnit::new2(
+                    common_properties,
+                    &name_prefix,
+                    container,
+                    &service_name,
+                    &template_data,
+                    &package_root,
+                );
+            }
+        }
 
         if let Ok(unit) = result {
             assert_eq!(expected_unit_file_name, unit.get_name());
@@ -496,6 +563,7 @@ mod test {
         }
     }
 
+    // TODO (sigi) Refactor common test code
     fn parse_pod_from_yaml(pod_config: &str) -> Pod {
         let kube_pod: k8s_openapi::api::core::v1::Pod = serde_yaml::from_str(pod_config).unwrap();
         Pod::from(kube_pod)
