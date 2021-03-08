@@ -356,6 +356,9 @@ impl SystemdManager {
     }
 
     pub fn is_running(&self, unit: &str) -> Result<bool, anyhow::Error> {
+        // We are using `LoadUnit` here, as GetUnit can fail seemingly at random, when the unit
+        // is not loaded due to systemd garbage collection.
+        // see https://github.com/systemd/systemd/issues/1929 for more information
         let unit_node = self
             .method_call("LoadUnit", (&unit,))
             .map(|r: (Path,)| r.0)?;
