@@ -357,7 +357,7 @@ impl SystemdManager {
 
     pub fn is_running(&self, unit: &str) -> Result<bool, anyhow::Error> {
         let unit_node = self
-            .method_call("GetUnit", (&unit,))
+            .method_call("LoadUnit", (&unit,))
             .map(|r: (Path,)| r.0)?;
 
         let proxy = self
