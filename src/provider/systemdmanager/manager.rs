@@ -35,6 +35,7 @@ pub struct SystemdManager {
     units_directory: PathBuf,
     connection: SyncConnection, //TODO does this need to be closed?
     timeout: Duration,
+    user_mode: bool,
 }
 
 /// By default the manager will connect to the system-wide instance of systemd,
@@ -73,7 +74,12 @@ impl SystemdManager {
             units_directory,
             connection,
             timeout,
+            user_mode,
         })
+    }
+
+    pub fn is_user_mode(&self) -> bool {
+        self.user_mode
     }
 
     // The main method for interacting with dbus, all other functions will delegate the actual
@@ -307,7 +313,6 @@ impl SystemdManager {
         {
             Ok(result) => {
                 debug!("Successfully started service [{}]: [{}]", unit, result);
-                // TODO (sigi) Log the user of the unit.
                 Ok(())
             }
             Err(e) => {

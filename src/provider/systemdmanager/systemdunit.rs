@@ -47,11 +47,10 @@ impl fmt::Display for Section {
 }
 
 lazy_static! {
-    // TODO (sigi) Check if ^ and $ are necessary.
     // Pattern for user names to comply with the strict mode of systemd
     // see https://systemd.io/USER_NAMES/
     static ref USER_NAME_PATTERN: Regex =
-        Regex::new("[a-zA-Z_][a-zA-Z0-9_-]{0,30}").unwrap();
+        Regex::new("^[a-zA-Z_][a-zA-Z0-9_-]{0,30}$").unwrap();
 
     static ref SECTION_ORDER: Vec<Section> = vec![
         Section::Unit,
@@ -78,6 +77,7 @@ impl SystemDUnit {
         common_properties: &SystemDUnit,
         name_prefix: &str,
         container: &Container,
+        user_mode: bool,
         pod_state: &PodState,
     ) -> Result<Self, StackableError> {
         // Create template data to be used when rendering template strings
@@ -95,24 +95,25 @@ impl SystemDUnit {
 
         let package_root = pod_state.get_service_package_directory();
 
-        SystemDUnit::new2(
+        SystemDUnit::new_from_container(
             common_properties,
             name_prefix,
             container,
             &pod_state.service_name,
             &template_data,
             &package_root,
+            user_mode,
         )
     }
 
-    // TODO (sigi) rename
-    fn new2(
+    fn new_from_container(
         common_properties: &SystemDUnit,
         name_prefix: &str,
         container: &Container,
         service_name: &str,
         template_data: &BTreeMap<String, String>,
         package_root: &PathBuf,
+        user_mode: bool,
     ) -> Result<Self, StackableError> {
         let mut unit = common_properties.clone();
 
@@ -151,8 +152,9 @@ impl SystemDUnit {
         if let Some(user_name) =
             SystemDUnit::get_user_name_from_security_context(container, &unit.name)?
         {
-            // TODO (sigi) Do not add User if in session mode.
-            unit.add_property(Section::Service, "User", user_name);
+            if !user_mode {
+                unit.add_property(Section::Service, "User", user_name);
+            }
         }
 
         // This one is mandatory, as otherwise enabling the unit fails
@@ -171,12 +173,12 @@ impl SystemDUnit {
             } else {
                 Err(PodValidationError {
                     msg: format!(
-                        // TODO (sigi) Check if the regular expression should be quoted.
-                        // TODO (sigi) Ask if the nested brackets are okay.
-                        "The validation of the pod [{}] failed. \
-                        The user name [{}] in [spec.containers[name = {}].securityContext.windowsOptions.runAsUserName] must match the regular expression {}.",
-                        pod_name, user_name, container.name(), USER_NAME_PATTERN.to_string()
-                    )
+                        r#"The validation of the pod [{}] failed. The user name [{}] in spec.containers[name = {}].securityContext.windowsOptions.runAsUserName must match the regular expression "{}"."#,
+                        pod_name,
+                        user_name,
+                        container.name(),
+                        USER_NAME_PATTERN.to_string()
+                    ),
                 })
             }
         };
@@ -185,7 +187,6 @@ impl SystemDUnit {
             .security_context()
             .and_then(|security_context| security_context.windows_options.as_ref())
             .and_then(|windows_options| windows_options.run_as_user_name.as_ref())
-            // TODO (sigi) Check why η-reduction is not possible.
             .map(|user_name| validate(user_name))
             .transpose()
     }
@@ -194,7 +195,7 @@ impl SystemDUnit {
     /// all service units created for containers in this pod.
     /// This is designed to then be used as `common_properties` parameter when calling
     ///[`SystemdUnit::new`]
-    pub fn new_from_pod(pod: &Pod) -> Result<Self, StackableError> {
+    pub fn new_from_pod(pod: &Pod, user_mode: bool) -> Result<Self, StackableError> {
         let mut unit = SystemDUnit {
             name: pod.name().to_string(),
             unit_type: UnitTypes::Service,
@@ -224,8 +225,9 @@ impl SystemDUnit {
         unit.add_property(Section::Service, "Restart", restart_policy);
 
         if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
-            // TODO (sigi) Do not add User if in session mode.
-            unit.add_property(Section::Service, "User", user_name);
+            if !user_mode {
+                unit.add_property(Section::Service, "User", user_name);
+            }
         }
 
         Ok(unit)
@@ -238,11 +240,11 @@ impl SystemDUnit {
             } else {
                 Err(PodValidationError {
                     msg: format!(
-                        // TODO (sigi) Check if the regular expression should be quoted.
-                        "The validation of the pod [{}] failed. \
-                        The user name [{}] in [spec.securityContext.windowsOptions.runAsUserName] must match the regular expression {}.",
-                        pod.name(), user_name, USER_NAME_PATTERN.to_string()
-                    )
+                        r#"The validation of the pod [{}] failed. The user name [{}] in spec.securityContext.windowsOptions.runAsUserName must match the regular expression "{}"."#,
+                        pod.name(),
+                        user_name,
+                        USER_NAME_PATTERN.to_string()
+                    ),
                 })
             }
         };
@@ -253,7 +255,6 @@ impl SystemDUnit {
             .and_then(|spec| spec.security_context.as_ref())
             .and_then(|security_context| security_context.windows_options.as_ref())
             .and_then(|windows_options| windows_options.run_as_user_name.as_ref())
-            // TODO (sigi) Check why η-reduction is not possible.
             .map(|user_name| validate(user_name))
             .transpose()
     }
@@ -462,11 +463,13 @@ impl Display for SystemDUnit {
 #[cfg(test)]
 mod test {
     use super::*;
+    use dbus::channel::BusType;
     use indoc::indoc;
     use rstest::rstest;
 
-    #[rstest(pod_config, expected_unit_file_name, expected_unit_file_content,
+    #[rstest(bus_type, pod_config, expected_unit_file_name, expected_unit_file_content,
         case::without_containers(
+            BusType::System,
             indoc! {"
                 apiVersion: v1
                 kind: Pod
@@ -484,20 +487,21 @@ mod test {
                 Restart=always
                 User=pod-user"}
         ),
-        // TODO (sigi) Check if all fields are tested.
-        case::with_container(indoc! {r#"
+        case::with_container(
+            BusType::System,
+            indoc! {r#"
                 apiVersion: v1
                 kind: Pod
                 metadata:
                   name: stackable
                 spec:
                   containers:
-                    - name: test-container
+                    - name: test-container.service
                       command:
                         - start.sh
                       args:
-                        - arg1
-                        - arg2
+                        - arg
+                        - "{{configroot}}"
                       env:
                         - name: LOG_DIR
                           value: "{{logroot}}"
@@ -514,7 +518,7 @@ mod test {
 
                 [Service]
                 Environment="LOG_DIR=/var/log/default-stackable"
-                ExecStart=start.sh arg1 arg2
+                ExecStart=start.sh arg /etc/default-stackable
                 Restart=no
                 StandardError=journal
                 StandardOutput=journal
@@ -525,13 +529,14 @@ mod test {
         ),
     )]
     fn create_unit_from_pod(
+        bus_type: BusType,
         pod_config: &str,
         expected_unit_file_name: &str,
         expected_unit_file_content: &str,
     ) {
         let pod = parse_pod_from_yaml(pod_config);
 
-        let mut result = SystemDUnit::new_from_pod(&pod);
+        let mut result = SystemDUnit::new_from_pod(&pod, bus_type == BusType::Session);
 
         if let Ok(common_properties) = &result {
             if let Some(container) = pod.containers().first() {
@@ -542,15 +547,20 @@ mod test {
                     String::from("logroot"),
                     format!("/var/log/{}", &service_name),
                 );
+                template_data.insert(
+                    String::from("configroot"),
+                    format!("/etc/{}", &service_name),
+                );
                 let package_root = PathBuf::new();
 
-                result = SystemDUnit::new2(
+                result = SystemDUnit::new_from_container(
                     common_properties,
                     &name_prefix,
                     container,
                     &service_name,
                     &template_data,
                     &package_root,
+                    bus_type == BusType::Session,
                 );
             }
         }
@@ -563,7 +573,6 @@ mod test {
         }
     }
 
-    // TODO (sigi) Refactor common test code
     fn parse_pod_from_yaml(pod_config: &str) -> Pod {
         let kube_pod: k8s_openapi::api::core::v1::Pod = serde_yaml::from_str(pod_config).unwrap();
         Pod::from(kube_pod)
