@@ -211,8 +211,6 @@ impl SystemdManager {
             self.link_unit_file(&target_file.into_os_string().to_string_lossy(), force)?;
         }
 
-        // TODO (sigi) Create the user if it does not exist.
-
         // Perform daemon reload if requested
         if daemon_reload {
             self.reload()?;

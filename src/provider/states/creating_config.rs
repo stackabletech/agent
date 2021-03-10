@@ -217,8 +217,6 @@ impl CreatingConfig {
             debug!("No data found in ConfigMap..");
         }
 
-        // TODO (sigi) Change ownership of config directory.
-
         Ok(())
     }
 
