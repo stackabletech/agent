@@ -135,15 +135,19 @@ impl SystemDUnit {
             &SystemDUnit::get_command(container, template_data, package_root)?,
         );
 
-        unit.add_property(
-            Section::Service,
-            "Environment",
-            &SystemDUnit::get_environment(container, service_name, template_data)?
+        let env_vars = SystemDUnit::get_environment(container, service_name, template_data)?;
+        if !env_vars.is_empty() {
+            let mut assignments = env_vars
                 .iter()
                 .map(|(k, v)| format!("\"{}={}\"", k, v))
-                .collect::<Vec<_>>()
-                .join(" "),
-        );
+                .collect::<Vec<_>>();
+            assignments.sort();
+            unit.add_property(
+                Section::Service,
+                "Environment",
+                &assignments.join(" "),
+            );
+        }
 
         // These are currently hard-coded, as this is not something we expect to change soon
         unit.add_property(Section::Service, "StandardOutput", "journal");
@@ -468,7 +472,7 @@ mod test {
     use rstest::rstest;
 
     #[rstest(bus_type, pod_config, expected_unit_file_name, expected_unit_file_content,
-        case::without_containers(
+        case::without_containers_on_system_bus(
             BusType::System,
             indoc! {"
                 apiVersion: v1
@@ -487,7 +491,7 @@ mod test {
                 Restart=always
                 User=pod-user"}
         ),
-        case::with_container(
+        case::with_container_on_system_bus(
             BusType::System,
             indoc! {r#"
                 apiVersion: v1
@@ -503,6 +507,8 @@ mod test {
                         - arg
                         - "{{configroot}}"
                       env:
+                        - name: LOG_LEVEL
+                          value: INFO
                         - name: LOG_DIR
                           value: "{{logroot}}"
                       securityContext:
@@ -517,12 +523,44 @@ mod test {
                 Description=default-stackable-test-container
 
                 [Service]
-                Environment="LOG_DIR=/var/log/default-stackable"
+                Environment="LOG_DIR=/var/log/default-stackable" "LOG_LEVEL=INFO"
                 ExecStart=start.sh arg /etc/default-stackable
                 Restart=no
                 StandardError=journal
                 StandardOutput=journal
                 User=container-user
+
+                [Install]
+                WantedBy=multi-user.target"#}
+        ),
+        case::with_container_on_session_bus(
+            BusType::Session,
+            indoc! {r#"
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: stackable
+                spec:
+                  containers:
+                    - name: test-container.service
+                      command:
+                        - start.sh
+                      securityContext:
+                        windowsOptions:
+                          runAsUserName: container-user
+                  securityContext:
+                    windowsOptions:
+                      runAsUserName: pod-user"#},
+            "default-stackable-test-container.service",
+            indoc! {r#"
+                [Unit]
+                Description=default-stackable-test-container
+
+                [Service]
+                ExecStart=start.sh
+                Restart=no
+                StandardError=journal
+                StandardOutput=journal
 
                 [Install]
                 WantedBy=multi-user.target"#}
