@@ -216,7 +216,6 @@ impl CreatingConfig {
         } else {
             debug!("No data found in ConfigMap..");
         }
-
         Ok(())
     }
 
