@@ -142,11 +142,7 @@ impl SystemDUnit {
                 .map(|(k, v)| format!("\"{}={}\"", k, v))
                 .collect::<Vec<_>>();
             assignments.sort();
-            unit.add_property(
-                Section::Service,
-                "Environment",
-                &assignments.join(" "),
-            );
+            unit.add_property(Section::Service, "Environment", &assignments.join(" "));
         }
 
         // These are currently hard-coded, as this is not something we expect to change soon
