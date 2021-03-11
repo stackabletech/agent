@@ -126,6 +126,7 @@ impl SystemDUnit {
                 .map(|(k, v)| format!("\"{}={}\"", k, v))
                 .collect::<Vec<_>>();
             assignments.sort();
+            // TODO Put every environment variable on a separate line
             unit.add_property(Section::Service, "Environment", &assignments.join(" "));
         }
 
