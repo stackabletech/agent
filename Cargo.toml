@@ -56,3 +56,15 @@ assets = [
     ["packaging/config/agent.conf", "etc/stackable-agent/", "644"],
     ["target/release/agent", "opt/stackable-agent/stackable-agent", "755"],
 ]
+[package.metadata.rpm]
+package = "stackable-agent"
+
+[package.metadata.rpm.cargo]
+buildflags = ["--release"]
+
+[package.metadata.rpm.targets]
+agent = { path = "/opt/stackable-agent/stackable-agent" }
+
+[package.metadata.rpm.files]
+"config/agent.conf" = { path = "/etc/stackable-agent/agent.conf"}
+"systemd/stackable-agent.service" = { path = "/lib/systemd/system/stackable-agent.service"}
