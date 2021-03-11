@@ -12,7 +12,7 @@ use crate::provider::states::creating_config::CreatingConfig;
 use crate::provider::systemdmanager::manager::UnitTypes;
 use crate::provider::PodState;
 use lazy_static::lazy_static;
-use log::{debug, error, trace, warn};
+use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -154,6 +154,8 @@ impl SystemDUnit {
         {
             if !user_mode {
                 unit.add_property(Section::Service, "User", user_name);
+            } else {
+                info!("The user name [{}] in spec.containers[name = {}].securityContext.windowsOptions.runAsUserName is not set in the systemd unit because the agent runs in session mode.", user_name, container.name());
             }
         }
 
@@ -227,6 +229,8 @@ impl SystemDUnit {
         if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
             if !user_mode {
                 unit.add_property(Section::Service, "User", user_name);
+            } else {
+                info!("The user name [{}] in spec.securityContext.windowsOptions.runAsUserName is not set in the systemd unit because the agent runs in session mode.", user_name);
             }
         }
 

@@ -35,7 +35,7 @@ pub struct SystemdManager {
     units_directory: PathBuf,
     connection: SyncConnection, //TODO does this need to be closed?
     timeout: Duration,
-    user_mode: bool,
+    user_mode: bool, // TODO Use the same naming (user_mode or session_mode) everywhere
 }
 
 /// By default the manager will connect to the system-wide instance of systemd,
