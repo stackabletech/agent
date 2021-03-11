@@ -16,7 +16,7 @@ use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::iter::once;
+use std::iter;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 // This is used to map from Kubernetes restart lingo to systemd restart terms
@@ -279,7 +279,10 @@ impl SystemDUnit {
             .collect::<Vec<_>>();
         body.sort();
 
-        once(header).chain(body).collect::<Vec<_>>().join("\n")
+        iter::once(header)
+            .chain(body)
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     fn get_type_string(&self) -> &str {
