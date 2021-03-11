@@ -6,7 +6,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use log::{debug, error, info, trace};
-use pnet::datalink;
+use nix::ifaddrs;
+use nix::net::if_::InterfaceFlags;
+use nix::sys::socket::SockAddr;
 use stackable_config::{ConfigOption, Configurable, Configuration};
 use thiserror::Error;
 
@@ -270,32 +272,39 @@ impl AgentConfig {
     }
 
     /// This tries to find the first non loopback interface with an ip address assigned.
-    /// This should usually be the default interface according to:
-    ///
-    ///
-    /// https://docs.rs/pnet/0.27.2/pnet/datalink/fn.interfaces.html
+    /// This should usually be the default interface.
     fn get_default_ipaddress() -> Option<IpAddr> {
-        let all_interfaces = datalink::interfaces();
+        match ifaddrs::getifaddrs() {
+            Ok(ifaddr_iter) => {
+                let maybe_first_ifaddr = ifaddr_iter
+                    .filter(|ifaddr| {
+                        ifaddr.flags.contains(InterfaceFlags::IFF_UP)
+                            && !ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK)
+                    })
+                    .find_map(|ifaddr| {
+                        if let Some(SockAddr::Inet(inet_addr)) = ifaddr.address {
+                            Some((ifaddr.interface_name, inet_addr.to_std().ip()))
+                        } else {
+                            None
+                        }
+                    });
 
-        let default_interface = all_interfaces
-            .iter()
-            .find(|e| e.is_up() && !e.is_loopback() && !e.ips.is_empty());
-
-        match default_interface {
-            Some(interface) => {
-                debug!(
-                    "Found default interface {} with following ips: [{:?}].",
-                    interface, interface.ips
-                );
-                if let Some(ipv4_network) = interface.ips.get(0) {
-                    return Some(ipv4_network.ip());
+                if let Some((interface_name, inet_addr)) = maybe_first_ifaddr {
+                    debug!(
+                        "Found interface {} with the ip address {}.",
+                        interface_name, inet_addr
+                    );
+                    Some(inet_addr)
+                } else {
+                    error!("Error while finding the default interface - delegating ip retrieval to Kubelet.");
+                    None
                 }
             }
-            None => error!(
-                "Error while finding the default interface - delegating ip retrieval to Kubelet."
-            ),
-        };
-        None
+            Err(err) => {
+                error!("Error while retrieving the interface addresses: {}", err);
+                None
+            }
+        }
     }
 
     fn default_hostname() -> anyhow::Result<String> {
