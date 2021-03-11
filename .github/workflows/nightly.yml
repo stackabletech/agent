@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Build rpm package
-        run: ~/.cargo/bin/cargo rpm build
+        run: ~/.cargo/bin/cargo rpm build -vvvvv
       - name: Publish rpm package
         run: >-
           /usr/bin/curl
@@ -49,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Build rpm package
-        run: ~/.cargo/bin/cargo rpm build
+        run: ~/.cargo/bin/cargo rpm build -vvvvv
       - name: Publish rpm package
         run: >-
           /usr/bin/curl
