@@ -32,6 +32,8 @@ impl State<PodState> for CreatingService {
             }
         }
 
+        let user_mode = pod_state.systemd_manager.is_user_mode();
+
         // Naming schema
         //  Service name: `namespace-podname`
         //  SystemdUnit: `namespace-podname-containername`
@@ -40,7 +42,7 @@ impl State<PodState> for CreatingService {
 
         // Create a template from those settings that are derived directly from the pod, not
         // from container objects
-        let unit_template = match SystemDUnit::new_from_pod(&pod) {
+        let unit_template = match SystemDUnit::new_from_pod(&pod, user_mode) {
             Ok(unit) => unit,
             Err(pod_error) => {
                 error!(
@@ -58,7 +60,13 @@ impl State<PodState> for CreatingService {
             .containers()
             .iter()
             .map(|container| {
-                SystemDUnit::new(&unit_template, &service_prefix, container, pod_state)
+                SystemDUnit::new(
+                    &unit_template,
+                    &service_prefix,
+                    container,
+                    user_mode,
+                    pod_state,
+                )
             })
             .collect()
         {
