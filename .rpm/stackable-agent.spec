@@ -28,6 +28,9 @@ cp -a * %{buildroot}
 
 %post
 systemctl daemon-reload
+mkdir -p /var/lib/stackable/packages
+mkdir -p /var/lib/stackable/config
+mkdir -p /var/lib/stackable/agent/config
 
 %preun
 if [ $1 == 0 ]; then #uninstall
