@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
+use std::path::Path;
 
 use kubelet::container::Container;
 use kubelet::pod::Pod;
@@ -96,7 +96,7 @@ impl SystemDUnit {
         container: &Container,
         service_name: &str,
         template_data: &BTreeMap<String, String>,
-        package_root: &PathBuf,
+        package_root: &Path,
         user_mode: bool,
     ) -> Result<Self, StackableError> {
         let mut unit = common_properties.clone();
@@ -352,7 +352,7 @@ impl SystemDUnit {
     fn get_command(
         container: &Container,
         template_data: &BTreeMap<String, String>,
-        package_root: &PathBuf,
+        package_root: &Path,
     ) -> Result<String, StackableError> {
         // Return an error if no command was specified in the container
         // TODO: We should discuss if there can be a valid scenario for this
@@ -457,6 +457,7 @@ mod test {
     use dbus::channel::BusType;
     use indoc::indoc;
     use rstest::rstest;
+    use std::path::PathBuf;
 
     #[rstest(bus_type, pod_config, expected_unit_file_name, expected_unit_file_content,
         case::without_containers_on_system_bus(
