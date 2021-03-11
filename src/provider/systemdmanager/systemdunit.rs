@@ -17,6 +17,7 @@ use regex::Regex;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::iter::once;
+use strum::{Display, EnumIter, IntoEnumIterator};
 
 // This is used to map from Kubernetes restart lingo to systemd restart terms
 static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
@@ -25,25 +26,14 @@ static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
     "Never" => "no",
 };
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+/// List of sections in the systemd unit
+///
+/// The sections are written in the same order as listed here into the unit file.
+#[derive(Clone, Copy, Debug, Display, EnumIter, Eq, Hash, PartialEq)]
 pub enum Section {
     Unit,
     Service,
     Install,
-}
-
-impl fmt::Display for Section {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Section::Unit => "Unit",
-                Section::Service => "Service",
-                Section::Install => "Install",
-            }
-        )
-    }
 }
 
 lazy_static! {
@@ -51,12 +41,6 @@ lazy_static! {
     // see https://systemd.io/USER_NAMES/
     static ref USER_NAME_PATTERN: Regex =
         Regex::new("^[a-zA-Z_][a-zA-Z0-9_-]{0,30}$").unwrap();
-
-    static ref SECTION_ORDER: Vec<Section> = vec![
-        Section::Unit,
-        Section::Service,
-        Section::Install,
-    ];
 }
 
 /// A struct that represents an individual systemd unit
@@ -278,9 +262,8 @@ impl SystemDUnit {
 
     /// Retrieve content of the unit file as it should be written to disk
     pub fn get_unit_file_content(&self) -> String {
-        SECTION_ORDER
-            .iter()
-            .map(|section| self.sections.get_key_value(section))
+        Section::iter()
+            .map(|section| self.sections.get_key_value(&section))
             .flatten()
             .map(|(section, entries)| SystemDUnit::write_section(section, entries))
             .collect::<Vec<_>>()

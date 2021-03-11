@@ -41,6 +41,8 @@ shellexpand = "2.1"
 regex = "1"
 nix = "0.20"
 lazy_static = "1"
+strum = { version = "0.20", features = ["derive"] }
+strum_macros = "0.20"
 
 [dev-dependencies]
 indoc = "1.0"
