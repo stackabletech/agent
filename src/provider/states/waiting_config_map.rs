@@ -1,9 +1,9 @@
 use kubelet::backoff::BackoffStrategy;
-use kubelet::state::prelude::*;
+use kubelet::pod::state::prelude::*;
 use log::info;
 
 use crate::provider::states::creating_config::CreatingConfig;
-use crate::provider::PodState;
+use crate::provider::{PodState, ProviderState};
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(CreatingConfig)]
@@ -16,7 +16,12 @@ pub struct WaitingConfigMap {
 
 #[async_trait::async_trait]
 impl State<PodState> for WaitingConfigMap {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
+    async fn next(
+        self: Box<Self>,
+        _provider_state: SharedState<ProviderState>,
+        pod_state: &mut PodState,
+        _pod: Manifest<Pod>,
+    ) -> Transition<PodState> {
         info!(
             "Delaying execution due to missing configmaps: {:?}",
             &self.missing_config_maps
@@ -31,11 +36,7 @@ impl State<PodState> for WaitingConfigMap {
         )
     }
 
-    async fn json_status(
-        &self,
-        _pod_state: &mut PodState,
-        _pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"WaitingConfigMap")
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
+        Ok(make_status(Phase::Pending, &"WaitingConfigMap"))
     }
 }

@@ -2,9 +2,8 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use flate2::read::GzDecoder;
+use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
-use kubelet::state::prelude::*;
-use kubelet::state::{State, Transition};
 use log::{debug, error, info};
 use tar::Archive;
 
@@ -12,7 +11,7 @@ use crate::provider::error::StackableError;
 use crate::provider::repository::package::Package;
 use crate::provider::states::creating_config::CreatingConfig;
 use crate::provider::states::setup_failed::SetupFailed;
-use crate::provider::PodState;
+use crate::provider::{PodState, ProviderState};
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(CreatingConfig, SetupFailed)]
@@ -59,7 +58,12 @@ impl Installing {
 
 #[async_trait::async_trait]
 impl State<PodState> for Installing {
-    async fn next(self: Box<Self>, _pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
+    async fn next(
+        self: Box<Self>,
+        _provider_state: SharedState<ProviderState>,
+        _pod_state: &mut PodState,
+        _pod: Manifest<Pod>,
+    ) -> Transition<PodState> {
         let package = self.package.clone();
         let package_name = &package.get_directory_name();
         return if self.package_installed(package.clone()) {
@@ -95,11 +99,7 @@ impl State<PodState> for Installing {
         };
     }
 
-    async fn json_status(
-        &self,
-        _pod_state: &mut PodState,
-        _pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"Installing")
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
+        Ok(make_status(Phase::Pending, &"Installing"))
     }
 }

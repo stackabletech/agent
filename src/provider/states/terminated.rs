@@ -1,7 +1,7 @@
-use kubelet::state::prelude::*;
+use kubelet::pod::state::prelude::*;
 use log::{error, info, warn};
 
-use crate::provider::PodState;
+use crate::provider::{PodState, ProviderState};
 
 #[derive(Default, Debug)]
 /// The pod object was deleted in Kubernetes
@@ -11,7 +11,12 @@ pub struct Terminated {
 
 #[async_trait::async_trait]
 impl State<PodState> for Terminated {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
+    async fn next(
+        self: Box<Self>,
+        _provider_state: SharedState<ProviderState>,
+        pod_state: &mut PodState,
+        _pod: Manifest<Pod>,
+    ) -> Transition<PodState> {
         info!(
             "Pod {} was terminated, stopping service!",
             &pod_state.service_name
@@ -61,11 +66,7 @@ impl State<PodState> for Terminated {
         };
     }
 
-    async fn json_status(
-        &self,
-        _pod_state: &mut PodState,
-        _pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Succeeded, &self.message)
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
+        Ok(make_status(Phase::Succeeded, &self.message))
     }
 }

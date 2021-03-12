@@ -1,15 +1,14 @@
 use std::path::Path;
 
+use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
-use kubelet::state::prelude::*;
-use kubelet::state::{State, Transition};
 use log::{debug, error, info, warn};
 
 use crate::provider::repository::find_repository;
 use crate::provider::repository::package::Package;
 use crate::provider::states::downloading_backoff::DownloadingBackoff;
 use crate::provider::states::installing::Installing;
-use crate::provider::PodState;
+use crate::provider::{PodState, ProviderState};
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Installing, DownloadingBackoff)]
@@ -29,7 +28,12 @@ impl Downloading {
 
 #[async_trait::async_trait]
 impl State<PodState> for Downloading {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
+    async fn next(
+        self: Box<Self>,
+        _provider_state: SharedState<ProviderState>,
+        pod_state: &mut PodState,
+        _pod: Manifest<Pod>,
+    ) -> Transition<PodState> {
         let package = pod_state.package.clone();
 
         info!("Looking for package: {} in known repositories", &package);
@@ -122,11 +126,7 @@ impl State<PodState> for Downloading {
         };
     }
 
-    async fn json_status(
-        &self,
-        _pod_state: &mut PodState,
-        _pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"Downloading")
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
+        Ok(make_status(Phase::Pending, &"Downloading"))
     }
 }

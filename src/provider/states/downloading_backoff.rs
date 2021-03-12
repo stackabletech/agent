@@ -1,10 +1,10 @@
 use kubelet::backoff::BackoffStrategy;
-use kubelet::state::prelude::*;
+use kubelet::pod::state::prelude::*;
 use log::info;
 
 use crate::provider::repository::package::Package;
 use crate::provider::states::downloading::Downloading;
-use crate::provider::PodState;
+use crate::provider::{PodState, ProviderState};
 
 #[derive(Debug, TransitionTo)]
 #[transition_to(Downloading)]
@@ -15,7 +15,12 @@ pub struct DownloadingBackoff {
 
 #[async_trait::async_trait]
 impl State<PodState> for DownloadingBackoff {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, _pod: &Pod) -> Transition<PodState> {
+    async fn next(
+        self: Box<Self>,
+        _provider_state: SharedState<ProviderState>,
+        pod_state: &mut PodState,
+        _pod: Manifest<Pod>,
+    ) -> Transition<PodState> {
         info!(
             "Backing of before retrying download of package {}",
             self.package
@@ -24,11 +29,7 @@ impl State<PodState> for DownloadingBackoff {
         Transition::next(self, Downloading)
     }
 
-    async fn json_status(
-        &self,
-        _pod_state: &mut PodState,
-        _pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"DownloadingBackoff")
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
+        Ok(make_status(Phase::Pending, &"DownloadingBackoff"))
     }
 }

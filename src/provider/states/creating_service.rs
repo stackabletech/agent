@@ -1,12 +1,11 @@
+use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
-use kubelet::state::prelude::*;
-use kubelet::state::{State, Transition};
 use log::{debug, error, info};
 
 use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::states::starting::Starting;
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
-use crate::provider::PodState;
+use crate::provider::{PodState, ProviderState};
 use std::fs::create_dir_all;
 
 #[derive(Default, Debug, TransitionTo)]
@@ -15,7 +14,14 @@ pub struct CreatingService;
 
 #[async_trait::async_trait]
 impl State<PodState> for CreatingService {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, pod: &Pod) -> Transition<PodState> {
+    async fn next(
+        self: Box<Self>,
+        _provider_state: SharedState<ProviderState>,
+        pod_state: &mut PodState,
+        pod: Manifest<Pod>,
+    ) -> Transition<PodState> {
+        let pod = pod.latest();
+
         let service_name: &str = pod_state.service_name.as_ref();
         info!(
             "Creating service unit for service {}",
@@ -104,11 +110,7 @@ impl State<PodState> for CreatingService {
         Transition::next(self, Starting)
     }
 
-    async fn json_status(
-        &self,
-        _pod_state: &mut PodState,
-        _pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"CreatingService")
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
+        Ok(make_status(Phase::Pending, &"CreatingService"))
     }
 }

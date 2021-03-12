@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
@@ -8,9 +9,11 @@ use kube::{Api, Client};
 use kubelet::backoff::ExponentialBackoffStrategy;
 use kubelet::log::Sender;
 use kubelet::node::Builder;
-use kubelet::pod::Pod;
+use kubelet::pod::state::prelude::*;
+use kubelet::pod::{Pod, Status};
 use kubelet::provider::Provider;
 use log::{debug, error};
+use tokio::sync::RwLock;
 
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::{
@@ -39,6 +42,8 @@ mod error;
 mod repository;
 mod states;
 mod systemdmanager;
+
+pub struct ProviderState;
 
 pub struct PodState {
     client: Client,
@@ -157,17 +162,26 @@ impl StackableProvider {
 
 // No cleanup state needed, we clean up when dropping PodState.
 #[async_trait::async_trait]
-impl kubelet::state::AsyncDrop for PodState {
-    async fn async_drop(self) {}
+impl ObjectState for PodState {
+    type Manifest = Pod;
+    type Status = Status;
+    type SharedState = ProviderState;
+
+    async fn async_drop(self, _provider_state: &mut ProviderState) {}
 }
 
 #[async_trait::async_trait]
 impl Provider for StackableProvider {
+    type ProviderState = ProviderState;
     type PodState = PodState;
     type InitialState = Downloading;
     type TerminatedState = Terminated;
 
     const ARCH: &'static str = "stackable-linux";
+
+    fn provider_state(&self) -> SharedState<ProviderState> {
+        Arc::new(RwLock::new(ProviderState {}))
+    }
 
     async fn node(&self, builder: &mut Builder) -> anyhow::Result<()> {
         builder.set_architecture(Self::ARCH);

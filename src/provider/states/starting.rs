@@ -1,11 +1,10 @@
+use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
-use kubelet::state::prelude::*;
-use kubelet::state::{State, Transition};
 
 use crate::provider::states::failed::Failed;
 use crate::provider::states::running::Running;
 use crate::provider::states::setup_failed::SetupFailed;
-use crate::provider::PodState;
+use crate::provider::{PodState, ProviderState};
 use anyhow::anyhow;
 use log::{debug, error, info, warn};
 use std::time::Instant;
@@ -17,7 +16,12 @@ pub struct Starting;
 
 #[async_trait::async_trait]
 impl State<PodState> for Starting {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, _: &Pod) -> Transition<PodState> {
+    async fn next(
+        self: Box<Self>,
+        _provider_state: SharedState<ProviderState>,
+        pod_state: &mut PodState,
+        _: Manifest<Pod>,
+    ) -> Transition<PodState> {
         if let Some(systemd_units) = &pod_state.service_units {
             for unit in systemd_units {
                 match pod_state.systemd_manager.is_running(&unit.get_name()) {
@@ -107,11 +111,7 @@ impl State<PodState> for Starting {
         )
     }
 
-    async fn json_status(
-        &self,
-        _pod_state: &mut PodState,
-        _pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"Starting")
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
+        Ok(make_status(Phase::Pending, &"Starting"))
     }
 }

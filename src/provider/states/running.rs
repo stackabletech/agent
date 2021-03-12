@@ -2,15 +2,15 @@ use anyhow::anyhow;
 use k8s_openapi::api::core::v1::{
     ContainerState, ContainerStateRunning, ContainerStatus as KubeContainerStatus, PodCondition,
 };
+use krator::ObjectStatus;
+use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
-use kubelet::state::prelude::*;
-use kubelet::state::{State, Transition};
 use log::{debug, info, trace};
 
 use crate::provider::states::failed::Failed;
 use crate::provider::states::installing::Installing;
 use crate::provider::states::make_status_with_containers_and_condition;
-use crate::provider::PodState;
+use crate::provider::{PodState, ProviderState};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use k8s_openapi::chrono;
 use tokio::time::Duration;
@@ -33,8 +33,9 @@ impl Default for Running {
 impl State<PodState> for Running {
     async fn next(
         mut self: Box<Self>,
+        _provider_state: SharedState<ProviderState>,
         pod_state: &mut PodState,
-        _pod: &Pod,
+        _pod: Manifest<Pod>,
     ) -> Transition<PodState> {
         // We loop here indefinitely and "wake up" periodically to check if the service is still
         // up and running
@@ -87,11 +88,7 @@ impl State<PodState> for Running {
     }
 
     // test
-    async fn json_status(
-        &self,
-        pod_state: &mut PodState,
-        pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
+    async fn status(&self, pod_state: &mut PodState, pod: &Pod) -> anyhow::Result<PodStatus> {
         let state = ContainerState {
             running: Some(ContainerStateRunning { started_at: None }),
             ..Default::default()
@@ -123,7 +120,8 @@ impl State<PodState> for Running {
         );
         debug!(
             "Patching status for running servce [{}] with: [{}]",
-            pod_state.service_name, status
+            pod_state.service_name,
+            status.json_patch()
         );
         Ok(status)
     }

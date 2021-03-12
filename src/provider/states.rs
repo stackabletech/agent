@@ -1,6 +1,7 @@
 use k8s_openapi::api::core::v1::ContainerStatus as KubeContainerStatus;
 use k8s_openapi::api::core::v1::PodCondition as KubePodCondition;
-use kubelet::pod::Phase;
+use kubelet::pod::state::prelude::*;
+use kubelet::pod::{Phase, Status};
 
 pub(crate) mod creating_config;
 pub(crate) mod creating_service;
@@ -31,17 +32,20 @@ pub fn make_status_with_containers_and_condition(
     reason: &str,
     container_statuses: Vec<KubeContainerStatus>,
     init_container_statuses: Vec<KubeContainerStatus>,
-    pod_conditions: Vec<KubePodCondition>,
-) -> serde_json::Value {
-    serde_json::json!(
-       {
-           "status": {
-               "phase": phase,
-               "reason": reason,
-               "containerStatuses": container_statuses,
-               "initContainerStatuses": init_container_statuses,
-               "conditions": pod_conditions
-           }
-       }
-    )
+    _pod_conditions: Vec<KubePodCondition>,
+) -> Status {
+    // serde_json::json!(
+    //    {
+    //        "status": {
+    //            "phase": phase,
+    //            "reason": reason,
+    //            "containerStatuses": container_statuses,
+    //            "initContainerStatuses": init_container_statuses,
+    //            "conditions": pod_conditions
+    //        }
+    //    }
+    // )
+
+    // TODO (sigi) Use custom Status to serialize the pod conditions.
+    make_status_with_containers(phase, reason, container_statuses, init_container_statuses)
 }
