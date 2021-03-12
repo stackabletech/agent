@@ -9,6 +9,7 @@ use kube::{Api, Client};
 use kubelet::backoff::ExponentialBackoffStrategy;
 use kubelet::log::Sender;
 use kubelet::node::Builder;
+use kubelet::plugin_watcher::PluginRegistry;
 use kubelet::pod::state::prelude::*;
 use kubelet::pod::{Pod, Status};
 use kubelet::provider::Provider;
@@ -32,6 +33,7 @@ pub struct StackableProvider {
     parcel_directory: PathBuf,
     config_directory: PathBuf,
     log_directory: PathBuf,
+    plugins_directory: PathBuf,
     session: bool,
     pod_cidr: String,
 }
@@ -91,6 +93,7 @@ impl StackableProvider {
         parcel_directory: PathBuf,
         config_directory: PathBuf,
         log_directory: PathBuf,
+        plugins_directory: PathBuf,
         session: bool,
         pod_cidr: String,
     ) -> Result<Self, StackableError> {
@@ -99,6 +102,7 @@ impl StackableProvider {
             parcel_directory,
             config_directory,
             log_directory,
+            plugins_directory,
             session,
             pod_cidr,
         };
@@ -181,6 +185,16 @@ impl Provider for StackableProvider {
 
     fn provider_state(&self) -> SharedState<ProviderState> {
         Arc::new(RwLock::new(ProviderState {}))
+    }
+
+    // TODO (sigi) The plugin_registry is optional. It defaults to None.
+    // But if it is None then tokio::time::delay_for is called with u64::MAX
+    // (see https://github.com/deislabs/krustlet/blob/v0.6.0/crates/kubelet/src/kubelet.rs#L170)
+    // which causes a panic in tokio (see https://github.com/tokio-rs/tokio/pull/3551).
+    fn plugin_registry(&self) -> Option<Arc<PluginRegistry>> {
+        Some(Arc::new(PluginRegistry::new(
+            self.plugins_directory.clone(),
+        )))
     }
 
     async fn node(&self, builder: &mut Builder) -> anyhow::Result<()> {
