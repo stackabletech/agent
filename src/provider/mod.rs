@@ -187,10 +187,13 @@ impl Provider for StackableProvider {
         Arc::new(RwLock::new(ProviderState {}))
     }
 
-    // TODO (sigi) The plugin_registry is optional. It defaults to None.
+    // TODO Remove all the plugin registry stuff when kubelet depends on tokio 1.3.0 or higher.
+    //
+    // The plugin_registry is optional. It defaults to None.
     // But if it is None then tokio::time::delay_for is called with u64::MAX
     // (see https://github.com/deislabs/krustlet/blob/v0.6.0/crates/kubelet/src/kubelet.rs#L170)
     // which causes a panic in tokio (see https://github.com/tokio-rs/tokio/pull/3551).
+    // This is fixed in tokio 1.3.0.
     fn plugin_registry(&self) -> Option<Arc<PluginRegistry>> {
         Some(Arc::new(PluginRegistry::new(
             self.plugins_directory.clone(),

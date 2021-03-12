@@ -1180,8 +1180,7 @@ dependencies = [
 [[package]]
 name = "krator"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88c5cb9d387be881aef19ef4038fc6abb79dae9aec24181000ecea1cdd4018c6"
+source = "git+https://github.com/stackabletech/krustlet.git?rev=6d00917adc9f06366532ce6f82302f507971c69a#6d00917adc9f06366532ce6f82302f507971c69a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1199,8 +1198,7 @@ dependencies = [
 [[package]]
 name = "krator-derive"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a304205f843ddd12c210a71dfcaeaabfb9c1544c141b289011ebeb1aef53fd72"
+source = "git+https://github.com/stackabletech/krustlet.git?rev=6d00917adc9f06366532ce6f82302f507971c69a#6d00917adc9f06366532ce6f82302f507971c69a"
 dependencies = [
  "quote 1.0.9",
  "syn 1.0.64",
@@ -1270,8 +1268,7 @@ dependencies = [
 [[package]]
 name = "kubelet"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1afaf230751ca6e817b2b06dad2b4727953a8d3e79b82b4f77ce924ea40515f3"
+source = "git+https://github.com/stackabletech/krustlet.git?rev=6d00917adc9f06366532ce6f82302f507971c69a#6d00917adc9f06366532ce6f82302f507971c69a"
 dependencies = [
  "anyhow",
  "async-stream 0.3.0",
@@ -1607,8 +1604,7 @@ dependencies = [
 [[package]]
 name = "oci-distribution"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e24e60b93de525eaac5e57bd958fb191b84a8cb7a7baf958717268656c431bc"
+source = "git+https://github.com/stackabletech/krustlet.git?rev=6d00917adc9f06366532ce6f82302f507971c69a#6d00917adc9f06366532ce6f82302f507971c69a"
 dependencies = [
  "anyhow",
  "futures-util",

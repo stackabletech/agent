@@ -10,9 +10,9 @@ license = "Apache-2.0"
 # We are currently referencing the Krustlet directly from a Stackable fork of the official repository.
 # The fork is needed to remove the node draining behavior of the Krustlet (see https://github.com/deislabs/krustlet/issues/523)
 # There is already a PR for cargo to allow patching of dependencies (see https://github.com/rust-lang/cargo/pull/9001).
-kubelet = { version = "0.6", default-features = true, features= ["derive", "cli"] }
-krator = { version = "0.1", default-features = false }
-oci-distribution = { version = "0.5", default-features = false }
+kubelet = { git="https://github.com/stackabletech/krustlet.git", rev="6d00917adc9f06366532ce6f82302f507971c69a", default-features = true, features= ["derive", "cli"] }
+krator = { git="https://github.com/stackabletech/krustlet.git", rev="6d00917adc9f06366532ce6f82302f507971c69a"}
+oci-distribution = { git="https://github.com/stackabletech/krustlet.git", rev="6d00917adc9f06366532ce6f82302f507971c69a"}
 k8s-openapi = { version = "0.9", default-features = false, features = ["v1_18"] }
 kube = { version= "0.42", default-features = false, features = ["native-tls"] }
 kube-derive = "0.43"
