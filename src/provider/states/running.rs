@@ -33,10 +33,15 @@ impl Default for Running {
 impl State<PodState> for Running {
     async fn next(
         mut self: Box<Self>,
-        _provider_state: SharedState<ProviderState>,
+        provider_state: SharedState<ProviderState>,
         pod_state: &mut PodState,
         _pod: Manifest<Pod>,
     ) -> Transition<PodState> {
+        let systemd_manager = {
+            let provider_state = provider_state.read().await;
+            provider_state.systemd_manager.clone()
+        };
+
         // We loop here indefinitely and "wake up" periodically to check if the service is still
         // up and running
         // Interruption of this loop is triggered externally by the Krustlet code when
@@ -58,7 +63,7 @@ impl State<PodState> for Running {
             };
 
             for unit in systemd_units {
-                match pod_state.systemd_manager.is_running(&unit.get_name()) {
+                match systemd_manager.is_running(&unit.get_name()) {
                     Ok(true) => trace!(
                         "Unit [{}] of service [{}] still running ...",
                         &unit.get_name(),

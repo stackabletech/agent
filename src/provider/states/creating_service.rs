@@ -16,11 +16,16 @@ pub struct CreatingService;
 impl State<PodState> for CreatingService {
     async fn next(
         self: Box<Self>,
-        _provider_state: SharedState<ProviderState>,
+        provider_state: SharedState<ProviderState>,
         pod_state: &mut PodState,
         pod: Manifest<Pod>,
     ) -> Transition<PodState> {
         let pod = pod.latest();
+
+        let systemd_manager = {
+            let provider_state = provider_state.read().await;
+            provider_state.systemd_manager.clone()
+        };
 
         let service_name: &str = pod_state.service_name.as_ref();
         info!(
@@ -38,7 +43,7 @@ impl State<PodState> for CreatingService {
             }
         }
 
-        let user_mode = pod_state.systemd_manager.is_user_mode();
+        let user_mode = systemd_manager.is_user_mode();
 
         // Naming schema
         //  Service name: `namespace-podname`
@@ -86,10 +91,7 @@ impl State<PodState> for CreatingService {
             // Create the service
             // As per ADR005 we currently write the unit files directly in the systemd
             // unit directory (by passing None as [unit_file_path]).
-            match pod_state
-                .systemd_manager
-                .create_unit(&unit, None, true, true)
-            {
+            match systemd_manager.create_unit(&unit, None, true, true) {
                 Ok(()) => {}
                 Err(e) => {
                     // TODO: We need to discuss what to do here, in theory we could have loaded

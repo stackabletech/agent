@@ -34,7 +34,6 @@ pub struct StackableProvider {
     config_directory: PathBuf,
     log_directory: PathBuf,
     plugins_directory: PathBuf,
-    session: bool,
     pod_cidr: String,
 }
 
@@ -49,6 +48,7 @@ mod systemdmanager;
 #[derive(Clone)]
 pub struct ProviderState {
     client: Client,
+    systemd_manager: Arc<SystemdManager>,
 }
 
 pub struct PodState {
@@ -60,7 +60,6 @@ pub struct PodState {
     service_name: String,
     service_uid: String,
     package: Package,
-    systemd_manager: SystemdManager,
     service_units: Option<Vec<SystemDUnit>>,
 }
 
@@ -100,7 +99,12 @@ impl StackableProvider {
         session: bool,
         pod_cidr: String,
     ) -> Result<Self, StackableError> {
-        let provider_state = ProviderState { client };
+        let systemd_manager = Arc::new(SystemdManager::new(session, Duration::from_secs(5))?);
+
+        let provider_state = ProviderState {
+            client,
+            systemd_manager,
+        };
 
         let provider = StackableProvider {
             shared: provider_state,
@@ -108,7 +112,6 @@ impl StackableProvider {
             config_directory,
             log_directory,
             plugins_directory,
-            session,
             pod_cidr,
         };
         let missing_crds = provider.check_crds().await?;
@@ -231,7 +234,6 @@ impl Provider for StackableProvider {
         let download_directory = parcel_directory.join("_download");
         let config_directory = self.config_directory.clone();
         let log_directory = self.log_directory.clone();
-        let session = self.session;
 
         let package = Self::get_package(pod)?;
         if !(&download_directory.is_dir()) {
@@ -240,9 +242,6 @@ impl Provider for StackableProvider {
         if !(&config_directory.is_dir()) {
             fs::create_dir_all(&config_directory)?;
         }
-
-        // TODO: investigate if we can share one DBus connection across all pods
-        let systemd_manager = SystemdManager::new(session, Duration::from_secs(5))?;
 
         Ok(PodState {
             parcel_directory,
@@ -253,9 +252,6 @@ impl Provider for StackableProvider {
             service_name,
             service_uid,
             package,
-            // TODO: Check if we can work with a reference or a Mutex Guard here to only keep
-            // one connection open to DBus instead of one per tracked Pod
-            systemd_manager,
             service_units: None,
         })
     }
