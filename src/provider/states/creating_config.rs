@@ -236,7 +236,7 @@ impl CreatingConfig {
 impl State<PodState> for CreatingConfig {
     async fn next(
         self: Box<Self>,
-        _provider_state: SharedState<ProviderState>,
+        provider_state: SharedState<ProviderState>,
         pod_state: &mut PodState,
         pod: Manifest<Pod>,
     ) -> Transition<PodState> {
@@ -244,7 +244,10 @@ impl State<PodState> for CreatingConfig {
 
         // TODO: this entire function needs to be heavily refactored
         let name = pod.name();
-        let client = pod_state.client.clone();
+        let client = {
+            let provider_state = provider_state.read().await;
+            provider_state.client.clone()
+        };
 
         // Check size of containers array, we currently only allow one container to be present, this
         // might change in the future

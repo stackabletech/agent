@@ -30,11 +30,16 @@ impl Downloading {
 impl State<PodState> for Downloading {
     async fn next(
         self: Box<Self>,
-        _provider_state: SharedState<ProviderState>,
+        provider_state: SharedState<ProviderState>,
         pod_state: &mut PodState,
         _pod: Manifest<Pod>,
     ) -> Transition<PodState> {
         let package = pod_state.package.clone();
+
+        let client = {
+            let provider_state = provider_state.read().await;
+            provider_state.client.clone()
+        };
 
         info!("Looking for package: {} in known repositories", &package);
         debug!(
@@ -55,7 +60,7 @@ impl State<PodState> for Downloading {
                 },
             );
         }
-        let repo = find_repository(pod_state.client.clone(), &package, None).await;
+        let repo = find_repository(client, &package, None).await;
         return match repo {
             Ok(Some(mut repo)) => {
                 // We found a repository providing the package, proceed with download

@@ -29,7 +29,7 @@ use kube::error::ErrorResponse;
 use std::time::Duration;
 
 pub struct StackableProvider {
-    client: Client,
+    shared: ProviderState,
     parcel_directory: PathBuf,
     config_directory: PathBuf,
     log_directory: PathBuf,
@@ -45,10 +45,13 @@ mod repository;
 mod states;
 mod systemdmanager;
 
-pub struct ProviderState;
+/// Provider-level state shared between all pods
+#[derive(Clone)]
+pub struct ProviderState {
+    client: Client,
+}
 
 pub struct PodState {
-    client: Client,
     parcel_directory: PathBuf,
     download_directory: PathBuf,
     config_directory: PathBuf,
@@ -97,8 +100,10 @@ impl StackableProvider {
         session: bool,
         pod_cidr: String,
     ) -> Result<Self, StackableError> {
+        let provider_state = ProviderState { client };
+
         let provider = StackableProvider {
-            client,
+            shared: provider_state,
             parcel_directory,
             config_directory,
             log_directory,
@@ -138,7 +143,7 @@ impl StackableProvider {
 
     async fn check_crds(&self) -> Result<Vec<String>, StackableError> {
         let mut missing_crds = vec![];
-        let crds: Api<CustomResourceDefinition> = Api::all(self.client.clone());
+        let crds: Api<CustomResourceDefinition> = Api::all(self.shared.client.clone());
 
         // Check all CRDS
         for crd in CRDS.iter() {
@@ -184,7 +189,7 @@ impl Provider for StackableProvider {
     const ARCH: &'static str = "stackable-linux";
 
     fn provider_state(&self) -> SharedState<ProviderState> {
-        Arc::new(RwLock::new(ProviderState {}))
+        Arc::new(RwLock::new(self.shared.clone()))
     }
 
     // TODO Remove all the plugin registry stuff when kubelet depends on tokio 1.3.0 or higher.
@@ -240,7 +245,6 @@ impl Provider for StackableProvider {
         let systemd_manager = SystemdManager::new(session, Duration::from_secs(5))?;
 
         Ok(PodState {
-            client: self.client.clone(),
             parcel_directory,
             download_directory,
             log_directory,
