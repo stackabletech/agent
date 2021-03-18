@@ -2,7 +2,7 @@ use kubelet::backoff::BackoffStrategy;
 use kubelet::pod::state::prelude::*;
 use log::info;
 
-use crate::provider::states::creating_config::CreatingConfig;
+use super::creating_config::CreatingConfig;
 use crate::provider::{PodState, ProviderState};
 
 #[derive(Debug, TransitionTo)]

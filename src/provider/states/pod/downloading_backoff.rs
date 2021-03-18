@@ -2,8 +2,8 @@ use kubelet::backoff::BackoffStrategy;
 use kubelet::pod::state::prelude::*;
 use log::info;
 
+use super::downloading::Downloading;
 use crate::provider::repository::package::Package;
-use crate::provider::states::downloading::Downloading;
 use crate::provider::{PodState, ProviderState};
 
 #[derive(Debug, TransitionTo)]

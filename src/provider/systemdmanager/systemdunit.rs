@@ -8,9 +8,9 @@ use phf::Map;
 use crate::provider::error::StackableError;
 
 use crate::provider::error::StackableError::PodValidationError;
-use crate::provider::states::creating_config::CreatingConfig;
+use crate::provider::states::pod::creating_config::CreatingConfig;
+use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::UnitTypes;
-use crate::provider::PodState;
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use regex::Regex;

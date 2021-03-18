@@ -7,8 +7,8 @@ use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
 use log::{debug, info, trace};
 
-use crate::provider::states::failed::Failed;
-use crate::provider::states::installing::Installing;
+use super::failed::Failed;
+use super::installing::Installing;
 use crate::provider::states::make_status_with_containers_and_condition;
 use crate::provider::{PodState, ProviderState};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;

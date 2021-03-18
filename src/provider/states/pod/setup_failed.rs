@@ -1,7 +1,7 @@
 use kubelet::pod::state::prelude::*;
 use log::{error, info};
 
-use crate::provider::states::downloading::Downloading;
+use super::downloading::Downloading;
 use crate::provider::{PodState, ProviderState};
 
 #[derive(Default, Debug, TransitionTo)]

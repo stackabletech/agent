@@ -4,10 +4,10 @@ use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
 use log::{debug, error, info, warn};
 
+use super::downloading_backoff::DownloadingBackoff;
+use super::installing::Installing;
 use crate::provider::repository::find_repository;
 use crate::provider::repository::package::Package;
-use crate::provider::states::downloading_backoff::DownloadingBackoff;
-use crate::provider::states::installing::Installing;
 use crate::provider::{PodState, ProviderState};
 
 #[derive(Default, Debug, TransitionTo)]

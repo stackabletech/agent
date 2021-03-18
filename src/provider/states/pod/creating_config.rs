@@ -10,15 +10,15 @@ use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
 use log::{debug, error, info, trace, warn};
 
+use super::creating_service::CreatingService;
+use super::setup_failed::SetupFailed;
+use super::waiting_config_map::WaitingConfigMap;
 use crate::fail_fatal;
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::{
     ConfigFileWriteError, DirectoryParseError, MissingConfigMapsError, PodValidationError,
     RuntimeError,
 };
-use crate::provider::states::creating_service::CreatingService;
-use crate::provider::states::setup_failed::SetupFailed;
-use crate::provider::states::waiting_config_map::WaitingConfigMap;
 use crate::provider::{PodState, ProviderState};
 use kube::error::ErrorResponse;
 
@@ -405,7 +405,7 @@ impl State<PodState> for CreatingConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::provider::states::creating_config::CreatingConfig;
+    use super::*;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 

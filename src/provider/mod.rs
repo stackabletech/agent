@@ -11,7 +11,7 @@ use kubelet::log::Sender;
 use kubelet::node::Builder;
 use kubelet::plugin_watcher::PluginRegistry;
 use kubelet::pod::state::prelude::*;
-use kubelet::pod::{Pod, Status};
+use kubelet::pod::Pod;
 use kubelet::provider::Provider;
 use log::{debug, error};
 use tokio::sync::RwLock;
@@ -21,10 +21,10 @@ use crate::provider::error::StackableError::{
     CrdMissing, KubeError, MissingObjectKey, PodValidationError,
 };
 use crate::provider::repository::package::Package;
-use crate::provider::states::downloading::Downloading;
-use crate::provider::states::terminated::Terminated;
+use crate::provider::states::pod::downloading::Downloading;
+use crate::provider::states::pod::terminated::Terminated;
+use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::SystemdManager;
-use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use kube::error::ErrorResponse;
 use std::time::Duration;
 
@@ -49,44 +49,6 @@ mod systemdmanager;
 pub struct ProviderState {
     client: Client,
     systemd_manager: Arc<SystemdManager>,
-}
-
-pub struct PodState {
-    parcel_directory: PathBuf,
-    download_directory: PathBuf,
-    config_directory: PathBuf,
-    log_directory: PathBuf,
-    package_download_backoff_strategy: ExponentialBackoffStrategy,
-    service_name: String,
-    service_uid: String,
-    package: Package,
-    service_units: Option<Vec<SystemDUnit>>,
-}
-
-impl PodState {
-    pub fn get_service_config_directory(&self) -> PathBuf {
-        self.config_directory
-            .join(format!("{}-{}", &self.service_name, &self.service_uid))
-    }
-
-    pub fn get_service_package_directory(&self) -> PathBuf {
-        self.parcel_directory
-            .join(&self.package.get_directory_name())
-    }
-
-    pub fn get_service_log_directory(&self) -> PathBuf {
-        self.log_directory.join(&self.service_name)
-    }
-
-    /// Resolve the directory in which the systemd unit files will be placed for this
-    /// service.
-    /// This defaults to "{{config_root}}/_service"
-    ///
-    /// From this place the unit files will be symlinked to the relevant systemd
-    /// unit directories so that they are picked up by systemd.
-    pub fn get_service_service_directory(&self) -> PathBuf {
-        self.get_service_config_directory().join("_service")
-    }
 }
 
 impl StackableProvider {
@@ -170,16 +132,6 @@ impl StackableProvider {
         }
         Ok(missing_crds)
     }
-}
-
-// No cleanup state needed, we clean up when dropping PodState.
-#[async_trait::async_trait]
-impl ObjectState for PodState {
-    type Manifest = Pod;
-    type Status = Status;
-    type SharedState = ProviderState;
-
-    async fn async_drop(self, _provider_state: &mut ProviderState) {}
 }
 
 #[async_trait::async_trait]

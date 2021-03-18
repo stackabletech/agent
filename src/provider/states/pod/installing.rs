@@ -7,10 +7,10 @@ use kubelet::pod::Pod;
 use log::{debug, error, info};
 use tar::Archive;
 
+use super::creating_config::CreatingConfig;
+use super::setup_failed::SetupFailed;
 use crate::provider::error::StackableError;
 use crate::provider::repository::package::Package;
-use crate::provider::states::creating_config::CreatingConfig;
-use crate::provider::states::setup_failed::SetupFailed;
 use crate::provider::{PodState, ProviderState};
 
 #[derive(Debug, TransitionTo)]

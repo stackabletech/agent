@@ -3,17 +3,7 @@ use k8s_openapi::api::core::v1::PodCondition as KubePodCondition;
 use kubelet::pod::state::prelude::*;
 use kubelet::pod::{Phase, Status};
 
-pub(crate) mod creating_config;
-pub(crate) mod creating_service;
-pub(crate) mod downloading;
-pub(crate) mod downloading_backoff;
-pub(crate) mod failed;
-pub(crate) mod installing;
-pub(crate) mod running;
-pub(crate) mod setup_failed;
-pub(crate) mod starting;
-pub(crate) mod terminated;
-pub(crate) mod waiting_config_map;
+pub(crate) mod pod;
 
 /// When called in a state's `next` function, exits the state machine
 /// returns a fatal error to the kubelet.

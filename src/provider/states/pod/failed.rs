@@ -1,8 +1,8 @@
 use kubelet::pod::state::prelude::*;
 use log::{debug, info};
 
-use crate::provider::states::installing::Installing;
-use crate::provider::states::starting::Starting;
+use super::installing::Installing;
+use super::starting::Starting;
 use crate::provider::{PodState, ProviderState};
 
 #[derive(Default, Debug, TransitionTo)]

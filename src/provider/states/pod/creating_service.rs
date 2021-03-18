@@ -2,8 +2,8 @@ use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
 use log::{debug, error, info};
 
-use crate::provider::states::setup_failed::SetupFailed;
-use crate::provider::states::starting::Starting;
+use super::setup_failed::SetupFailed;
+use super::starting::Starting;
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::{PodState, ProviderState};
 use std::fs::create_dir_all;

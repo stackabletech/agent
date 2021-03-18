@@ -1,9 +1,9 @@
 use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
 
-use crate::provider::states::failed::Failed;
-use crate::provider::states::running::Running;
-use crate::provider::states::setup_failed::SetupFailed;
+use super::failed::Failed;
+use super::running::Running;
+use super::setup_failed::SetupFailed;
 use crate::provider::{PodState, ProviderState};
 use anyhow::anyhow;
 use log::{debug, error, info, warn};
