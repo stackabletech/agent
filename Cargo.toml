@@ -52,3 +52,11 @@ serde_yaml = "0.8"
 opt-level = "s"
 lto = true
 codegen-units = 1
+
+[package.metadata.deb]
+maintainer-scripts = "packaging/debian/"
+systemd-units = { enable = false }
+assets = [
+    ["packaging/config/agent.conf", "etc/stackable-agent/", "644"],
+    ["target/release/agent", "opt/stackable-agent/stackable-agent", "755"],
+]
