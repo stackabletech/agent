@@ -43,7 +43,7 @@ strum_macros = "0.20"
 
 [dev-dependencies]
 indoc = "1.0"
-rstest = "0.6"
+rstest = "0.7"
 serde_yaml = "0.8"
 
 [profile.release]
