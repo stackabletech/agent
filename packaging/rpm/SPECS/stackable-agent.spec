@@ -6,6 +6,7 @@
 %define _release %{getenv:PACKAGE_RELEASE}
 %define _name %{getenv:PACKAGE_NAME}
 %define _bindir /opt/stackable/%{_name}
+%define _confdir /etc/stackable/agent
 %define _description %{getenv:PACKAGE_DESCRIPTION}
 
 Name: %{_name}
@@ -57,3 +58,4 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 %{_bindir}/*
 %{_servicedir}/%{name}.service
+%{_confdir}/%{name}/agent.conf
