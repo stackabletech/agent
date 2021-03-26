@@ -6,7 +6,7 @@
 %define _release %{getenv:PACKAGE_RELEASE}
 %define _name %{getenv:PACKAGE_NAME}
 %define _bindir /opt/stackable/%{_name}
-%define _confdir /etc/stackable/agent
+%define _confdir /etc/stackable
 %define _description %{getenv:PACKAGE_DESCRIPTION}
 
 Name: %{_name}
