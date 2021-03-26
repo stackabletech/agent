@@ -1,18 +1,23 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::path::Path;
 
 use kubelet::container::Container;
 use kubelet::pod::Pod;
-use phf::{Map, OrderedSet};
+use phf::Map;
 
 use crate::provider::error::StackableError;
 
 use crate::provider::error::StackableError::PodValidationError;
-use crate::provider::states::creating_config::CreatingConfig;
+use crate::provider::states::pod::creating_config::CreatingConfig;
+use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::UnitTypes;
-use crate::provider::PodState;
-use log::{debug, error, trace, warn};
+use lazy_static::lazy_static;
+use log::{debug, error, info, trace, warn};
+use regex::Regex;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::iter;
+use strum::{Display, EnumIter, IntoEnumIterator};
 
 // This is used to map from Kubernetes restart lingo to systemd restart terms
 static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
@@ -21,23 +26,29 @@ static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
     "Never" => "no",
 };
 
-pub const SECTION_SERVICE: &str = "Service";
-pub const SECTION_UNIT: &str = "Unit";
-pub const SECTION_INSTALL: &str = "Install";
+/// List of sections in the systemd unit
+///
+/// The sections are written in the same order as listed here into the unit file.
+#[derive(Clone, Copy, Debug, Display, EnumIter, Eq, Hash, PartialEq)]
+pub enum Section {
+    Unit,
+    Service,
+    Install,
+}
 
-// TODO: This will be used later to ensure the same ordering of known sections in
-//  unit files, I'll leave it in for now
-#[allow(dead_code)]
-static SECTION_ORDER: OrderedSet<&'static str> =
-    phf::phf_ordered_set! {"Unit", "Service", "Install"};
+lazy_static! {
+    // Pattern for user names to comply with the strict mode of systemd
+    // see https://systemd.io/USER_NAMES/
+    static ref USER_NAME_PATTERN: Regex =
+        Regex::new("^[a-zA-Z_][a-zA-Z0-9_-]{0,30}$").unwrap();
+}
 
 /// A struct that represents an individual systemd unit
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SystemDUnit {
     pub name: String,
     pub unit_type: UnitTypes,
-    pub sections: HashMap<String, HashMap<String, String>>,
-    pub environment: HashMap<String, String>,
+    pub sections: HashMap<Section, HashMap<String, String>>,
 }
 
 // TODO: The parsing code is also highly stackable specific, we should
@@ -50,7 +61,43 @@ impl SystemDUnit {
         common_properties: &SystemDUnit,
         name_prefix: &str,
         container: &Container,
+        user_mode: bool,
         pod_state: &PodState,
+    ) -> Result<Self, StackableError> {
+        // Create template data to be used when rendering template strings
+        let template_data = if let Ok(data) = CreatingConfig::create_render_data(&pod_state) {
+            data
+        } else {
+            error!("Unable to parse directories for command template as UTF8");
+            return Err(PodValidationError {
+                msg: format!(
+                    "Unable to parse directories for command template as UTF8 for container [{}].",
+                    container.name()
+                ),
+            });
+        };
+
+        let package_root = pod_state.get_service_package_directory();
+
+        SystemDUnit::new_from_container(
+            common_properties,
+            name_prefix,
+            container,
+            &pod_state.service_name,
+            &template_data,
+            &package_root,
+            user_mode,
+        )
+    }
+
+    fn new_from_container(
+        common_properties: &SystemDUnit,
+        name_prefix: &str,
+        container: &Container,
+        service_name: &str,
+        template_data: &BTreeMap<String, String>,
+        package_root: &Path,
+        user_mode: bool,
     ) -> Result<Self, StackableError> {
         let mut unit = common_properties.clone();
 
@@ -64,39 +111,82 @@ impl SystemDUnit {
 
         unit.name = format!("{}{}", name_prefix, trimmed_name);
 
-        unit.add_property(SECTION_UNIT, "Description", &unit.name.clone());
+        unit.add_property(Section::Unit, "Description", &unit.name.clone());
 
         unit.add_property(
-            SECTION_SERVICE,
+            Section::Service,
             "ExecStart",
-            &SystemDUnit::get_command(container, pod_state)?,
+            &SystemDUnit::get_command(container, template_data, package_root)?,
         );
 
-        let env_vars = SystemDUnit::get_environment(container, pod_state)?;
-
-        for (name, value) in env_vars {
-            unit.add_env_var(&name, &value);
+        let env_vars = SystemDUnit::get_environment(container, service_name, template_data)?;
+        if !env_vars.is_empty() {
+            let mut assignments = env_vars
+                .iter()
+                .map(|(k, v)| format!("\"{}={}\"", k, v))
+                .collect::<Vec<_>>();
+            assignments.sort();
+            // TODO Put every environment variable on a separate line
+            unit.add_property(Section::Service, "Environment", &assignments.join(" "));
         }
 
         // These are currently hard-coded, as this is not something we expect to change soon
-        unit.add_property(SECTION_SERVICE, "StandardOutput", "journal");
-        unit.add_property(SECTION_SERVICE, "StandardError", "journal");
+        unit.add_property(Section::Service, "StandardOutput", "journal");
+        unit.add_property(Section::Service, "StandardError", "journal");
+
+        if let Some(user_name) =
+            SystemDUnit::get_user_name_from_security_context(container, &unit.name)?
+        {
+            if !user_mode {
+                unit.add_property(Section::Service, "User", user_name);
+            } else {
+                info!("The user name [{}] in spec.containers[name = {}].securityContext.windowsOptions.runAsUserName is not set in the systemd unit because the agent runs in session mode.", user_name, container.name());
+            }
+        }
+
         // This one is mandatory, as otherwise enabling the unit fails
-        unit.add_property(SECTION_INSTALL, "WantedBy", "multi-user.target");
+        unit.add_property(Section::Install, "WantedBy", "multi-user.target");
 
         Ok(unit)
+    }
+
+    fn get_user_name_from_security_context<'a>(
+        container: &'a Container,
+        pod_name: &str,
+    ) -> Result<Option<&'a str>, StackableError> {
+        let validate = |user_name| {
+            if USER_NAME_PATTERN.is_match(user_name) {
+                Ok(user_name)
+            } else {
+                Err(PodValidationError {
+                    msg: format!(
+                        r#"The validation of the pod [{}] failed. The user name [{}] in spec.containers[name = {}].securityContext.windowsOptions.runAsUserName must match the regular expression "{}"."#,
+                        pod_name,
+                        user_name,
+                        container.name(),
+                        USER_NAME_PATTERN.to_string()
+                    ),
+                })
+            }
+        };
+
+        container
+            .security_context()
+            .and_then(|security_context| security_context.windows_options.as_ref())
+            .and_then(|windows_options| windows_options.run_as_user_name.as_ref())
+            .map(|user_name| validate(user_name))
+            .transpose()
     }
 
     /// Parse a pod object and retrieve the generic settings which will be the same across
     /// all service units created for containers in this pod.
     /// This is designed to then be used as `common_properties` parameter when calling
     ///[`SystemdUnit::new`]
-    pub fn new_from_pod(pod: &Pod) -> Result<Self, StackableError> {
+    pub fn new_from_pod(pod: &Pod, user_mode: bool) -> Result<Self, StackableError> {
         let mut unit = SystemDUnit {
             name: pod.name().to_string(),
             unit_type: UnitTypes::Service,
             sections: Default::default(),
-            environment: Default::default(),
         };
 
         let restart_policy = match &pod.as_kube_pod().spec {
@@ -119,8 +209,43 @@ impl SystemDUnit {
             }
         };
 
-        unit.add_property(SECTION_SERVICE, "Restart", restart_policy);
+        unit.add_property(Section::Service, "Restart", restart_policy);
+
+        if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
+            if !user_mode {
+                unit.add_property(Section::Service, "User", user_name);
+            } else {
+                info!("The user name [{}] in spec.securityContext.windowsOptions.runAsUserName is not set in the systemd unit because the agent runs in session mode.", user_name);
+            }
+        }
+
         Ok(unit)
+    }
+
+    fn get_user_name_from_pod_security_context(pod: &Pod) -> Result<Option<&str>, StackableError> {
+        let validate = |user_name| {
+            if USER_NAME_PATTERN.is_match(user_name) {
+                Ok(user_name)
+            } else {
+                Err(PodValidationError {
+                    msg: format!(
+                        r#"The validation of the pod [{}] failed. The user name [{}] in spec.securityContext.windowsOptions.runAsUserName must match the regular expression "{}"."#,
+                        pod.name(),
+                        user_name,
+                        USER_NAME_PATTERN.to_string()
+                    ),
+                })
+            }
+        };
+
+        pod.as_kube_pod()
+            .spec
+            .as_ref()
+            .and_then(|spec| spec.security_context.as_ref())
+            .and_then(|security_context| security_context.windows_options.as_ref())
+            .and_then(|windows_options| windows_options.run_as_user_name.as_ref())
+            .map(|user_name| validate(user_name))
+            .transpose()
     }
 
     /// Convenience function to retrieve the _fully qualified_ systemd name, which includes the
@@ -131,38 +256,34 @@ impl SystemDUnit {
     }
 
     /// Add a key=value entry to the specified section
-    fn add_property(&mut self, section: &'static str, key: &str, value: &str) {
-        let section = self
-            .sections
-            .entry(String::from(section))
-            .or_insert_with(HashMap::new);
+    fn add_property(&mut self, section: Section, key: &str, value: &str) {
+        let section = self.sections.entry(section).or_insert_with(HashMap::new);
         section.insert(String::from(key), String::from(value));
-    }
-
-    fn add_env_var(&mut self, name: &str, value: &str) {
-        self.environment
-            .insert(String::from(name), String::from(value));
     }
 
     /// Retrieve content of the unit file as it should be written to disk
     pub fn get_unit_file_content(&self) -> String {
-        let mut unit_file_content = String::new();
+        Section::iter()
+            .map(|section| self.sections.get_key_value(&section))
+            .flatten()
+            .map(|(section, entries)| SystemDUnit::write_section(section, entries))
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
 
-        // Iterate over all sections and write out its header and content
-        for (section, entries) in &self.sections {
-            unit_file_content.push_str(&format!("[{}]\n", section));
-            for (key, value) in entries {
-                unit_file_content.push_str(&format!("{}={}\n", key, value));
-            }
-            if section == SECTION_SERVICE {
-                // Add environment variables to Service section
-                for (name, value) in &self.environment {
-                    unit_file_content.push_str(&format!("Environment=\"{}={}\"\n", name, value));
-                }
-            }
-            unit_file_content.push('\n');
-        }
-        unit_file_content
+    fn write_section(section: &Section, entries: &HashMap<String, String>) -> String {
+        let header = format!("[{}]", section);
+
+        let mut body = entries
+            .iter()
+            .map(|(key, value)| format!("{}={}", key, value))
+            .collect::<Vec<_>>();
+        body.sort();
+
+        iter::once(header)
+            .chain(body)
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     fn get_type_string(&self) -> &str {
@@ -173,21 +294,9 @@ impl SystemDUnit {
 
     fn get_environment(
         container: &Container,
-        pod_state: &PodState,
+        service_name: &str,
+        template_data: &BTreeMap<String, String>,
     ) -> Result<Vec<(String, String)>, StackableError> {
-        // Create template data to be used when rendering template strings
-        let template_data = if let Ok(data) = CreatingConfig::create_render_data(&pod_state) {
-            data
-        } else {
-            error!("Unable to parse directories for command template as UTF8");
-            return Err(PodValidationError {
-                msg: format!(
-                    "Unable to parse directories for command template as UTF8 for container [{}].",
-                    container.name()
-                ),
-            });
-        };
-
         // Check if environment variables are set on the container - if some are present
         // we render all values as templates to replace configroot, packageroot and logroot
         // directories in case they are referenced in the values
@@ -202,10 +311,7 @@ impl SystemDUnit {
         // an Error. If any error occurred, iteration stops on the first error and returns
         // that in the outer result.
         let env_variables = if let Some(vars) = container.env() {
-            debug!(
-                "Got environment vars: {:?} service {}",
-                vars, pod_state.service_name
-            );
+            debug!("Got environment vars: {:?} service {}", vars, service_name);
             let render_result = vars
                 .iter()
                 .map(|env_var| {
@@ -231,22 +337,23 @@ impl SystemDUnit {
             }
         } else {
             // No environment variables present for this container -> empty vec
-            debug!(
-                "No environment vars set for service {}",
-                pod_state.service_name
-            );
+            debug!("No environment vars set for service {}", service_name);
             vec![]
         };
         debug!(
             "Setting environment for service {} to {:?}",
-            pod_state.service_name, &env_variables
+            service_name, &env_variables
         );
 
         Ok(env_variables)
     }
 
     // Retrieve a copy of the command object in the pod, or return an error if it is missing
-    fn get_command(container: &Container, pod_state: &PodState) -> Result<String, StackableError> {
+    fn get_command(
+        container: &Container,
+        template_data: &BTreeMap<String, String>,
+        package_root: &Path,
+    ) -> Result<String, StackableError> {
         // Return an error if no command was specified in the container
         // TODO: We should discuss if there can be a valid scenario for this
         // This clones because we perform some in place mutations on the elements
@@ -261,8 +368,6 @@ impl SystemDUnit {
                 })
             }
         };
-
-        let package_root = pod_state.get_service_package_directory();
 
         trace!(
             "Command before replacing variables and adding packageroot: {:?}",
@@ -311,19 +416,6 @@ impl SystemDUnit {
             binary.replace_range(.., &binary_with_path);
         }
 
-        // Create template data to be used when rendering template strings
-        let template_data = if let Ok(data) = CreatingConfig::create_render_data(&pod_state) {
-            data
-        } else {
-            error!("Unable to parse directories for command template as UTF8");
-            return Err(PodValidationError {
-                msg: format!(
-                    "Unable to parse directories for command template as UTF8 for container [{}].",
-                    container.name()
-                ),
-            });
-        };
-
         // Append values from args array to command array
         // This is necessary as we only have the ExecStart field in a systemd service unit.
         // There is no specific place to put arguments separate from the command.
@@ -356,5 +448,159 @@ impl SystemDUnit {
 impl Display for SystemDUnit {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.get_name())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use dbus::channel::BusType;
+    use indoc::indoc;
+    use rstest::rstest;
+    use std::path::PathBuf;
+
+    #[rstest(bus_type, pod_config, expected_unit_file_name, expected_unit_file_content,
+        case::without_containers_on_system_bus(
+            BusType::System,
+            indoc! {"
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: stackable
+                spec:
+                  containers: []
+                  restartPolicy: Always
+                  securityContext:
+                    windowsOptions:
+                      runAsUserName: pod-user"},
+            "stackable.service",
+            indoc! {"
+                [Service]
+                Restart=always
+                User=pod-user"}
+        ),
+        case::with_container_on_system_bus(
+            BusType::System,
+            indoc! {r#"
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: stackable
+                spec:
+                  containers:
+                    - name: test-container.service
+                      command:
+                        - start.sh
+                      args:
+                        - arg
+                        - "{{configroot}}"
+                      env:
+                        - name: LOG_LEVEL
+                          value: INFO
+                        - name: LOG_DIR
+                          value: "{{logroot}}"
+                      securityContext:
+                        windowsOptions:
+                          runAsUserName: container-user
+                  securityContext:
+                    windowsOptions:
+                      runAsUserName: pod-user"#},
+            "default-stackable-test-container.service",
+            indoc! {r#"
+                [Unit]
+                Description=default-stackable-test-container
+
+                [Service]
+                Environment="LOG_DIR=/var/log/default-stackable" "LOG_LEVEL=INFO"
+                ExecStart=start.sh arg /etc/default-stackable
+                Restart=no
+                StandardError=journal
+                StandardOutput=journal
+                User=container-user
+
+                [Install]
+                WantedBy=multi-user.target"#}
+        ),
+        case::with_container_on_session_bus(
+            BusType::Session,
+            indoc! {r#"
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: stackable
+                spec:
+                  containers:
+                    - name: test-container.service
+                      command:
+                        - start.sh
+                      securityContext:
+                        windowsOptions:
+                          runAsUserName: container-user
+                  securityContext:
+                    windowsOptions:
+                      runAsUserName: pod-user"#},
+            "default-stackable-test-container.service",
+            indoc! {r#"
+                [Unit]
+                Description=default-stackable-test-container
+
+                [Service]
+                ExecStart=start.sh
+                Restart=no
+                StandardError=journal
+                StandardOutput=journal
+
+                [Install]
+                WantedBy=multi-user.target"#}
+        ),
+    )]
+    fn create_unit_from_pod(
+        bus_type: BusType,
+        pod_config: &str,
+        expected_unit_file_name: &str,
+        expected_unit_file_content: &str,
+    ) {
+        let pod = parse_pod_from_yaml(pod_config);
+
+        let mut result = SystemDUnit::new_from_pod(&pod, bus_type == BusType::Session);
+
+        if let Ok(common_properties) = &result {
+            if let Some(container) = pod.containers().first() {
+                let service_name = format!("{}-{}", pod.namespace(), pod.name());
+                let name_prefix = format!("{}-", service_name);
+                let mut template_data = BTreeMap::new();
+                template_data.insert(
+                    String::from("logroot"),
+                    format!("/var/log/{}", &service_name),
+                );
+                template_data.insert(
+                    String::from("configroot"),
+                    format!("/etc/{}", &service_name),
+                );
+                let package_root = PathBuf::new();
+
+                result = SystemDUnit::new_from_container(
+                    common_properties,
+                    &name_prefix,
+                    container,
+                    &service_name,
+                    &template_data,
+                    &package_root,
+                    bus_type == BusType::Session,
+                );
+            }
+        }
+
+        if let Ok(unit) = result {
+            assert_eq!(expected_unit_file_name, unit.get_name());
+            assert_eq!(expected_unit_file_content, unit.get_unit_file_content());
+        } else {
+            panic!("Systemd unit expected but got {:?}", result);
+        }
+    }
+
+    fn parse_pod_from_yaml(pod_config: &str) -> Pod {
+        let kube_pod: k8s_openapi::api::core::v1::Pod = serde_yaml::from_str(pod_config).unwrap();
+        Pod::from(kube_pod)
     }
 }

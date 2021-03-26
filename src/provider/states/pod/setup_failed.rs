@@ -1,8 +1,8 @@
-use kubelet::state::prelude::*;
+use kubelet::pod::state::prelude::*;
 use log::{error, info};
 
-use crate::provider::states::downloading::Downloading;
-use crate::provider::PodState;
+use super::downloading::Downloading;
+use crate::provider::{PodState, ProviderState};
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Downloading)]
@@ -17,7 +17,14 @@ pub struct SetupFailed {
 
 #[async_trait::async_trait]
 impl State<PodState> for SetupFailed {
-    async fn next(self: Box<Self>, _pod_state: &mut PodState, pod: &Pod) -> Transition<PodState> {
+    async fn next(
+        self: Box<Self>,
+        _provider_state: SharedState<ProviderState>,
+        _pod_state: &mut PodState,
+        pod: Manifest<Pod>,
+    ) -> Transition<PodState> {
+        let pod = pod.latest();
+
         error!(
             "setup failed for pod {} due to: {}",
             pod.name(),
@@ -29,11 +36,7 @@ impl State<PodState> for SetupFailed {
         Transition::next(self, Downloading)
     }
 
-    async fn json_status(
-        &self,
-        _pod_state: &mut PodState,
-        _pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, "SetupFailed")
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
+        Ok(make_status(Phase::Pending, "SetupFailed"))
     }
 }

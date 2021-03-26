@@ -1,18 +1,9 @@
 use k8s_openapi::api::core::v1::ContainerStatus as KubeContainerStatus;
 use k8s_openapi::api::core::v1::PodCondition as KubePodCondition;
-use kubelet::pod::Phase;
+use kubelet::pod::state::prelude::*;
+use kubelet::pod::{Phase, Status};
 
-pub(crate) mod creating_config;
-pub(crate) mod creating_service;
-pub(crate) mod downloading;
-pub(crate) mod downloading_backoff;
-pub(crate) mod failed;
-pub(crate) mod installing;
-pub(crate) mod running;
-pub(crate) mod setup_failed;
-pub(crate) mod starting;
-pub(crate) mod terminated;
-pub(crate) mod waiting_config_map;
+pub(crate) mod pod;
 
 /// When called in a state's `next` function, exits the state machine
 /// returns a fatal error to the kubelet.
@@ -31,17 +22,13 @@ pub fn make_status_with_containers_and_condition(
     reason: &str,
     container_statuses: Vec<KubeContainerStatus>,
     init_container_statuses: Vec<KubeContainerStatus>,
-    pod_conditions: Vec<KubePodCondition>,
-) -> serde_json::Value {
-    serde_json::json!(
-       {
-           "status": {
-               "phase": phase,
-               "reason": reason,
-               "containerStatuses": container_statuses,
-               "initContainerStatuses": init_container_statuses,
-               "conditions": pod_conditions
-           }
-       }
-    )
+    conditions: Vec<KubePodCondition>,
+) -> Status {
+    StatusBuilder::new()
+        .phase(phase)
+        .reason(reason)
+        .container_statuses(container_statuses)
+        .init_container_statuses(init_container_statuses)
+        .conditions(conditions)
+        .build()
 }

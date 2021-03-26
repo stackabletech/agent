@@ -6,21 +6,20 @@ use std::path::{Path, PathBuf};
 use handlebars::Handlebars;
 use k8s_openapi::api::core::v1::ConfigMap;
 use kube::{Api, Client};
+use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
-use kubelet::state::prelude::*;
-use kubelet::state::{State, Transition};
 use log::{debug, error, info, trace, warn};
 
+use super::creating_service::CreatingService;
+use super::setup_failed::SetupFailed;
+use super::waiting_config_map::WaitingConfigMap;
 use crate::fail_fatal;
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::{
     ConfigFileWriteError, DirectoryParseError, MissingConfigMapsError, PodValidationError,
     RuntimeError,
 };
-use crate::provider::states::creating_service::CreatingService;
-use crate::provider::states::setup_failed::SetupFailed;
-use crate::provider::states::waiting_config_map::WaitingConfigMap;
-use crate::provider::PodState;
+use crate::provider::{PodState, ProviderState};
 use kube::error::ErrorResponse;
 
 #[derive(Default, Debug, TransitionTo)]
@@ -236,13 +235,19 @@ impl CreatingConfig {
 #[async_trait::async_trait]
 impl State<PodState> for CreatingConfig {
     async fn next(
-        mut self: Box<Self>,
+        self: Box<Self>,
+        provider_state: SharedState<ProviderState>,
         pod_state: &mut PodState,
-        pod: &Pod,
+        pod: Manifest<Pod>,
     ) -> Transition<PodState> {
+        let pod = pod.latest();
+
         // TODO: this entire function needs to be heavily refactored
         let name = pod.name();
-        let client = pod_state.client.clone();
+        let client = {
+            let provider_state = provider_state.read().await;
+            provider_state.client.clone()
+        };
 
         // Check size of containers array, we currently only allow one container to be present, this
         // might change in the future
@@ -302,7 +307,7 @@ impl State<PodState> for CreatingConfig {
 
         // Retrieve all config map names that are referenced in the pods volume mounts
         // TODO: refactor this to use the map created above
-        let referenced_config_maps = CreatingConfig::get_config_maps(pod).await;
+        let referenced_config_maps = CreatingConfig::get_config_maps(&pod).await;
 
         // Check if all required config maps have been created in the api-server
         // Transition pod to retry state if some are missing or we geta kube error when
@@ -393,18 +398,14 @@ impl State<PodState> for CreatingConfig {
         Transition::next(self, CreatingService)
     }
 
-    async fn json_status(
-        &self,
-        _pod_state: &mut PodState,
-        _pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, "CreatingConfig")
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
+        Ok(make_status(Phase::Pending, "CreatingConfig"))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::provider::states::creating_config::CreatingConfig;
+    use super::*;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 
@@ -425,12 +426,11 @@ mod tests {
 
         // Test if an undefined variable leads to an error
         let template_with_undefined_var = "{{var4}}test";
-        let result = CreatingConfig::render_config_template(&context, template_with_undefined_var);
+        let _ = CreatingConfig::render_config_template(&context, template_with_undefined_var);
 
-        match CreatingConfig::render_config_template(&context, template_with_undefined_var) {
-            Ok(_) => assert!(false),
-            Err(_) => {}
-        }
+        assert!(
+            CreatingConfig::render_config_template(&context, template_with_undefined_var).is_err()
+        );
     }
 
     #[test]
