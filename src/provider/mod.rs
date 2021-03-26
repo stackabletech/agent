@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
@@ -8,28 +9,31 @@ use kube::{Api, Client};
 use kubelet::backoff::ExponentialBackoffStrategy;
 use kubelet::log::Sender;
 use kubelet::node::Builder;
+use kubelet::plugin_watcher::PluginRegistry;
+use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
 use kubelet::provider::Provider;
 use log::{debug, error};
+use tokio::sync::RwLock;
 
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::{
     CrdMissing, KubeError, MissingObjectKey, PodValidationError,
 };
 use crate::provider::repository::package::Package;
-use crate::provider::states::downloading::Downloading;
-use crate::provider::states::terminated::Terminated;
+use crate::provider::states::pod::downloading::Downloading;
+use crate::provider::states::pod::terminated::Terminated;
+use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::SystemdManager;
-use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use kube::error::ErrorResponse;
 use std::time::Duration;
 
 pub struct StackableProvider {
-    client: Client,
+    shared: ProviderState,
     parcel_directory: PathBuf,
     config_directory: PathBuf,
     log_directory: PathBuf,
-    session: bool,
+    plugins_directory: PathBuf,
     pod_cidr: String,
 }
 
@@ -40,44 +44,11 @@ mod repository;
 mod states;
 mod systemdmanager;
 
-pub struct PodState {
+/// Provider-level state shared between all pods
+#[derive(Clone)]
+pub struct ProviderState {
     client: Client,
-    parcel_directory: PathBuf,
-    download_directory: PathBuf,
-    config_directory: PathBuf,
-    log_directory: PathBuf,
-    package_download_backoff_strategy: ExponentialBackoffStrategy,
-    service_name: String,
-    service_uid: String,
-    package: Package,
-    systemd_manager: SystemdManager,
-    service_units: Option<Vec<SystemDUnit>>,
-}
-
-impl PodState {
-    pub fn get_service_config_directory(&self) -> PathBuf {
-        self.config_directory
-            .join(format!("{}-{}", &self.service_name, &self.service_uid))
-    }
-
-    pub fn get_service_package_directory(&self) -> PathBuf {
-        self.parcel_directory
-            .join(&self.package.get_directory_name())
-    }
-
-    pub fn get_service_log_directory(&self) -> PathBuf {
-        self.log_directory.join(&self.service_name)
-    }
-
-    /// Resolve the directory in which the systemd unit files will be placed for this
-    /// service.
-    /// This defaults to "{{config_root}}/_service"
-    ///
-    /// From this place the unit files will be symlinked to the relevant systemd
-    /// unit directories so that they are picked up by systemd.
-    pub fn get_service_service_directory(&self) -> PathBuf {
-        self.get_service_config_directory().join("_service")
-    }
+    systemd_manager: Arc<SystemdManager>,
 }
 
 impl StackableProvider {
@@ -86,15 +57,23 @@ impl StackableProvider {
         parcel_directory: PathBuf,
         config_directory: PathBuf,
         log_directory: PathBuf,
+        plugins_directory: PathBuf,
         session: bool,
         pod_cidr: String,
     ) -> Result<Self, StackableError> {
-        let provider = StackableProvider {
+        let systemd_manager = Arc::new(SystemdManager::new(session, Duration::from_secs(5))?);
+
+        let provider_state = ProviderState {
             client,
+            systemd_manager,
+        };
+
+        let provider = StackableProvider {
+            shared: provider_state,
             parcel_directory,
             config_directory,
             log_directory,
-            session,
+            plugins_directory,
             pod_cidr,
         };
         let missing_crds = provider.check_crds().await?;
@@ -129,7 +108,7 @@ impl StackableProvider {
 
     async fn check_crds(&self) -> Result<Vec<String>, StackableError> {
         let mut missing_crds = vec![];
-        let crds: Api<CustomResourceDefinition> = Api::all(self.client.clone());
+        let crds: Api<CustomResourceDefinition> = Api::all(self.shared.client.clone());
 
         // Check all CRDS
         for crd in CRDS.iter() {
@@ -155,19 +134,31 @@ impl StackableProvider {
     }
 }
 
-// No cleanup state needed, we clean up when dropping PodState.
-#[async_trait::async_trait]
-impl kubelet::state::AsyncDrop for PodState {
-    async fn async_drop(self) {}
-}
-
 #[async_trait::async_trait]
 impl Provider for StackableProvider {
+    type ProviderState = ProviderState;
     type PodState = PodState;
     type InitialState = Downloading;
     type TerminatedState = Terminated;
 
     const ARCH: &'static str = "stackable-linux";
+
+    fn provider_state(&self) -> SharedState<ProviderState> {
+        Arc::new(RwLock::new(self.shared.clone()))
+    }
+
+    // TODO Remove all the plugin registry stuff when kubelet depends on tokio 1.3.0 or higher.
+    //
+    // The plugin_registry is optional. It defaults to None.
+    // But if it is None then tokio::time::delay_for is called with u64::MAX
+    // (see https://github.com/deislabs/krustlet/blob/v0.6.0/crates/kubelet/src/kubelet.rs#L170)
+    // which causes a panic in tokio (see https://github.com/tokio-rs/tokio/pull/3551).
+    // This is fixed in tokio 1.3.0.
+    fn plugin_registry(&self) -> Option<Arc<PluginRegistry>> {
+        Some(Arc::new(PluginRegistry::new(
+            self.plugins_directory.clone(),
+        )))
+    }
 
     async fn node(&self, builder: &mut Builder) -> anyhow::Result<()> {
         builder.set_architecture(Self::ARCH);
@@ -195,7 +186,6 @@ impl Provider for StackableProvider {
         let download_directory = parcel_directory.join("_download");
         let config_directory = self.config_directory.clone();
         let log_directory = self.log_directory.clone();
-        let session = self.session;
 
         let package = Self::get_package(pod)?;
         if !(&download_directory.is_dir()) {
@@ -205,11 +195,7 @@ impl Provider for StackableProvider {
             fs::create_dir_all(&config_directory)?;
         }
 
-        // TODO: investigate if we can share one DBus connection across all pods
-        let systemd_manager = SystemdManager::new(session, Duration::from_secs(5))?;
-
         Ok(PodState {
-            client: self.client.clone(),
             parcel_directory,
             download_directory,
             log_directory,
@@ -218,9 +204,6 @@ impl Provider for StackableProvider {
             service_name,
             service_uid,
             package,
-            // TODO: Check if we can work with a reference or a Mutex Guard here to only keep
-            // one connection open to DBus instead of one per tracked Pod
-            systemd_manager,
             service_units: None,
         })
     }

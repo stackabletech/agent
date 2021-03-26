@@ -4,6 +4,8 @@
 //! disable systemd units.
 //!
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
+use crate::provider::StackableError;
+use crate::provider::StackableError::RuntimeError;
 use anyhow::anyhow;
 use dbus::arg::{AppendAll, ReadAll, Variant};
 use dbus::blocking::SyncConnection;
@@ -51,12 +53,22 @@ impl Default for SystemdManager {
 impl SystemdManager {
     /// Create a new instance, takes a flag whether to run within the user session or manage services
     /// system-wide and a timeout value for dbus communications.
-    pub fn new(user_mode: bool, timeout: Duration) -> Result<Self, anyhow::Error> {
+    pub fn new(user_mode: bool, timeout: Duration) -> Result<Self, StackableError> {
         // Connect to session or system bus depending on the value of [user_mode]
         let connection = if user_mode {
-            SyncConnection::new_session()?
+            SyncConnection::new_session().map_err(|e| RuntimeError {
+                msg: format!(
+                    "Could not create a connection to the systemd session bus: {}",
+                    e
+                ),
+            })?
         } else {
-            SyncConnection::new_system()?
+            SyncConnection::new_system().map_err(|e| RuntimeError {
+                msg: format!(
+                    "Could not create a connection to the systemd system-wide bus: {}",
+                    e
+                ),
+            })?
         };
 
         // Depending on whether we are supposed to run in user space or system-wide

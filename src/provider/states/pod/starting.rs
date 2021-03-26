@@ -1,11 +1,10 @@
+use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
-use kubelet::state::prelude::*;
-use kubelet::state::{State, Transition};
 
-use crate::provider::states::failed::Failed;
-use crate::provider::states::running::Running;
-use crate::provider::states::setup_failed::SetupFailed;
-use crate::provider::PodState;
+use super::failed::Failed;
+use super::running::Running;
+use super::setup_failed::SetupFailed;
+use crate::provider::{PodState, ProviderState};
 use anyhow::anyhow;
 use log::{debug, error, info, warn};
 use std::time::Instant;
@@ -17,10 +16,20 @@ pub struct Starting;
 
 #[async_trait::async_trait]
 impl State<PodState> for Starting {
-    async fn next(self: Box<Self>, pod_state: &mut PodState, _: &Pod) -> Transition<PodState> {
+    async fn next(
+        self: Box<Self>,
+        provider_state: SharedState<ProviderState>,
+        pod_state: &mut PodState,
+        _: Manifest<Pod>,
+    ) -> Transition<PodState> {
+        let systemd_manager = {
+            let provider_state = provider_state.read().await;
+            provider_state.systemd_manager.clone()
+        };
+
         if let Some(systemd_units) = &pod_state.service_units {
             for unit in systemd_units {
-                match pod_state.systemd_manager.is_running(&unit.get_name()) {
+                match systemd_manager.is_running(&unit.get_name()) {
                     Ok(true) => {
                         debug!(
                             "Unit [{}] for service [{}] already running, nothing to do..",
@@ -43,7 +52,7 @@ impl State<PodState> for Starting {
                     }
                 }
                 info!("Starting systemd unit [{}]", unit);
-                if let Err(start_error) = pod_state.systemd_manager.start(&unit.get_name()) {
+                if let Err(start_error) = systemd_manager.start(&unit.get_name()) {
                     error!(
                         "Error occurred starting systemd unit [{}]: [{}]",
                         unit.get_name(),
@@ -53,7 +62,7 @@ impl State<PodState> for Starting {
                 }
 
                 info!("Enabling systemd unit [{}]", unit);
-                if let Err(enable_error) = pod_state.systemd_manager.enable(&unit.get_name()) {
+                if let Err(enable_error) = systemd_manager.enable(&unit.get_name()) {
                     error!(
                         "Error occurred starting systemd unit [{}]: [{}]",
                         unit.get_name(),
@@ -76,7 +85,7 @@ impl State<PodState> for Starting {
                         "Checking if unit [{}] is still up and running.",
                         &unit.get_name()
                     );
-                    match pod_state.systemd_manager.is_running(&unit.get_name()) {
+                    match systemd_manager.is_running(&unit.get_name()) {
                         Ok(true) => debug!(
                             "Service [{}] still running after [{}] seconds",
                             &unit.get_name(),
@@ -107,11 +116,7 @@ impl State<PodState> for Starting {
         )
     }
 
-    async fn json_status(
-        &self,
-        _pod_state: &mut PodState,
-        _pod: &Pod,
-    ) -> anyhow::Result<serde_json::Value> {
-        make_status(Phase::Pending, &"Starting")
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
+        Ok(make_status(Phase::Pending, &"Starting"))
     }
 }

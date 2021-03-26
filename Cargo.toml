@@ -8,13 +8,11 @@ license = "Apache-2.0"
 
 [dependencies]
 # We are currently referencing the Krustlet directly from a Stackable fork of the official repository.
-# There are two reasons for this, the fork is needed to remove the node draining behavior of the Krustlet (see
-# https://github.com/deislabs/krustlet/issues/523)
-# Our fork / the referenced commit is quite a bit behind the official repo, as there were some breaking changes in the
-# 0.6 release that we need to adapt the Krustlet to.
-# We will look to move to the latest version as soon as possible, but may need to continue releasing from a fork.
-kubelet = { git="https://github.com/stackabletech/krustlet.git", rev="bb8bb42c9400a565df4be04f357e61934fb277c6", default-features = true, features= ["derive", "cli"] }
-oci-distribution = { git="https://github.com/stackabletech/krustlet.git", rev="bb8bb42c9400a565df4be04f357e61934fb277c6"}
+# The fork is needed to remove the node draining behavior of the Krustlet (see https://github.com/deislabs/krustlet/issues/523)
+# There is already a PR for cargo to allow patching of dependencies (see https://github.com/rust-lang/cargo/pull/9001).
+kubelet = { git="https://github.com/stackabletech/krustlet.git", rev="1697c48fadd4cfb68a5b6b24c559d9ad3d62dcb2", default-features = true, features= ["derive", "cli"] }
+krator = { git="https://github.com/stackabletech/krustlet.git", rev="1697c48fadd4cfb68a5b6b24c559d9ad3d62dcb2"}
+oci-distribution = { git="https://github.com/stackabletech/krustlet.git", rev="1697c48fadd4cfb68a5b6b24c559d9ad3d62dcb2"}
 k8s-openapi = { version = "0.9", default-features = false, features = ["v1_18"] }
 kube = { version= "0.42", default-features = false, features = ["native-tls"] }
 kube-derive = "0.43"
