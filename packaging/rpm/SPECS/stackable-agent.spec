@@ -59,4 +59,4 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 %{_bindir}/*
 %{_servicedir}/%{name}.service
-%{_confdir}/%{name}/agent.conf
+%{_confdir}/agent.conf
