@@ -6,7 +6,8 @@
 %define _release %{getenv:PACKAGE_RELEASE}
 %define _name %{getenv:PACKAGE_NAME}
 %define _bindir /opt/stackable/%{_name}
-%define _confdir /etc/stackable
+%define _confdir /etc/stackable/%{_name}
+%define _vardir /var/lib/stackable/%{_name}
 %define _description %{getenv:PACKAGE_DESCRIPTION}
 
 Name: %{_name}
@@ -33,10 +34,10 @@ cp -a * %{buildroot}
 %post
 systemctl daemon-reload
 mkdir -p /opt/stackable/packages
-mkdir -p /var/lib/stackable/agent
+mkdir -p %{_vardir}
 mkdir -p /var/log/stackable/servicelogs
-mkdir -p /etc/stackable/agent
-mkdir -m 700 /etc/stackable/agent/secret
+mkdir -p %{_confdir}
+mkdir -m 700 %{_confdir}/secret
 
 %preun
 if [ $1 == 0 ]; then #uninstall

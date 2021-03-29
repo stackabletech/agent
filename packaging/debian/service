@@ -8,7 +8,7 @@ ExecStart=/opt/stackable-agent/stackable-agent
 Restart=on-abort
 StandardOutput=journal
 StandardError=journal
-Environment="CONFIG_FILE=/etc/stackable/agent/agent.conf"
+Environment="CONFIG_FILE=/etc/stackable/stackable-agent/agent.conf"
 Environment="RUST_LOG=info"
 [Install]
 WantedBy=multi-user.target

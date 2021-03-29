@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 mkdir -p /opt/stackable/packages
-mkdir -p /var/lib/stackable/agent
+mkdir -p /var/lib/stackable/stackable-agent
 mkdir -p /var/log/stackable/servicelogs
-mkdir -p /etc/stackable/agent
-mkdir -m 700 /etc/stackable/agent/secret
+mkdir -p /etc/stackable/stackable-agent
+mkdir -m 700 /etc/stackable/stackable-agent/secret
 
 #DEBHELPER#
