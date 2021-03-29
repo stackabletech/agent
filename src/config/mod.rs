@@ -63,7 +63,7 @@ impl AgentConfig {
 
     pub const BOOTSTRAP_FILE: ConfigOption = ConfigOption {
         name: "bootstrap-file",
-        default: Some("/etc/stackable/agent/bootstrap-kubelet.conf"),
+        default: Some("/etc/stackable/stackable-agent/bootstrap-kubelet.conf"),
         required: false,
         takes_argument: true,
         help: "The bootstrap file to use in case Kubernetes bootstraping is used to add the agent.",
@@ -83,7 +83,7 @@ impl AgentConfig {
 
     pub const SERVER_CERT_FILE: ConfigOption = ConfigOption {
         name: "server-cert-file",
-        default: Some("/etc/stackable/agent/secret/agent.crt"),
+        default: Some("/etc/stackable/stackable-agent/secret/agent.crt"),
         required: false,
         takes_argument: true,
         help: "The certificate file for the local webserver which the Krustlet starts.",
@@ -93,7 +93,7 @@ impl AgentConfig {
 
     pub const SERVER_KEY_FILE: ConfigOption = ConfigOption {
         name: "server-key-file",
-        default: Some("/etc/stackable/agent/secret/agent.key"),
+        default: Some("/etc/stackable/stackable-agent/secret/agent.key"),
         required: false,
         takes_argument: true,
         help:
