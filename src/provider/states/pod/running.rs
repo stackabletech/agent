@@ -48,7 +48,7 @@ impl State<PodState> for Running {
         //   - the pod which this state machine refers to gets deleted
         //   - Krustlet shuts down
         loop {
-            tokio::time::delay_for(Duration::from_secs(10)).await;
+            tokio::time::sleep(Duration::from_secs(10)).await;
             trace!(
                 "Checking if service {} is still running.",
                 &pod_state.service_name

@@ -9,7 +9,7 @@ use stackable_config::ConfigBuilder;
 use stackable_agent::config::AgentConfig;
 use stackable_agent::provider::StackableProvider;
 
-#[tokio::main(threaded_scheduler)]
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize the logger
     env_logger::init();
@@ -93,7 +93,6 @@ async fn main() -> anyhow::Result<()> {
         agent_config.parcel_directory.clone(),
         agent_config.config_directory.clone(),
         agent_config.log_directory.clone(),
-        plugins_directory.clone(),
         agent_config.session,
         agent_config.pod_cidr,
     )

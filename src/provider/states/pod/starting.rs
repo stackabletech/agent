@@ -80,7 +80,7 @@ impl State<PodState> for Starting {
                 //  the units actually depend on each other, but a case could be made for waiting
                 //  once at the end
                 while start_time.elapsed().as_secs() < 10 {
-                    tokio::time::delay_for(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                     debug!(
                         "Checking if unit [{}] is still up and running.",
                         &unit.get_name()

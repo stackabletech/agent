@@ -32,7 +32,7 @@ impl State<PodState> for SetupFailed {
         );
         info!("Waiting for {} seconds before retrying..", 10);
         // TODO: make this configurable
-        tokio::time::delay_for(std::time::Duration::from_secs(10)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
         Transition::next(self, Downloading)
     }
 

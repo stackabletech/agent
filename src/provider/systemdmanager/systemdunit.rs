@@ -459,106 +459,105 @@ mod test {
     use rstest::rstest;
     use std::path::PathBuf;
 
-    #[rstest(bus_type, pod_config, expected_unit_file_name, expected_unit_file_content,
-        case::without_containers_on_system_bus(
-            BusType::System,
-            indoc! {"
-                apiVersion: v1
-                kind: Pod
-                metadata:
-                  name: stackable
-                spec:
-                  containers: []
-                  restartPolicy: Always
+    #[rstest]
+    #[case::without_containers_on_system_bus(
+        BusType::System,
+        indoc! {"
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: stackable
+            spec:
+              containers: []
+              restartPolicy: Always
+              securityContext:
+                windowsOptions:
+                  runAsUserName: pod-user"},
+        "stackable.service",
+        indoc! {"
+            [Service]
+            Restart=always
+            User=pod-user"}
+    )]
+    #[case::with_container_on_system_bus(
+        BusType::System,
+        indoc! {r#"
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: stackable
+            spec:
+              containers:
+                - name: test-container.service
+                  command:
+                    - start.sh
+                  args:
+                    - arg
+                    - "{{configroot}}"
+                  env:
+                    - name: LOG_LEVEL
+                      value: INFO
+                    - name: LOG_DIR
+                      value: "{{logroot}}"
                   securityContext:
                     windowsOptions:
-                      runAsUserName: pod-user"},
-            "stackable.service",
-            indoc! {"
-                [Service]
-                Restart=always
-                User=pod-user"}
-        ),
-        case::with_container_on_system_bus(
-            BusType::System,
-            indoc! {r#"
-                apiVersion: v1
-                kind: Pod
-                metadata:
-                  name: stackable
-                spec:
-                  containers:
-                    - name: test-container.service
-                      command:
-                        - start.sh
-                      args:
-                        - arg
-                        - "{{configroot}}"
-                      env:
-                        - name: LOG_LEVEL
-                          value: INFO
-                        - name: LOG_DIR
-                          value: "{{logroot}}"
-                      securityContext:
-                        windowsOptions:
-                          runAsUserName: container-user
+                      runAsUserName: container-user
+              securityContext:
+                windowsOptions:
+                  runAsUserName: pod-user"#},
+        "default-stackable-test-container.service",
+        indoc! {r#"
+            [Unit]
+            Description=default-stackable-test-container
+
+            [Service]
+            Environment="LOG_DIR=/var/log/default-stackable" "LOG_LEVEL=INFO"
+            ExecStart=start.sh arg /etc/default-stackable
+            Restart=no
+            StandardError=journal
+            StandardOutput=journal
+            User=container-user
+
+            [Install]
+            WantedBy=multi-user.target"#}
+    )]
+    #[case::with_container_on_session_bus(
+        BusType::Session,
+        indoc! {r#"
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: stackable
+            spec:
+              containers:
+                - name: test-container.service
+                  command:
+                    - start.sh
                   securityContext:
                     windowsOptions:
-                      runAsUserName: pod-user"#},
-            "default-stackable-test-container.service",
-            indoc! {r#"
-                [Unit]
-                Description=default-stackable-test-container
+                      runAsUserName: container-user
+              securityContext:
+                windowsOptions:
+                  runAsUserName: pod-user"#},
+        "default-stackable-test-container.service",
+        indoc! {r#"
+            [Unit]
+            Description=default-stackable-test-container
 
-                [Service]
-                Environment="LOG_DIR=/var/log/default-stackable" "LOG_LEVEL=INFO"
-                ExecStart=start.sh arg /etc/default-stackable
-                Restart=no
-                StandardError=journal
-                StandardOutput=journal
-                User=container-user
+            [Service]
+            ExecStart=start.sh
+            Restart=no
+            StandardError=journal
+            StandardOutput=journal
 
-                [Install]
-                WantedBy=multi-user.target"#}
-        ),
-        case::with_container_on_session_bus(
-            BusType::Session,
-            indoc! {r#"
-                apiVersion: v1
-                kind: Pod
-                metadata:
-                  name: stackable
-                spec:
-                  containers:
-                    - name: test-container.service
-                      command:
-                        - start.sh
-                      securityContext:
-                        windowsOptions:
-                          runAsUserName: container-user
-                  securityContext:
-                    windowsOptions:
-                      runAsUserName: pod-user"#},
-            "default-stackable-test-container.service",
-            indoc! {r#"
-                [Unit]
-                Description=default-stackable-test-container
-
-                [Service]
-                ExecStart=start.sh
-                Restart=no
-                StandardError=journal
-                StandardOutput=journal
-
-                [Install]
-                WantedBy=multi-user.target"#}
-        ),
+            [Install]
+            WantedBy=multi-user.target"#}
     )]
     fn create_unit_from_pod(
-        bus_type: BusType,
-        pod_config: &str,
-        expected_unit_file_name: &str,
-        expected_unit_file_content: &str,
+        #[case] bus_type: BusType,
+        #[case] pod_config: &str,
+        #[case] expected_unit_file_name: &str,
+        #[case] expected_unit_file_content: &str,
     ) {
         let pod = parse_pod_from_yaml(pod_config);
 
