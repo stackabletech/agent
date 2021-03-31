@@ -12,7 +12,7 @@ pub enum StackableError {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error("unable to create repository from received repo object")]
     RepositoryConversionError,
     #[error("Invalid content in pod object: {msg}")]

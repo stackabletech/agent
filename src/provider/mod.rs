@@ -9,7 +9,6 @@ use kube::{Api, Client};
 use kubelet::backoff::ExponentialBackoffStrategy;
 use kubelet::log::Sender;
 use kubelet::node::Builder;
-use kubelet::plugin_watcher::PluginRegistry;
 use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
 use kubelet::provider::Provider;
@@ -33,7 +32,6 @@ pub struct StackableProvider {
     parcel_directory: PathBuf,
     config_directory: PathBuf,
     log_directory: PathBuf,
-    plugins_directory: PathBuf,
     pod_cidr: String,
 }
 
@@ -57,7 +55,6 @@ impl StackableProvider {
         parcel_directory: PathBuf,
         config_directory: PathBuf,
         log_directory: PathBuf,
-        plugins_directory: PathBuf,
         session: bool,
         pod_cidr: String,
     ) -> Result<Self, StackableError> {
@@ -73,7 +70,6 @@ impl StackableProvider {
             parcel_directory,
             config_directory,
             log_directory,
-            plugins_directory,
             pod_cidr,
         };
         let missing_crds = provider.check_crds().await?;
@@ -145,19 +141,6 @@ impl Provider for StackableProvider {
 
     fn provider_state(&self) -> SharedState<ProviderState> {
         Arc::new(RwLock::new(self.shared.clone()))
-    }
-
-    // TODO Remove all the plugin registry stuff when kubelet depends on tokio 1.3.0 or higher.
-    //
-    // The plugin_registry is optional. It defaults to None.
-    // But if it is None then tokio::time::delay_for is called with u64::MAX
-    // (see https://github.com/deislabs/krustlet/blob/v0.6.0/crates/kubelet/src/kubelet.rs#L170)
-    // which causes a panic in tokio (see https://github.com/tokio-rs/tokio/pull/3551).
-    // This is fixed in tokio 1.3.0.
-    fn plugin_registry(&self) -> Option<Arc<PluginRegistry>> {
-        Some(Arc::new(PluginRegistry::new(
-            self.plugins_directory.clone(),
-        )))
     }
 
     async fn node(&self, builder: &mut Builder) -> anyhow::Result<()> {
@@ -248,46 +231,48 @@ mod test {
         }
     }
 
-    #[rstest(pod_config, expected_err,
-        case(indoc! {"
-                apiVersion: v1
-                kind: Pod
-                metadata:
-                  name: test
-                spec:
-                  containers:
-                  - name: kafka
-                    image: kafka:2.7
-                  - name: zookeeper
-                    image: zookeeper:3.6.2
-            "},
-            "Only one container is supported in the PodSpec."
-        ),
-        case(indoc! {"
-                apiVersion: v1
-                kind: Pod
-                metadata:
-                  name: test
-                spec:
-                  containers:
-                  - name: kafka
-            "},
-            "Unable to get package reference from pod [test]: Image is required."
-        ),
-        case(indoc! {"
-                apiVersion: v1
-                kind: Pod
-                metadata:
-                  name: test
-                spec:
-                  containers:
-                  - name: kafka
-                    image: kafka
-            "},
-            "Unable to get package reference from pod [test]: Tag is required."
-        ),
+    #[rstest]
+    #[case(indoc! {"
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: test
+            spec:
+              containers:
+              - name: kafka
+                image: kafka:2.7
+              - name: zookeeper
+                image: zookeeper:3.6.2
+        "},
+        "Only one container is supported in the PodSpec."
     )]
-    fn try_to_get_package_from_insufficient_configuration(pod_config: &str, expected_err: &str) {
+    #[case(indoc! {"
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: test
+            spec:
+              containers:
+              - name: kafka
+        "},
+        "Unable to get package reference from pod [test]: Image is required."
+    )]
+    #[case(indoc! {"
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: test
+            spec:
+              containers:
+              - name: kafka
+                image: kafka
+        "},
+        "Unable to get package reference from pod [test]: Tag is required."
+    )]
+    fn try_to_get_package_from_insufficient_configuration(
+        #[case] pod_config: &str,
+        #[case] expected_err: &str,
+    ) {
         let pod = parse_pod_from_yaml(pod_config);
 
         let maybe_package = StackableProvider::get_package(&pod);
