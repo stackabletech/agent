@@ -3,7 +3,6 @@ use std::path::Path;
 
 use kubelet::container::Container;
 use kubelet::pod::Pod;
-use phf::Map;
 
 use crate::provider::error::StackableError;
 
@@ -19,12 +18,14 @@ use std::fmt::{Display, Formatter};
 use std::iter;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
-// This is used to map from Kubernetes restart lingo to systemd restart terms
-static RESTART_POLICY_MAP: Map<&'static str, &'static str> = phf::phf_map! {
-    "Always" => "always",
-    "OnFailure" => "on-failure",
-    "Never" => "no",
-};
+lazy_static! {
+    // This is used to map from Kubernetes restart lingo to systemd restart terms
+    static ref RESTART_POLICY_MAP: HashMap<&'static str, &'static str> = [
+            ("Always", "always"),
+            ("OnFailure", "on-failure"),
+            ("Never", "no")
+        ].iter().cloned().collect();
+}
 
 /// List of sections in the systemd unit
 ///

@@ -26,7 +26,6 @@ lazy_static = "1.4"
 log = "0.4"
 nix = "0.20"
 oci-distribution = { git="https://github.com/stackabletech/krustlet.git", rev="297fe2c29207dc0c26233b906de243ca6e17148c"} # version = "0.6"
-phf = { version = "0.8", features = ["macros"] }
 regex = "1.4"
 reqwest = "0.11"
 schemars = "0.8"
