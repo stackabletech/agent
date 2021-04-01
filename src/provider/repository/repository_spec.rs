@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
-use kube_derive::CustomResource;
+use kube::CustomResource;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(CustomResource, Serialize, Deserialize, Default, Clone, Debug)]
+#[derive(CustomResource, Serialize, Deserialize, Default, Clone, Debug, JsonSchema)]
 #[kube(
     kind = "Repository",
     group = "stable.stackable.de",
@@ -15,7 +16,7 @@ pub struct RepositorySpec {
     pub properties: HashMap<String, String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub enum RepoType {
     StackableRepo,
 }
