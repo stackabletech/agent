@@ -1,9 +1,116 @@
 
 
 
-=== server-cert-file
+=== no-config
 
 *Default value*: `No default value`
+
+*Required*: false
+
+*Multiple values:* false
+
+
+If this option is specified, any file referenced in AGENT_CONF environment variable will be ignored.
+
+
+=== pod-cidr
+
+*Default value*: ``
+
+*Required*: false
+
+*Multiple values:* false
+
+
+This setting controls the pod address range that the agent reports to Kubernetes.
+The effect of this setting is that Kubernetes will reserve address blocks from withhin this range for every node.
+Depending on the setting for maximum pods per node, these will be larger or smaller ranges, and influence the maximum number of nodes for the cluster.
+
+The agent does not require any pod address ranges, and by default doesn't specify anything for this setting.
+
+WARNING: There should almost never be a reason to use this setting, this is mostly here for very special circumstances. Do not touch it unless you really know what you're doing.
+
+
+=== bootstrap-file
+
+*Default value*: `/etc/stackable/stackable-agent/bootstrap-kubelet.conf`
+
+*Required*: false
+
+*Multiple values:* false
+
+
+The bootstrap file to use in case Kubernetes bootstraping is used to add the agent.
+
+
+=== server-bind-ip
+
+*Default value*: `No default value`
+
+*Required*: false
+
+*Multiple values:* false
+
+
+The local IP to register as the node's ip with the apiserver. Will be automatically set to the first address of the first non-loopback interface if not specified.
+
+
+=== server-key-file
+
+*Default value*: `/etc/stackable/stackable-agent/secret/agent.key`
+
+*Required*: false
+
+*Multiple values:* false
+
+
+Private key file (in PKCS8 format) to use for the local webserver the Krustlet starts.
+
+
+=== package-directory
+
+*Default value*: `/opt/stackable/packages`
+
+*Required*: false
+
+*Multiple values:* false
+
+
+This directory will serve as starting point for packages that are needed by pods assigned to this node.\n Packages will be downloaded into the "_download" folder at the top level of this folder as archives and remain there for potential future use.
+
+Archives will the be extracted directly into this folder in subdirectories following the naming
+scheme of "productname-productversion".
+
+The agent will need full access to this directory and tries to create it if it does not exist.
+
+
+=== hostname
+
+*Default value*: `No default value`
+
+*Required*: false
+
+*Multiple values:* false
+
+
+The hostname to register the node under in Kubernetes - defaults to system hostname.
+
+
+=== data-directory
+
+*Default value*: `/var/lib/stackable/agent`
+
+*Required*: false
+
+*Multiple values:* false
+
+
+The directory where the stackable agent should keep its working data.
+
+
+=== server-cert-file
+
+*Default value*: `/etc/stackable/stackable-agent/secret/agent.crt`
 
 *Required*: false
 
@@ -25,102 +132,9 @@ The certificate file for the local webserver which the Krustlet starts.
 Port to listen on for callbacks.
 
 
-=== package-directory
-
-*Default value*: `/opt/stackable/packages`
-
-*Required*: false
-
-*Multiple values:* false
-
-
-This directory will serve as starting point for packages that are needed by pods assigned to this node.\n Packages will be downloaded into the "_download" folder at the top level of this folder as archives and remain there for potential future use.
-
-Archives will the be extracted directly into this folder in subdirectories following the naming
-scheme of "productname-productversion".
-
-The agent will need full access to this directory and tries to create it if it does not exist.
-
-
-=== data-directory
-
-*Default value*: `/var/stackable/agent/data`
-
-*Required*: false
-
-*Multiple values:* false
-
-
-The directory where the stackable agent should keep its working data.
-
-
-=== no-config
-
-*Default value*: `No default value`
-
-*Required*: false
-
-*Multiple values:* false
-
-
-If this option is specified, any file referenced in AGENT_CONF environment variable will be ignored.
-
-
-=== hostname
-
-*Default value*: `No default value`
-
-*Required*: false
-
-*Multiple values:* false
-
-
-The hostname to register the node under in Kubernetes - defaults to system hostname.
-
-
-=== pod-cidr
-
-*Default value*: ``
-
-*Required*: false
-
-*Multiple values:* false
-
-
-This setting controls the pod address range that the agent reports to Kubernetes.
-The effect of this setting is that Kubernetes will reserve address blocks from withhin this range for every node.
-Depending on the setting for maximum pods per node, these will be larger or smaller ranges, and influence the maximum number of nodes for the cluster.
-
-The agent does not require any pod address ranges, and by default doesn't specify anything for this setting.
-
-
-=== server-key-file
-
-*Default value*: `No default value`
-
-*Required*: false
-
-*Multiple values:* false
-
-
-Private key file (in PKCS8 format) to use for the local webserver the Krustlet starts.
-
-
-=== server-bind-ip
-
-*Default value*: `No default value`
-
-*Required*: false
-
-*Multiple values:* false
-
-
-The local IP to register as the node's ip with the apiserver. Will be automatically set to the first address of the first non-loopback interface if not specified.
-
-
 === config-directory
 
-*Default value*: `/opt/stackable/config`
+*Default value*: `/etc/stackable/serviceconfig`
 
 *Required*: false
 
@@ -140,23 +154,9 @@ WARNING: This allows anybody who can specify pods more or less full access to th
 The agent will need full access to this directory and tries to create it if it does not exist.
 
 
-=== tag
-
-*Default value*: `No default value`
-
-*Required*: false
-
-*Multiple values:* true
-
-
-A "key=value" pair that should be assigned to this agent as tag. This can be specified multiple times to assign additional tags.
-
-Tags are the main way of identifying nodes to assign services to later on.
-
-
 === log-directory
 
-*Default value*: `/opt/stackable/logs`
+*Default value*: `/var/log/stackable/servicelogs`
 
 *Required*: false
 
@@ -170,13 +170,38 @@ Anything that is then specified in the log4j config or similar files will be res
 The agent will need full access to this directory and tries to create it if it does not exist.
 
 
-=== bootstrap-file
+=== session
 
-*Default value*: `/etc/kubernetes/bootstrap-kubelet.conf`
+*Default value*: `No default value`
 
 *Required*: false
 
 *Multiple values:* false
 
 
-The bootstrap file to use in case Kubernetes bootstraping is used to add the agent.
+This parameter specifies whether to use a session or the system DBus connection when talking to systemd.
+For our purposps the difference between the two can be explained as the session bus being restricted to the current user, whereas the system bus rolls out services that are available for every user.
+In reality is is a bit more involved than that, please refer to the https://dbus.freedesktop.org/doc/dbus-specification.html[official docs] for more information.
+
+When this flag is specified it causes symlinks for loaded services to be created in the currently active users systemd directory `~/.config/systemd/user` instead of one of the globally valid locations:
+
+- `/lib/systemd/system`
+- `/etc/systemd/system`
+
+The default is to use the system bus, for which it is necessary that the agent either run as root or have passwordless sudo rights.
+
+Using the session bus will mainly be useful for scenarios without root access and for testing on developer machines.
+
+
+=== tag
+
+*Default value*: `No default value`
+
+*Required*: false
+
+*Multiple values:* true
+
+
+A "key=value" pair that should be assigned to this agent as tag. This can be specified multiple times to assign additional tags.
+
+Tags are the main way of identifying nodes to assign services to later on.

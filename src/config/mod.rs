@@ -53,7 +53,7 @@ impl AgentConfig {
 
     pub const DATA_DIR: ConfigOption = ConfigOption {
         name: "data-directory",
-        default: Some("/var/stackable/agent/data"),
+        default: Some("/var/lib/stackable/agent"),
         required: false,
         takes_argument: true,
         help: "The directory where the stackable agent should keep its working data.",
@@ -63,7 +63,7 @@ impl AgentConfig {
 
     pub const BOOTSTRAP_FILE: ConfigOption = ConfigOption {
         name: "bootstrap-file",
-        default: Some("/etc/kubernetes/bootstrap-kubelet.conf"),
+        default: Some("/etc/stackable/stackable-agent/bootstrap-kubelet.conf"),
         required: false,
         takes_argument: true,
         help: "The bootstrap file to use in case Kubernetes bootstraping is used to add the agent.",
@@ -83,7 +83,7 @@ impl AgentConfig {
 
     pub const SERVER_CERT_FILE: ConfigOption = ConfigOption {
         name: "server-cert-file",
-        default: None,
+        default: Some("/etc/stackable/stackable-agent/secret/agent.crt"),
         required: false,
         takes_argument: true,
         help: "The certificate file for the local webserver which the Krustlet starts.",
@@ -93,7 +93,7 @@ impl AgentConfig {
 
     pub const SERVER_KEY_FILE: ConfigOption = ConfigOption {
         name: "server-key-file",
-        default: None,
+        default: Some("/etc/stackable/stackable-agent/secret/agent.key"),
         required: false,
         takes_argument: true,
         help:
@@ -124,7 +124,7 @@ impl AgentConfig {
 
     pub const CONFIG_DIR: ConfigOption = ConfigOption {
         name: "config-directory",
-        default: Some("/opt/stackable/config"),
+        default: Some("/etc/stackable/serviceconfig"),
         required: false,
         takes_argument: true,
         help: "The base directory under which configuration will be generated for all executed services.",
@@ -134,7 +134,7 @@ impl AgentConfig {
 
     pub const LOG_DIR: ConfigOption = ConfigOption {
         name: "log-directory",
-        default: Some("/opt/stackable/logs"),
+        default: Some("/var/log/stackable/servicelogs"),
         required: false,
         takes_argument: true,
         help: "The base directory under which log files will be placed for all services.",
