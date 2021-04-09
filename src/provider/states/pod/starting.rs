@@ -1,13 +1,16 @@
 use kubelet::pod::state::prelude::*;
-use kubelet::pod::Pod;
+use kubelet::{
+    container::{ContainerKey, Handle as ContainerHandle},
+    pod::{Handle as PodHandle, Pod, PodKey},
+};
 
 use super::failed::Failed;
 use super::running::Running;
 use super::setup_failed::SetupFailed;
-use crate::provider::{PodState, ProviderState};
+use crate::provider::{JournalReader, PodState, ProviderState, Runtime, HF};
 use anyhow::anyhow;
 use log::{debug, error, info, warn};
-use std::time::Instant;
+use std::{collections::HashMap, sync::Arc, time::Instant};
 use tokio::time::Duration;
 
 #[derive(Default, Debug, TransitionTo)]
@@ -18,12 +21,12 @@ pub struct Starting;
 impl State<PodState> for Starting {
     async fn next(
         self: Box<Self>,
-        provider_state: SharedState<ProviderState>,
+        shared: SharedState<ProviderState>,
         pod_state: &mut PodState,
-        _: Manifest<Pod>,
+        pod: Manifest<Pod>,
     ) -> Transition<PodState> {
         let systemd_manager = {
-            let provider_state = provider_state.read().await;
+            let provider_state = shared.read().await;
             provider_state.systemd_manager.clone()
         };
 
@@ -69,6 +72,32 @@ impl State<PodState> for Starting {
                         enable_error
                     );
                     return Transition::Complete(Err(enable_error));
+                }
+
+                info!("Creating container handle");
+                {
+                    let pod = pod.latest();
+                    let provider_state = shared.write().await;
+                    let pod_key = PodKey::from(pod.clone());
+                    info!("Pod [{:?}] inserted into handles", pod_key);
+                    let mut handles_writer = provider_state.handles.write().await;
+                    let pod_handle = handles_writer.entry(pod_key).or_insert_with(|| {
+                        Arc::new(PodHandle::new(HashMap::new(), pod.clone(), None))
+                    });
+                    let container_handle = ContainerHandle::new(
+                        Runtime {
+                            service_unit: unit.get_name(),
+                        },
+                        HF {
+                            journal_reader: JournalReader { end: false },
+                        },
+                    );
+                    pod_handle
+                        .insert_container_handle(
+                            ContainerKey::App(String::from("test-service")),
+                            container_handle,
+                        )
+                        .await;
                 }
 
                 let start_time = Instant::now();

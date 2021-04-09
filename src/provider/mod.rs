@@ -7,12 +7,12 @@ use anyhow::anyhow;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{Api, Client};
 use kubelet::backoff::ExponentialBackoffStrategy;
-use kubelet::log::Sender;
+use kubelet::log::{HandleFactory, Sender};
 use kubelet::node::Builder;
 use kubelet::pod::state::prelude::*;
-use kubelet::pod::Pod;
-use kubelet::provider::Provider;
-use log::{debug, error};
+use kubelet::pod::{Handle, Pod, PodKey};
+use kubelet::{handle::StopHandler, provider::Provider};
+use log::{debug, error, info};
 use tokio::sync::RwLock;
 
 use crate::provider::error::StackableError;
@@ -25,7 +25,8 @@ use crate::provider::states::pod::terminated::Terminated;
 use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::SystemdManager;
 use kube::error::ErrorResponse;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
+use systemdmanager::journal_reader::JournalReader;
 
 pub struct StackableProvider {
     shared: ProviderState,
@@ -42,9 +43,37 @@ mod repository;
 mod states;
 mod systemdmanager;
 
+pub struct Runtime {
+    service_unit: String,
+}
+
+#[async_trait::async_trait]
+impl StopHandler for Runtime {
+    async fn stop(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn wait(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+pub struct HF {
+    journal_reader: JournalReader,
+}
+
+impl HandleFactory<JournalReader> for HF {
+    fn new_handle(&self) -> JournalReader {
+        self.journal_reader.clone()
+    }
+}
+
+type PodHandleMap = Arc<RwLock<HashMap<PodKey, Arc<Handle<Runtime, HF>>>>>;
+
 /// Provider-level state shared between all pods
 #[derive(Clone)]
 pub struct ProviderState {
+    handles: PodHandleMap,
     client: Client,
     systemd_manager: Arc<SystemdManager>,
 }
@@ -61,6 +90,7 @@ impl StackableProvider {
         let systemd_manager = Arc::new(SystemdManager::new(session, Duration::from_secs(5))?);
 
         let provider_state = ProviderState {
+            handles: Default::default(),
             client,
             systemd_manager,
         };
@@ -193,12 +223,17 @@ impl Provider for StackableProvider {
 
     async fn logs(
         &self,
-        _namespace: String,
-        _pod: String,
-        _container: String,
-        _sender: Sender,
+        namespace: String,
+        pod: String,
+        container: String,
+        sender: Sender,
     ) -> anyhow::Result<()> {
-        Ok(())
+        info!("Logs requested");
+        let mut handles = self.shared.handles.write().await;
+        let handle = handles
+            .get_mut(&PodKey::new(&namespace, &pod))
+            .ok_or_else(|| anyhow!("Pod [{:?}] not found", pod))?;
+        handle.output(&container, sender).await
     }
 }
 
