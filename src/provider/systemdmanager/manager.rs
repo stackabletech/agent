@@ -7,7 +7,7 @@ use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::StackableError;
 use crate::provider::StackableError::RuntimeError;
 use anyhow::anyhow;
-use dbus::arg::{AppendAll, ReadAll, Variant};
+use dbus::arg::{AppendAll, Get, ReadAll, RefArg, Variant};
 use dbus::blocking::SyncConnection;
 use dbus::strings::Member;
 use dbus::Path;
@@ -374,6 +374,20 @@ impl SystemdManager {
     }
 
     pub fn is_running(&self, unit: &str) -> Result<bool, anyhow::Error> {
+        self.get_value::<String>(unit, "ActiveState")
+            .map(|v| v.as_str() == Some("active"))
+    }
+
+    pub fn get_invocation_id(&self, unit: &str) -> Result<String, anyhow::Error> {
+        self.get_value::<Vec<u8>>(unit, "InvocationID")
+            .map(|Variant(vec)| vec.iter().map(|byte| format!("{:02x}", byte)).collect())
+    }
+
+    pub fn get_value<T: for<'a> Get<'a>>(
+        &self,
+        unit: &str,
+        property: &str,
+    ) -> Result<Variant<T>, anyhow::Error> {
         // We are using `LoadUnit` here, as GetUnit can fail seemingly at random, when the unit
         // is not loaded due to systemd garbage collection.
         // see https://github.com/systemd/systemd/issues/1929 for more information
@@ -385,17 +399,13 @@ impl SystemdManager {
             .connection
             .with_proxy(SYSTEMD_DESTINATION, &unit_node, self.timeout);
 
-        let active_state = proxy
+        Ok(proxy
             .method_call(
                 DBUS_PROPERTIES_INTERFACE,
                 "Get",
-                ("org.freedesktop.systemd1.Unit", "ActiveState"),
+                ("org.freedesktop.systemd1.Unit", property),
             )
-            .map(|r: (Variant<String>,)| r.0)?;
-
-        // TODO: I think this can panic, there should be a get() method on Variant that returns
-        //   an option, but I've not yet been able to get that to work
-        Ok(active_state.0 == "active")
+            .map(|r: (Variant<T>,)| r.0)?)
     }
 
     // Symlink a unit file into the systemd unit folder

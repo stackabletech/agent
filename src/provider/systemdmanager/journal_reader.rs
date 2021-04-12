@@ -9,6 +9,7 @@ use tokio::io::{AsyncRead, AsyncSeek, ReadBuf};
 
 #[derive(Clone)]
 pub struct JournalReader {
+    pub invocation_id: String,
     pub end: bool,
 }
 
@@ -20,14 +21,12 @@ impl AsyncRead for JournalReader {
     ) -> Poll<Result<()>> {
         if !self.end {
             self.end = true;
-            info!("Put Hallo into the buffer");
             let mut journal = journal::OpenOptions::default()
                 .open()
                 .expect("Journal could not be opened");
-            if let Ok(journal) = journal.match_add(
-                "_SYSTEMD_USER_UNIT",
-                "default-agent-integration-test-test-service.service",
-            ) {
+            if let Ok(journal) =
+                journal.match_add("_SYSTEMD_INVOCATION_ID", self.invocation_id.clone())
+            {
                 if let Ok(Some(entry)) = journal.next_entry() {
                     buf.put_slice(format!("{:?}", entry).as_bytes());
                 }

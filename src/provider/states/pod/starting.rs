@@ -74,32 +74,6 @@ impl State<PodState> for Starting {
                     return Transition::Complete(Err(enable_error));
                 }
 
-                info!("Creating container handle");
-                {
-                    let pod = pod.latest();
-                    let provider_state = shared.write().await;
-                    let pod_key = PodKey::from(pod.clone());
-                    info!("Pod [{:?}] inserted into handles", pod_key);
-                    let mut handles_writer = provider_state.handles.write().await;
-                    let pod_handle = handles_writer.entry(pod_key).or_insert_with(|| {
-                        Arc::new(PodHandle::new(HashMap::new(), pod.clone(), None))
-                    });
-                    let container_handle = ContainerHandle::new(
-                        Runtime {
-                            service_unit: unit.get_name(),
-                        },
-                        HF {
-                            journal_reader: JournalReader { end: false },
-                        },
-                    );
-                    pod_handle
-                        .insert_container_handle(
-                            ContainerKey::App(String::from("test-service")),
-                            container_handle,
-                        )
-                        .await;
-                }
-
                 let start_time = Instant::now();
                 // TODO: does this need to be configurable, or ar we happy with a hard coded value
                 //  for now. I've briefly looked at the podspec and couldn't identify a good field
@@ -126,6 +100,41 @@ impl State<PodState> for Starting {
                                 &unit.get_name(),
                                 start_time.elapsed().as_secs()
                             ))))
+                        }
+                        Err(dbus_error) => return Transition::Complete(Err(dbus_error)),
+                    }
+                }
+
+                info!("Creating container handle");
+                {
+                    let pod = pod.latest();
+                    let provider_state = shared.write().await;
+                    let pod_key = PodKey::from(pod.clone());
+                    info!("Pod [{:?}] inserted into handles", pod_key);
+                    let mut handles_writer = provider_state.handles.write().await;
+                    let pod_handle = handles_writer.entry(pod_key).or_insert_with(|| {
+                        Arc::new(PodHandle::new(HashMap::new(), pod.clone(), None))
+                    });
+                    match systemd_manager.get_invocation_id(&unit.get_name()) {
+                        Ok(invocation_id) => {
+                            info!("InvocationID: {}", invocation_id);
+                            let container_handle = ContainerHandle::new(
+                                Runtime {
+                                    service_unit: unit.get_name(),
+                                },
+                                HF {
+                                    journal_reader: JournalReader {
+                                        invocation_id,
+                                        end: false,
+                                    },
+                                },
+                            );
+                            pod_handle
+                                .insert_container_handle(
+                                    ContainerKey::App(String::from("test-service")),
+                                    container_handle,
+                                )
+                                .await;
                         }
                         Err(dbus_error) => return Transition::Complete(Err(dbus_error)),
                     }
