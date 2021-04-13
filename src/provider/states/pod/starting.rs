@@ -123,10 +123,7 @@ impl State<PodState> for Starting {
                                     service_unit: unit.get_name(),
                                 },
                                 HF {
-                                    journal_reader: JournalReader {
-                                        invocation_id,
-                                        end: false,
-                                    },
+                                    journal_reader: JournalReader::new(&invocation_id)
                                 },
                             );
                             pod_handle
