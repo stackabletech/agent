@@ -7,13 +7,16 @@ use anyhow::anyhow;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{Api, Client};
 use kubelet::backoff::ExponentialBackoffStrategy;
-use kubelet::log::{HandleFactory, Sender};
+use kubelet::log::Sender;
 use kubelet::node::Builder;
 use kubelet::pod::state::prelude::*;
-use kubelet::pod::{Handle, Pod, PodKey};
-use kubelet::{handle::StopHandler, provider::Provider};
+use kubelet::pod::{Pod, PodKey};
+use kubelet::{
+    container::{ContainerKey, ContainerMap},
+    provider::Provider,
+};
 use log::{debug, error, info};
-use tokio::sync::RwLock;
+use tokio::{runtime::Runtime, sync::RwLock, task};
 
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::{
@@ -26,7 +29,7 @@ use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::SystemdManager;
 use kube::error::ErrorResponse;
 use std::{collections::HashMap, time::Duration};
-use systemdmanager::journal_reader::JournalReader;
+use systemdmanager::journal_reader;
 
 pub struct StackableProvider {
     shared: ProviderState,
@@ -43,37 +46,20 @@ mod repository;
 mod states;
 mod systemdmanager;
 
-pub struct Runtime {
-    service_unit: String,
+pub struct ContainerHandle {
+    invocation_id: String,
 }
 
-#[async_trait::async_trait]
-impl StopHandler for Runtime {
-    async fn stop(&mut self) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    async fn wait(&mut self) -> anyhow::Result<()> {
-        Ok(())
-    }
+pub struct PodHandle {
+    containers: ContainerMap<ContainerHandle>,
 }
 
-pub struct HF {
-    journal_reader: JournalReader,
-}
-
-impl HandleFactory<JournalReader> for HF {
-    fn new_handle(&self) -> JournalReader {
-        self.journal_reader.clone()
-    }
-}
-
-type PodHandleMap = Arc<RwLock<HashMap<PodKey, Arc<Handle<Runtime, HF>>>>>;
+type PodHandleMap = HashMap<PodKey, PodHandle>;
 
 /// Provider-level state shared between all pods
 #[derive(Clone)]
 pub struct ProviderState {
-    handles: PodHandleMap,
+    handles: Arc<RwLock<PodHandleMap>>,
     client: Client,
     systemd_manager: Arc<SystemdManager>,
 }
@@ -226,14 +212,30 @@ impl Provider for StackableProvider {
         namespace: String,
         pod: String,
         container: String,
-        sender: Sender,
+        mut sender: Sender,
     ) -> anyhow::Result<()> {
         info!("Logs requested");
-        let mut handles = self.shared.handles.write().await;
-        let handle = handles
-            .get_mut(&PodKey::new(&namespace, &pod))
+        let handles = self.shared.handles.write().await;
+        let pod_handle = handles
+            .get(&PodKey::new(&namespace, &pod))
             .ok_or_else(|| anyhow!("Pod [{:?}] not found", pod))?;
-        handle.output(&container, sender).await
+        let container_handle = pod_handle
+            .containers
+            .get(&ContainerKey::App(container.clone()))
+            .ok_or_else(|| anyhow!("Container [{:?}] not found", container))?;
+        let invocation_id = container_handle.invocation_id.clone();
+
+        task::spawn_blocking(move || {
+            Runtime::new()
+                .unwrap()
+                .block_on(journal_reader::send_journal_entries(
+                    &mut sender,
+                    &invocation_id,
+                ))
+                .unwrap();
+        });
+
+        Ok(())
     }
 }
 

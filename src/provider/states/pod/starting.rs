@@ -1,16 +1,16 @@
 use kubelet::pod::state::prelude::*;
 use kubelet::{
-    container::{ContainerKey, Handle as ContainerHandle},
-    pod::{Handle as PodHandle, Pod, PodKey},
+    container::ContainerKey,
+    pod::{Pod, PodKey},
 };
 
 use super::failed::Failed;
 use super::running::Running;
 use super::setup_failed::SetupFailed;
-use crate::provider::{JournalReader, PodState, ProviderState, Runtime, HF};
+use crate::provider::{ContainerHandle, PodHandle, PodState, ProviderState};
 use anyhow::anyhow;
 use log::{debug, error, info, warn};
-use std::{collections::HashMap, sync::Arc, time::Instant};
+use std::{collections::HashMap, time::Instant};
 use tokio::time::Duration;
 
 #[derive(Default, Debug, TransitionTo)]
@@ -112,26 +112,20 @@ impl State<PodState> for Starting {
                     let pod_key = PodKey::from(pod.clone());
                     info!("Pod [{:?}] inserted into handles", pod_key);
                     let mut handles_writer = provider_state.handles.write().await;
-                    let pod_handle = handles_writer.entry(pod_key).or_insert_with(|| {
-                        Arc::new(PodHandle::new(HashMap::new(), pod.clone(), None))
+                    let pod_handle = handles_writer.entry(pod_key).or_insert_with(|| PodHandle {
+                        containers: HashMap::new(),
                     });
                     match systemd_manager.get_invocation_id(&unit.get_name()) {
                         Ok(invocation_id) => {
-                            info!("InvocationID: {}", invocation_id);
-                            let container_handle = ContainerHandle::new(
-                                Runtime {
-                                    service_unit: unit.get_name(),
-                                },
-                                HF {
-                                    journal_reader: JournalReader::new(&invocation_id)
-                                },
+                            pod_handle.containers.insert(
+                                ContainerKey::App(
+                                    unit.container_name
+                                        .as_ref()
+                                        .expect("Container name is missing")
+                                        .clone(),
+                                ),
+                                ContainerHandle { invocation_id },
                             );
-                            pod_handle
-                                .insert_container_handle(
-                                    ContainerKey::App(String::from("test-service")),
-                                    container_handle,
-                                )
-                                .await;
                         }
                         Err(dbus_error) => return Transition::Complete(Err(dbus_error)),
                     }
