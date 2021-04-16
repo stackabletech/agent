@@ -1,10 +1,11 @@
+use anyhow::Result;
 use kubelet::log::Sender;
 use std::str;
 use systemd::{journal, journal::JournalRef};
 
 const MAX_LOG_LINE_LENGTH: usize = 16384;
 
-pub async fn send_journal_entries(sender: &mut Sender, invocation_id: &str) -> anyhow::Result<()> {
+pub async fn send_journal_entries(sender: &mut Sender, invocation_id: &str) -> Result<()> {
     let mut journal = journal::OpenOptions::default().open()?;
     let journal = journal.match_add("_SYSTEMD_INVOCATION_ID", invocation_id)?;
 
@@ -35,7 +36,7 @@ async fn send_n_messages(
     journal: &mut JournalRef,
     sender: &mut Sender,
     count: usize,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     let mut sent = 0;
     let mut message_available = true;
     while sent != count && message_available {
@@ -49,17 +50,14 @@ async fn send_n_messages(
     Ok(())
 }
 
-async fn send_remaining_messages(
-    journal: &mut JournalRef,
-    sender: &mut Sender,
-) -> anyhow::Result<()> {
+async fn send_remaining_messages(journal: &mut JournalRef, sender: &mut Sender) -> Result<()> {
     while let Some(message) = next_message(journal)? {
         send_message(sender, &message).await?;
     }
     Ok(())
 }
 
-fn next_message(journal: &mut JournalRef) -> anyhow::Result<Option<String>> {
+fn next_message(journal: &mut JournalRef) -> Result<Option<String>> {
     let maybe_message = if journal.next()? != 0 {
         let message = if let Some(entry) = journal.get_data("MESSAGE")? {
             if let Some(value) = entry.value() {
@@ -77,7 +75,7 @@ fn next_message(journal: &mut JournalRef) -> anyhow::Result<Option<String>> {
     Ok(maybe_message)
 }
 
-async fn send_message(sender: &mut Sender, message: &str) -> anyhow::Result<()> {
+async fn send_message(sender: &mut Sender, message: &str) -> Result<()> {
     let mut line = message.to_owned();
     line.push('\n');
     sender.send(line).await?;

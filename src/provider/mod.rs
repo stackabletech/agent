@@ -7,7 +7,7 @@ use anyhow::anyhow;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{Api, Client};
 use kubelet::backoff::ExponentialBackoffStrategy;
-use kubelet::log::Sender;
+use kubelet::log::{SendError, Sender};
 use kubelet::node::Builder;
 use kubelet::pod::state::prelude::*;
 use kubelet::pod::{Pod, PodKey};
@@ -215,6 +215,7 @@ impl Provider for StackableProvider {
         mut sender: Sender,
     ) -> anyhow::Result<()> {
         info!("Logs requested");
+
         let handles = self.shared.handles.write().await;
         let pod_handle = handles
             .get(&PodKey::new(&namespace, &pod))
@@ -226,13 +227,19 @@ impl Provider for StackableProvider {
         let invocation_id = container_handle.invocation_id.clone();
 
         task::spawn_blocking(move || {
-            Runtime::new()
+            let result = Runtime::new()
                 .unwrap()
                 .block_on(journal_reader::send_journal_entries(
                     &mut sender,
                     &invocation_id,
-                ))
-                .unwrap();
+                ));
+
+            if let Err(error) = result {
+                match error.downcast_ref::<SendError>() {
+                    Some(SendError::ChannelClosed) => (),
+                    _ => error!("Log could not be sent. {}", error),
+                }
+            }
         });
 
         Ok(())
