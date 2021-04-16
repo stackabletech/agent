@@ -4,13 +4,13 @@ use k8s_openapi::api::core::v1::{
 };
 use krator::ObjectStatus;
 use kubelet::pod::state::prelude::*;
-use kubelet::pod::Pod;
+use kubelet::pod::{Pod, PodKey};
 use log::{debug, info, trace};
 
 use super::failed::Failed;
 use super::installing::Installing;
 use crate::provider::states::make_status_with_containers_and_condition;
-use crate::provider::{PodState, ProviderState};
+use crate::provider::{PodHandle, PodState, ProviderState};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use k8s_openapi::chrono;
 use tokio::time::Duration;
@@ -33,13 +33,22 @@ impl Default for Running {
 impl State<PodState> for Running {
     async fn next(
         mut self: Box<Self>,
-        provider_state: SharedState<ProviderState>,
+        shared: SharedState<ProviderState>,
         pod_state: &mut PodState,
-        _pod: Manifest<Pod>,
+        pod: Manifest<Pod>,
     ) -> Transition<PodState> {
-        let systemd_manager = {
-            let provider_state = provider_state.read().await;
-            provider_state.systemd_manager.clone()
+        let pod = pod.latest();
+        let pod_key = &PodKey::from(pod);
+
+        let (systemd_manager, pod_handle) = {
+            let provider_state = shared.read().await;
+            (
+                provider_state.systemd_manager.clone(),
+                provider_state
+                    .handles
+                    .get(&pod_key)
+                    .map(PodHandle::to_owned),
+            )
         };
 
         // We loop here indefinitely and "wake up" periodically to check if the service is still
@@ -57,20 +66,20 @@ impl State<PodState> for Running {
             // Iterate over all units and check their state
             // if the [`service_units`] Option is a None variant, return a failed state
             // as we need to run something otherwise we are not doing anything
-            let systemd_units = match &pod_state.service_units {
-                Some(units) => units,
+            let containers = match &pod_handle {
+                Some(containers) => containers,
                 None => return Transition::Complete(Err(anyhow!(format!("No systemd units found for service [{}], this should not happen, please report a bug for this!", pod_state.service_name)))),
             };
 
-            for unit in systemd_units {
-                match systemd_manager.is_running(&unit.get_name()) {
+            for container_handle in containers.values() {
+                match systemd_manager.is_running(&container_handle.service_unit) {
                     Ok(true) => trace!(
                         "Unit [{}] of service [{}] still running ...",
-                        &unit.get_name(),
+                        &container_handle.service_unit,
                         pod_state.service_name
                     ),
                     Ok(false) => {
-                        info!("Unit [{}] for service [{}] failed unexpectedly, transitioning to failed state.", pod_state.service_name, unit.get_name());
+                        info!("Unit [{}] for service [{}] failed unexpectedly, transitioning to failed state.", pod_state.service_name, container_handle.service_unit);
                         return Transition::next(
                             self,
                             Failed {
@@ -81,9 +90,7 @@ impl State<PodState> for Running {
                     Err(dbus_error) => {
                         info!(
                             "Error querying ActiveState for Unit [{}] of service [{}]: [{}].",
-                            pod_state.service_name,
-                            unit.get_name(),
-                            dbus_error
+                            pod_state.service_name, container_handle.service_unit, dbus_error
                         );
                         return Transition::Complete(Err(dbus_error));
                     }

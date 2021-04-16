@@ -46,22 +46,81 @@ mod repository;
 mod states;
 mod systemdmanager;
 
+#[derive(Clone, Debug)]
 pub struct ContainerHandle {
-    invocation_id: String,
+    pub service_unit: String,
+    pub invocation_id: Option<String>,
 }
 
-pub struct PodHandle {
-    containers: ContainerMap<ContainerHandle>,
+impl ContainerHandle {
+    pub fn new(service_unit: &str) -> Self {
+        ContainerHandle {
+            service_unit: String::from(service_unit),
+            invocation_id: None,
+        }
+    }
 }
 
+type PodHandle = ContainerMap<ContainerHandle>;
 type PodHandleMap = HashMap<PodKey, PodHandle>;
 
 /// Provider-level state shared between all pods
 #[derive(Clone)]
 pub struct ProviderState {
+    // TODO Change to Arc.RwLock; Compare with wasi-provider!!!
     handles: Arc<RwLock<PodHandleMap>>,
     client: Client,
     systemd_manager: Arc<SystemdManager>,
+}
+
+// TODO change to impl PodHandleMap
+impl ProviderState {
+    pub fn insert_container_handle(
+        &mut self,
+        pod_key: &PodKey,
+        container_key: &ContainerKey,
+        service_unit: &str,
+    ) {
+        self.handles
+            .entry(pod_key.to_owned())
+            .or_insert_with(ContainerMap::new)
+            .insert(container_key.to_owned(), ContainerHandle::new(service_unit));
+        info!("Handles inserted: {:?}", self.handles);
+    }
+
+    pub fn set_invocation_id(
+        &mut self,
+        pod_key: &PodKey,
+        container_key: &ContainerKey,
+        invocation_id: &str,
+    ) -> anyhow::Result<()> {
+        if let Some(mut container_handle) = self.container_handle_mut(pod_key, container_key) {
+            container_handle.invocation_id = Some(String::from(invocation_id));
+            Ok(())
+        } else {
+            Err(anyhow!("Container handle not found"))
+        }
+    }
+
+    pub fn container_handle(
+        &self,
+        pod_key: &PodKey,
+        container_key: &ContainerKey,
+    ) -> Option<&ContainerHandle> {
+        self.handles
+            .get(pod_key)
+            .and_then(|pod_handle| pod_handle.get(container_key))
+    }
+
+    fn container_handle_mut(
+        &mut self,
+        pod_key: &PodKey,
+        container_key: &ContainerKey,
+    ) -> Option<&mut ContainerHandle> {
+        self.handles
+            .get_mut(pod_key)
+            .and_then(|pod_handle| pod_handle.get_mut(container_key))
+    }
 }
 
 impl StackableProvider {
@@ -203,7 +262,6 @@ impl Provider for StackableProvider {
             service_name,
             service_uid,
             package,
-            service_units: None,
         })
     }
 
@@ -216,15 +274,28 @@ impl Provider for StackableProvider {
     ) -> anyhow::Result<()> {
         info!("Logs requested");
 
-        let handles = self.shared.handles.write().await;
-        let pod_handle = handles
-            .get(&PodKey::new(&namespace, &pod))
-            .ok_or_else(|| anyhow!("Pod [{:?}] not found", pod))?;
-        let container_handle = pod_handle
-            .containers
-            .get(&ContainerKey::App(container.clone()))
-            .ok_or_else(|| anyhow!("Container [{:?}] not found", container))?;
-        let invocation_id = container_handle.invocation_id.clone();
+        info!("Shared state handles: {:?}", self.shared.handles);
+
+        let pod_key = PodKey::new(&namespace, &pod);
+        let container_key = ContainerKey::App(container);
+        let container_handle = self
+            .shared
+            .container_handle(&pod_key, &container_key)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Container handle for pod [{:?}] and container [{:?}] not found",
+                    pod_key,
+                    container_key
+                )
+            })?;
+        let invocation_id = container_handle.invocation_id.to_owned().ok_or_else(|| {
+            anyhow!(
+                "Invocation ID for container [{}] in pod [{:?}] is unknown. \
+                    The service is probably not started yet.",
+                container_key,
+                pod_key
+            )
+        })?;
 
         task::spawn_blocking(move || {
             let result = Runtime::new()

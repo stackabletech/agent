@@ -52,7 +52,6 @@ lazy_static! {
 #[derive(Clone, Debug)]
 pub struct SystemDUnit {
     pub name: String,
-    pub container_name: Option<String>,
     pub unit_type: UnitTypes,
     pub sections: HashMap<Section, HashMap<String, String>>,
 }
@@ -106,8 +105,6 @@ impl SystemDUnit {
         user_mode: bool,
     ) -> Result<Self, StackableError> {
         let mut unit = common_properties.clone();
-
-        unit.container_name = Some(String::from(container.name()));
 
         let trimmed_name = match container
             .name()
@@ -193,7 +190,6 @@ impl SystemDUnit {
     pub fn new_from_pod(pod: &Pod, user_mode: bool) -> Result<Self, StackableError> {
         let mut unit = SystemDUnit {
             name: pod.name().to_string(),
-            container_name: None,
             unit_type: UnitTypes::Service,
             sections: Default::default(),
         };

@@ -1,5 +1,8 @@
 use kubelet::pod::state::prelude::*;
-use kubelet::pod::Pod;
+use kubelet::{
+    container::ContainerKey,
+    pod::{Pod, PodKey},
+};
 use log::{debug, error, info};
 
 use super::setup_failed::SetupFailed;
@@ -16,14 +19,14 @@ pub struct CreatingService;
 impl State<PodState> for CreatingService {
     async fn next(
         self: Box<Self>,
-        provider_state: SharedState<ProviderState>,
+        shared: SharedState<ProviderState>,
         pod_state: &mut PodState,
         pod: Manifest<Pod>,
     ) -> Transition<PodState> {
         let pod = pod.latest();
 
         let systemd_manager = {
-            let provider_state = provider_state.read().await;
+            let provider_state = shared.read().await;
             provider_state.systemd_manager.clone()
         };
 
@@ -67,27 +70,18 @@ impl State<PodState> for CreatingService {
         // Each pod can map to multiple systemd units/services as each container will get its own
         // systemd unit file/service.
         // Map every container from the pod object to a systemdunit
-        let systemd_units: Vec<SystemDUnit> = match pod
-            .containers()
-            .iter()
-            .map(|container| {
-                SystemDUnit::new(
-                    &unit_template,
-                    &service_prefix,
-                    container,
-                    user_mode,
-                    pod_state,
-                )
-            })
-            .collect()
-        {
-            Ok(units) => units,
-            Err(err) => return Transition::Complete(Err(anyhow::Error::from(err))),
-        };
+        for container in &pod.containers() {
+            let unit = match SystemDUnit::new(
+                &unit_template,
+                &service_prefix,
+                &container,
+                user_mode,
+                pod_state,
+            ) {
+                Ok(unit) => unit,
+                Err(err) => return Transition::Complete(Err(anyhow::Error::from(err))),
+            };
 
-        // This will iterate over all systemd units, write the service files to disk and link
-        // the service to systemd.
-        for unit in &systemd_units {
             // Create the service
             // As per ADR005 we currently write the unit files directly in the systemd
             // unit directory (by passing None as [unit_file_path]).
@@ -103,10 +97,19 @@ impl State<PodState> for CreatingService {
                     return Transition::Complete(Err(e));
                 }
             }
+
+            {
+                let mut provider_state = shared.write().await;
+                provider_state.insert_container_handle(
+                    &PodKey::from(&pod),
+                    &ContainerKey::App(String::from(container.name())),
+                    &unit.get_name(),
+                )
+            };
+
             // Done for now, if the service was created successfully we are happy
             // Starting and enabling comes in a later state after all service have been createddy
         }
-        pod_state.service_units = Some(systemd_units);
 
         // All services were loaded successfully, otherwise we'd have returned early above
         Transition::next(self, Starting)

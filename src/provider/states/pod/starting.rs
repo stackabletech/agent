@@ -1,16 +1,13 @@
 use kubelet::pod::state::prelude::*;
-use kubelet::{
-    container::ContainerKey,
-    pod::{Pod, PodKey},
-};
+use kubelet::pod::{Pod, PodKey};
 
 use super::failed::Failed;
 use super::running::Running;
 use super::setup_failed::SetupFailed;
-use crate::provider::{ContainerHandle, PodHandle, PodState, ProviderState};
+use crate::provider::{PodHandle, PodState, ProviderState};
 use anyhow::anyhow;
 use log::{debug, error, info, warn};
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 use tokio::time::Duration;
 
 #[derive(Default, Debug, TransitionTo)]
@@ -25,19 +22,27 @@ impl State<PodState> for Starting {
         pod_state: &mut PodState,
         pod: Manifest<Pod>,
     ) -> Transition<PodState> {
-        let systemd_manager = {
+        let pod = pod.latest();
+        let pod_key = &PodKey::from(pod);
+
+        let (systemd_manager, pod_handle) = {
             let provider_state = shared.read().await;
-            provider_state.systemd_manager.clone()
+            (
+                provider_state.systemd_manager.clone(),
+                provider_state
+                    .handles
+                    .get(&pod_key)
+                    .map(PodHandle::to_owned),
+            )
         };
 
-        if let Some(systemd_units) = &pod_state.service_units {
-            for unit in systemd_units {
-                match systemd_manager.is_running(&unit.get_name()) {
+        if let Some(containers) = pod_handle {
+            for (container_key, container_handle) in containers {
+                match systemd_manager.is_running(&container_handle.service_unit) {
                     Ok(true) => {
                         debug!(
                             "Unit [{}] for service [{}] already running, nothing to do..",
-                            &unit.get_name(),
-                            &pod_state.service_name
+                            &container_handle.service_unit, &pod_state.service_name
                         );
                         // Skip rest of loop as the service is already running
                         continue;
@@ -45,31 +50,27 @@ impl State<PodState> for Starting {
                     Err(dbus_error) => {
                         debug!(
                             "Error retrieving activestate of unit [{}] for service [{}]: [{}]",
-                            &unit.get_name(),
-                            &pod_state.service_name,
-                            dbus_error
+                            &container_handle.service_unit, &pod_state.service_name, dbus_error
                         );
                         return Transition::Complete(Err(dbus_error));
                     }
                     _ => { // nothing to do, just keep going
                     }
                 }
-                info!("Starting systemd unit [{}]", unit);
-                if let Err(start_error) = systemd_manager.start(&unit.get_name()) {
+                info!("Starting systemd unit [{}]", container_handle.service_unit);
+                if let Err(start_error) = systemd_manager.start(&container_handle.service_unit) {
                     error!(
                         "Error occurred starting systemd unit [{}]: [{}]",
-                        unit.get_name(),
-                        start_error
+                        container_handle.service_unit, start_error
                     );
                     return Transition::Complete(Err(start_error));
                 }
 
-                info!("Enabling systemd unit [{}]", unit);
-                if let Err(enable_error) = systemd_manager.enable(&unit.get_name()) {
+                info!("Enabling systemd unit [{}]", container_handle.service_unit);
+                if let Err(enable_error) = systemd_manager.enable(&container_handle.service_unit) {
                     error!(
                         "Error occurred starting systemd unit [{}]: [{}]",
-                        unit.get_name(),
-                        enable_error
+                        container_handle.service_unit, enable_error
                     );
                     return Transition::Complete(Err(enable_error));
                 }
@@ -86,48 +87,43 @@ impl State<PodState> for Starting {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     debug!(
                         "Checking if unit [{}] is still up and running.",
-                        &unit.get_name()
+                        container_handle.service_unit
                     );
-                    match systemd_manager.is_running(&unit.get_name()) {
+                    match systemd_manager.is_running(&container_handle.service_unit) {
                         Ok(true) => debug!(
                             "Service [{}] still running after [{}] seconds",
-                            &unit.get_name(),
+                            &container_handle.service_unit,
                             start_time.elapsed().as_secs()
                         ),
                         Ok(false) => {
-                            return Transition::Complete(Err(anyhow!(format!(
+                            return Transition::Complete(Err(anyhow!(
                                 "Unit [{}] stopped unexpectedly during startup after [{}] seconds.",
-                                &unit.get_name(),
+                                &container_handle.service_unit,
                                 start_time.elapsed().as_secs()
-                            ))))
+                            )))
                         }
                         Err(dbus_error) => return Transition::Complete(Err(dbus_error)),
                     }
                 }
 
                 info!("Creating container handle");
-                {
-                    let pod = pod.latest();
-                    let provider_state = shared.write().await;
-                    let pod_key = PodKey::from(pod.clone());
-                    info!("Pod [{:?}] inserted into handles", pod_key);
-                    let mut handles_writer = provider_state.handles.write().await;
-                    let pod_handle = handles_writer.entry(pod_key).or_insert_with(|| PodHandle {
-                        containers: HashMap::new(),
-                    });
-                    match systemd_manager.get_invocation_id(&unit.get_name()) {
-                        Ok(invocation_id) => {
-                            pod_handle.containers.insert(
-                                ContainerKey::App(
-                                    unit.container_name
-                                        .as_ref()
-                                        .expect("Container name is missing")
-                                        .clone(),
-                                ),
-                                ContainerHandle { invocation_id },
-                            );
-                        }
+                let invocation_id =
+                    match systemd_manager.get_invocation_id(&container_handle.service_unit) {
+                        Ok(invocation_id) => invocation_id,
                         Err(dbus_error) => return Transition::Complete(Err(dbus_error)),
+                    };
+
+                {
+                    let mut provider_state = shared.write().await;
+                    if provider_state
+                        .set_invocation_id(&pod_key, &container_key, &invocation_id)
+                        .is_err()
+                    {
+                        return Transition::Complete(Err(anyhow!(
+                            "Container [{}] in pod [{:?}] not found",
+                            container_key,
+                            pod_key
+                        )));
                     }
                 }
             }
