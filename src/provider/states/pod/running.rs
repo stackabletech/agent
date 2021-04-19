@@ -42,12 +42,10 @@ impl State<PodState> for Running {
 
         let (systemd_manager, pod_handle) = {
             let provider_state = shared.read().await;
+            let handles = provider_state.handles.read().await;
             (
                 provider_state.systemd_manager.clone(),
-                provider_state
-                    .handles
-                    .get(&pod_key)
-                    .map(PodHandle::to_owned),
+                handles.get(&pod_key).map(PodHandle::to_owned),
             )
         };
 

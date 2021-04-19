@@ -99,8 +99,9 @@ impl State<PodState> for CreatingService {
             }
 
             {
-                let mut provider_state = shared.write().await;
-                provider_state.insert_container_handle(
+                let provider_state = shared.write().await;
+                let mut handles = provider_state.handles.write().await;
+                handles.insert_container_handle(
                     &PodKey::from(&pod),
                     &ContainerKey::App(String::from(container.name())),
                     &unit.get_name(),

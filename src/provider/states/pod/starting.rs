@@ -27,12 +27,10 @@ impl State<PodState> for Starting {
 
         let (systemd_manager, pod_handle) = {
             let provider_state = shared.read().await;
+            let handles = provider_state.handles.read().await;
             (
                 provider_state.systemd_manager.clone(),
-                provider_state
-                    .handles
-                    .get(&pod_key)
-                    .map(PodHandle::to_owned),
+                handles.get(&pod_key).map(PodHandle::to_owned),
             )
         };
 
@@ -114,8 +112,9 @@ impl State<PodState> for Starting {
                     };
 
                 {
-                    let mut provider_state = shared.write().await;
-                    if provider_state
+                    let provider_state = shared.write().await;
+                    let mut handles = provider_state.handles.write().await;
+                    if handles
                         .set_invocation_id(&pod_key, &container_key, &invocation_id)
                         .is_err()
                     {

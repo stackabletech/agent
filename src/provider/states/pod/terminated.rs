@@ -26,10 +26,11 @@ impl State<PodState> for Terminated {
         let pod_key = &PodKey::from(pod);
 
         let (systemd_manager, pod_handle) = {
-            let mut provider_state = shared.write().await;
+            let provider_state = shared.write().await;
+            let mut handles = provider_state.handles.write().await;
             (
                 provider_state.systemd_manager.clone(),
-                provider_state.handles.remove(&pod_key),
+                handles.remove(&pod_key),
             )
         };
 

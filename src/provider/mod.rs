@@ -62,19 +62,29 @@ impl ContainerHandle {
 }
 
 type PodHandle = ContainerMap<ContainerHandle>;
-type PodHandleMap = HashMap<PodKey, PodHandle>;
 
 /// Provider-level state shared between all pods
 #[derive(Clone)]
 pub struct ProviderState {
-    // TODO Change to Arc.RwLock; Compare with wasi-provider!!!
     handles: Arc<RwLock<PodHandleMap>>,
     client: Client,
     systemd_manager: Arc<SystemdManager>,
 }
 
-// TODO change to impl PodHandleMap
-impl ProviderState {
+#[derive(Debug, Default)]
+struct PodHandleMap {
+    handles: HashMap<PodKey, PodHandle>,
+}
+
+impl PodHandleMap {
+    pub fn get(&self, pod_key: &PodKey) -> Option<&PodHandle> {
+        self.handles.get(pod_key)
+    }
+
+    pub fn remove(&mut self, pod_key: &PodKey) -> Option<PodHandle> {
+        self.handles.remove(pod_key)
+    }
+
     pub fn insert_container_handle(
         &mut self,
         pod_key: &PodKey,
@@ -276,10 +286,11 @@ impl Provider for StackableProvider {
 
         info!("Shared state handles: {:?}", self.shared.handles);
 
+        let handles = self.shared.handles.read().await;
+
         let pod_key = PodKey::new(&namespace, &pod);
         let container_key = ContainerKey::App(container);
-        let container_handle = self
-            .shared
+        let container_handle = handles
             .container_handle(&pod_key, &container_key)
             .ok_or_else(|| {
                 anyhow!(
