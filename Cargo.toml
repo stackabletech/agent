@@ -37,7 +37,7 @@ strum = { version = "0.20", features = ["derive"] }
 strum_macros = "0.20"
 tar = "0.4"
 thiserror = "1.0"
-tokio = { version = "1.4", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.5", features = ["macros", "rt-multi-thread", "time"] }
 url = "2.2"
 
 [dev-dependencies]
