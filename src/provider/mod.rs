@@ -108,7 +108,12 @@ impl PodHandleMap {
             container_handle.invocation_id = Some(String::from(invocation_id));
             Ok(())
         } else {
-            Err(anyhow!("Container handle not found"))
+            Err(anyhow!(
+                "Invocation ID could not be stored. Container handle for
+                pod [{:?}] and container [{}] not found",
+                pod_key,
+                container_key
+            ))
         }
     }
 

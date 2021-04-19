@@ -376,6 +376,13 @@ impl SystemdManager {
     pub fn is_running(&self, unit: &str) -> Result<bool, anyhow::Error> {
         self.get_value::<String>(unit, "ActiveState")
             .map(|v| v.as_str() == Some("active"))
+            .map_err(|dbus_error| {
+                anyhow!(
+                    "Error receiving ActiveState of unit [{}]. {}",
+                    unit,
+                    dbus_error
+                )
+            })
     }
 
     pub fn get_invocation_id(&self, unit: &str) -> Result<String, anyhow::Error> {
