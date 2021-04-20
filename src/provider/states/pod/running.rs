@@ -66,18 +66,20 @@ impl State<PodState> for Running {
             // as we need to run something otherwise we are not doing anything
             let containers = match &pod_handle {
                 Some(containers) => containers,
-                None => return Transition::Complete(Err(anyhow!(format!("No systemd units found for service [{}], this should not happen, please report a bug for this!", pod_state.service_name)))),
+                None => return Transition::Complete(Err(anyhow!("No systemd units found for service [{}], this should not happen, please report a bug for this!", pod_state.service_name))),
             };
 
             for container_handle in containers.values() {
-                match systemd_manager.is_running(&container_handle.service_unit) {
+                let service_unit = &container_handle.service_unit;
+
+                match systemd_manager.is_running(&service_unit) {
                     Ok(true) => trace!(
                         "Unit [{}] of service [{}] still running ...",
-                        &container_handle.service_unit,
+                        service_unit,
                         pod_state.service_name
                     ),
                     Ok(false) => {
-                        info!("Unit [{}] for service [{}] failed unexpectedly, transitioning to failed state.", pod_state.service_name, container_handle.service_unit);
+                        info!("Unit [{}] for service [{}] failed unexpectedly, transitioning to failed state.", pod_state.service_name, service_unit);
                         return Transition::next(
                             self,
                             Failed {
@@ -88,7 +90,7 @@ impl State<PodState> for Running {
                     Err(dbus_error) => {
                         info!(
                             "Error querying ActiveState for Unit [{}] of service [{}]: [{}].",
-                            pod_state.service_name, container_handle.service_unit, dbus_error
+                            pod_state.service_name, service_unit, dbus_error
                         );
                         return Transition::Complete(Err(dbus_error));
                     }

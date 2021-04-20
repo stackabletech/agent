@@ -8,7 +8,8 @@ use log::{debug, error, info};
 use super::setup_failed::SetupFailed;
 use super::starting::Starting;
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
-use crate::provider::{PodState, ProviderState};
+use crate::provider::{ContainerHandle, PodState, ProviderState};
+use anyhow::Error;
 use std::fs::create_dir_all;
 
 #[derive(Default, Debug, TransitionTo)]
@@ -42,7 +43,7 @@ impl State<PodState> for CreatingService {
                 pod_state.service_name, service_directory
             );
             if let Err(error) = create_dir_all(service_directory) {
-                return Transition::Complete(Err(anyhow::Error::from(error)));
+                return Transition::Complete(Err(Error::from(error)));
             }
         }
 
@@ -63,7 +64,7 @@ impl State<PodState> for CreatingService {
                     "Unable to create systemd unit template from pod [{}]: [{}]",
                     service_name, pod_error
                 );
-                return Transition::Complete(Err(anyhow::Error::from(pod_error)));
+                return Transition::Complete(Err(Error::from(pod_error)));
             }
         };
 
@@ -79,7 +80,7 @@ impl State<PodState> for CreatingService {
                 pod_state,
             ) {
                 Ok(unit) => unit,
-                Err(err) => return Transition::Complete(Err(anyhow::Error::from(err))),
+                Err(err) => return Transition::Complete(Err(Error::from(err))),
             };
 
             // Create the service
@@ -104,7 +105,7 @@ impl State<PodState> for CreatingService {
                 handles.insert_container_handle(
                     &PodKey::from(&pod),
                     &ContainerKey::App(String::from(container.name())),
-                    &unit.get_name(),
+                    &ContainerHandle::new(&unit.get_name()),
                 )
             };
 

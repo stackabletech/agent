@@ -15,7 +15,7 @@ use kubelet::{
     container::{ContainerKey, ContainerMap},
     provider::Provider,
 };
-use log::{debug, error, info};
+use log::{debug, error};
 use tokio::{runtime::Runtime, sync::RwLock, task};
 
 use crate::provider::error::StackableError;
@@ -46,23 +46,6 @@ mod repository;
 mod states;
 mod systemdmanager;
 
-#[derive(Clone, Debug)]
-pub struct ContainerHandle {
-    pub service_unit: String,
-    pub invocation_id: Option<String>,
-}
-
-impl ContainerHandle {
-    pub fn new(service_unit: &str) -> Self {
-        ContainerHandle {
-            service_unit: String::from(service_unit),
-            invocation_id: None,
-        }
-    }
-}
-
-type PodHandle = ContainerMap<ContainerHandle>;
-
 /// Provider-level state shared between all pods
 #[derive(Clone)]
 pub struct ProviderState {
@@ -71,33 +54,42 @@ pub struct ProviderState {
     systemd_manager: Arc<SystemdManager>,
 }
 
+/// Contains handles for running pods.
 #[derive(Debug, Default)]
 struct PodHandleMap {
     handles: HashMap<PodKey, PodHandle>,
 }
 
 impl PodHandleMap {
+    /// Returns the pod handle for the given key or [`None`] if not found.
     pub fn get(&self, pod_key: &PodKey) -> Option<&PodHandle> {
         self.handles.get(pod_key)
     }
 
+    /// Removes the pod handle with the given key and returns it.
     pub fn remove(&mut self, pod_key: &PodKey) -> Option<PodHandle> {
         self.handles.remove(pod_key)
     }
 
+    /// Inserts a new [`ContainerHandle`] for the given pod and container key.
+    ///
+    /// A pod handle is created if not already existent.
     pub fn insert_container_handle(
         &mut self,
         pod_key: &PodKey,
         container_key: &ContainerKey,
-        service_unit: &str,
+        container_handle: &ContainerHandle,
     ) {
         self.handles
             .entry(pod_key.to_owned())
             .or_insert_with(ContainerMap::new)
-            .insert(container_key.to_owned(), ContainerHandle::new(service_unit));
-        info!("Handles inserted: {:?}", self.handles);
+            .insert(container_key.to_owned(), container_handle.to_owned());
     }
 
+    /// Sets the invocation ID for the given pod and container key.
+    ///
+    /// If there is no corresponding container handle then an error is
+    /// returned.
     pub fn set_invocation_id(
         &mut self,
         pod_key: &PodKey,
@@ -117,6 +109,8 @@ impl PodHandleMap {
         }
     }
 
+    /// Returns a reference to the container handle with the given pod and
+    /// container key or [`None`] if not found.
     pub fn container_handle(
         &self,
         pod_key: &PodKey,
@@ -127,6 +121,8 @@ impl PodHandleMap {
             .and_then(|pod_handle| pod_handle.get(container_key))
     }
 
+    /// Returns a mutable reference to the container handle with the given
+    /// pod and container key or [`None`] if not found.
     fn container_handle_mut(
         &mut self,
         pod_key: &PodKey,
@@ -135,6 +131,31 @@ impl PodHandleMap {
         self.handles
             .get_mut(pod_key)
             .and_then(|pod_handle| pod_handle.get_mut(container_key))
+    }
+}
+
+/// Represents a handle to a running pod.
+type PodHandle = ContainerMap<ContainerHandle>;
+
+/// Represents a handle to a running container.
+#[derive(Clone, Debug)]
+pub struct ContainerHandle {
+    /// Contains the name of the corresponding service unit.
+    /// Can be used as reference in [`crate::provider::systemdmanager::manager`].
+    pub service_unit: String,
+
+    /// Contains the systemd invocation ID which identifies the
+    /// corresponding entries in the journal.
+    pub invocation_id: Option<String>,
+}
+
+impl ContainerHandle {
+    /// Creates an instance with the given service unit name.
+    pub fn new(service_unit: &str) -> Self {
+        ContainerHandle {
+            service_unit: String::from(service_unit),
+            invocation_id: None,
+        }
     }
 }
 
@@ -287,27 +308,29 @@ impl Provider for StackableProvider {
         container: String,
         mut sender: Sender,
     ) -> anyhow::Result<()> {
-        info!("Logs requested");
-
-        info!("Shared state handles: {:?}", self.shared.handles);
-
-        let handles = self.shared.handles.read().await;
+        debug!("Logs requested");
 
         let pod_key = PodKey::new(&namespace, &pod);
         let container_key = ContainerKey::App(container);
-        let container_handle = handles
-            .container_handle(&pod_key, &container_key)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Container handle for pod [{:?}] and container [{:?}] not found",
-                    pod_key,
-                    container_key
-                )
-            })?;
-        let invocation_id = container_handle.invocation_id.to_owned().ok_or_else(|| {
+
+        let maybe_container_handle = {
+            let handles = self.shared.handles.read().await;
+            handles
+                .container_handle(&pod_key, &container_key)
+                .map(ContainerHandle::to_owned)
+        };
+
+        let container_handle = maybe_container_handle.ok_or_else(|| {
+            anyhow!(
+                "Container handle for pod [{:?}] and container [{:?}] not found",
+                pod_key,
+                container_key
+            )
+        })?;
+        let invocation_id = container_handle.invocation_id.ok_or_else(|| {
             anyhow!(
                 "Invocation ID for container [{}] in pod [{:?}] is unknown. \
-                    The service is probably not started yet.",
+                The service is probably not started yet.",
                 container_key,
                 pod_key
             )
@@ -316,10 +339,7 @@ impl Provider for StackableProvider {
         task::spawn_blocking(move || {
             let result = Runtime::new()
                 .unwrap()
-                .block_on(journal_reader::send_journal_entries(
-                    &mut sender,
-                    &invocation_id,
-                ));
+                .block_on(journal_reader::send_messages(&mut sender, &invocation_id));
 
             if let Err(error) = result {
                 match error.downcast_ref::<SendError>() {

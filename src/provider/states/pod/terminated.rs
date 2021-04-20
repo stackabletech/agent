@@ -38,23 +38,23 @@ impl State<PodState> for Terminated {
         //  shut down and try to remove the rest of the services if one fails (tbd, do we want that?)
         if let Some(containers) = pod_handle {
             for container_handle in containers.values() {
-                info!("Stopping systemd unit [{}]", container_handle.service_unit);
-                if let Err(stop_error) = systemd_manager.stop(&container_handle.service_unit) {
+                let service_unit = &container_handle.service_unit;
+
+                info!("Stopping systemd unit [{}]", service_unit);
+                if let Err(stop_error) = systemd_manager.stop(service_unit) {
                     error!(
                         "Error occurred stopping systemd unit [{}]: [{}]",
-                        container_handle.service_unit, stop_error
+                        service_unit, stop_error
                     );
                     return Transition::Complete(Err(stop_error));
                 }
 
                 // Daemon reload is false here, we'll do that once after all units have been removed
-                info!("Removing systemd unit [{}]", container_handle.service_unit);
-                if let Err(remove_error) =
-                    systemd_manager.remove_unit(&container_handle.service_unit, false)
-                {
+                info!("Removing systemd unit [{}]", service_unit);
+                if let Err(remove_error) = systemd_manager.remove_unit(service_unit, false) {
                     error!(
                         "Error occurred removing systemd unit [{}]: [{}]",
-                        container_handle.service_unit, remove_error
+                        service_unit, remove_error
                     );
                     return Transition::Complete(Err(remove_error));
                 }
