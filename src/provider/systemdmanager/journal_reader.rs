@@ -5,9 +5,6 @@ use kubelet::log::Sender;
 use std::str;
 use systemd::{journal, journal::JournalRef};
 
-/// Length where log lines are truncated at; This number is arbitrarily chosen.
-const MAX_LOG_LINE_LENGTH: usize = 16384;
-
 /// Reads journal entries with the given invocation ID and sends the
 /// contained messages.
 ///
@@ -15,17 +12,16 @@ const MAX_LOG_LINE_LENGTH: usize = 16384;
 /// If `follow` is `true` then messages are sent until the channel of
 /// [`sender`] is closed. In this case an
 /// [`Err(kubelet::log::SendError::ChannelClosed)`] will be returned.
-///
-/// Messages longer than [`MAX_LOG_LINE_LENGTH`] are truncated.
 pub async fn send_messages(sender: &mut Sender, invocation_id: &str) -> Result<()> {
     let mut journal = journal::OpenOptions::default().open()?;
     let journal = journal.match_add("_SYSTEMD_INVOCATION_ID", invocation_id)?;
 
-    journal.set_data_threshold(MAX_LOG_LINE_LENGTH)?;
-
     if let Some(line_count) = sender.tail() {
         journal.seek_tail()?;
-        journal.previous_skip(line_count as u64 + 1)?;
+        let skipped = journal.previous_skip(line_count as u64 + 1)?;
+        if skipped < line_count + 1 {
+            journal.seek_head()?;
+        }
 
         if sender.follow() {
             send_remaining_messages(journal, sender).await?;
