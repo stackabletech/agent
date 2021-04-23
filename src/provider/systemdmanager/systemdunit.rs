@@ -27,9 +27,9 @@ lazy_static! {
         ].iter().cloned().collect();
 }
 
-/// The default timeout for stopping a service - when this has passed systemd will terminate
+/// The default timeout for stopping a service, after this has passed systemd will terminate
 /// the process
-const DEFAULT_TERMINATION_TIMEOUT: i64 = 30;
+const DEFAULT_TERMINATION_TIMEOUT_SECS: i64 = 30;
 
 /// List of sections in the systemd unit
 ///
@@ -233,7 +233,7 @@ impl SystemDUnit {
         // 30 seconds, as this differs from the systemd default for 'TimeOutStopSec` which is 90
         // seconds.
         let termination_timeout = match pod_spec.termination_grace_period_seconds {
-            None => DEFAULT_TERMINATION_TIMEOUT,
+            None => DEFAULT_TERMINATION_TIMEOUT_SECS,
             Some(specified_timeout) => specified_timeout,
         }
         .to_string();
