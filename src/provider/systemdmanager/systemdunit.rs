@@ -27,6 +27,10 @@ lazy_static! {
         ].iter().cloned().collect();
 }
 
+/// The default timeout for stopping a service, after this has passed systemd will terminate
+/// the process
+const DEFAULT_TERMINATION_TIMEOUT_SECS: i64 = 30;
+
 /// List of sections in the systemd unit
 ///
 /// The sections are written in the same order as listed here into the unit file.
@@ -190,14 +194,23 @@ impl SystemDUnit {
             sections: Default::default(),
         };
 
-        let restart_policy = match &pod.as_kube_pod().spec {
-            // if no restart policy is present we default to "never"
-            Some(spec) => spec.restart_policy.as_deref().unwrap_or("Never"),
-            None => "Never",
+        // Kubernetes does not allow creating pods without a spec, so if we do not get one here
+        //something is definitely seriously amiss
+        let pod_spec = match &pod.as_kube_pod().spec {
+            Some(spec) => spec,
+            None => {
+                return Err(PodValidationError {
+                    msg: format!("Got pod without spec: [{}]", unit.name),
+                })
+            }
         };
 
-        // if however one is specified but we do not know about this policy then we do not default
-        // to never but fail the service instead to avoid unpredictable behavior
+        // Get restart policy from pod, if none is specified default to "Never"
+        let restart_policy = pod_spec.restart_policy.as_deref().unwrap_or("Never");
+
+        // Lookup the equivalent systemd restart policy for the configured one
+        // If this lookup fails (which means a restart policy was specified which we do not know
+        // about) then we fail the entire service to avoid unpredictable behavior
         let restart_policy = match RESTART_POLICY_MAP.get(restart_policy) {
             Some(policy) => policy,
             None => {
@@ -211,6 +224,29 @@ impl SystemDUnit {
         };
 
         unit.add_property(Section::Service, "Restart", restart_policy);
+
+        // If `terminationGracePeriodSeconds` was specified in the PodSpec set the value as
+        // 'TimeOutStopSec` on the systemd unit
+        // This means that the service will be killed after this period if it does not shutdown
+        // after receiving a stop command
+        // If it was not specified we use the default value for 'terminationGracePeriodSeconds' of
+        // 30 seconds, as this differs from the systemd default for 'TimeOutStopSec` which is 90
+        // seconds.
+        let termination_timeout = match pod_spec.termination_grace_period_seconds {
+            None => DEFAULT_TERMINATION_TIMEOUT_SECS,
+            Some(specified_timeout) => specified_timeout,
+        }
+        .to_string();
+
+        unit.add_property(Section::Service, "TimeoutStopSec", &termination_timeout);
+
+        if let Some(stop_timeout) = pod_spec.termination_grace_period_seconds {
+            unit.add_property(
+                Section::Service,
+                "TimeoutStopSec",
+                stop_timeout.to_string().as_str(),
+            );
+        }
 
         if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
             if !user_mode {
@@ -478,6 +514,7 @@ mod test {
         indoc! {"
             [Service]
             Restart=always
+            TimeoutStopSec=30
             User=pod-user"}
     )]
     #[case::with_container_on_system_bus(
@@ -517,6 +554,7 @@ mod test {
             Restart=no
             StandardError=journal
             StandardOutput=journal
+            TimeoutStopSec=30
             User=container-user
 
             [Install]
@@ -550,10 +588,28 @@ mod test {
             Restart=no
             StandardError=journal
             StandardOutput=journal
+            TimeoutStopSec=30
 
             [Install]
             WantedBy=multi-user.target"#}
     )]
+    #[case::set_termination_timeout(
+        BusType::System,
+        indoc! {"
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: stackable
+            spec:
+              terminationGracePeriodSeconds: 10
+              containers: []"},
+        "stackable.service",
+        indoc! {"
+            [Service]
+            Restart=no
+            TimeoutStopSec=10"}
+    )]
+
     fn create_unit_from_pod(
         #[case] bus_type: BusType,
         #[case] pod_config: &str,
