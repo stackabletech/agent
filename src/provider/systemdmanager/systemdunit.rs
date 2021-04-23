@@ -27,6 +27,10 @@ lazy_static! {
         ].iter().cloned().collect();
 }
 
+/// The default timeout for stopping a service - when this has passed systemd will terminate
+/// the process
+const DEFAULT_TERMINATION_TIMEOUT: i64 = 30;
+
 /// List of sections in the systemd unit
 ///
 /// The sections are written in the same order as listed here into the unit file.
@@ -225,6 +229,17 @@ impl SystemDUnit {
         // 'TimeOutStopSec` on the systemd unit
         // This means that the service will be killed after this period if it does not shutdown
         // after receiving a stop command
+        // If it was not specified we use the default value for 'terminationGracePeriodSeconds' of
+        // 30 seconds, as this differs from the systemd default for 'TimeOutStopSec` which is 90
+        // seconds.
+        let termination_timeout = match pod_spec.termination_grace_period_seconds {
+            None => DEFAULT_TERMINATION_TIMEOUT,
+            Some(specified_timeout) => specified_timeout,
+        }
+        .to_string();
+
+        unit.add_property(Section::Service, "TimeoutStopSec", &termination_timeout);
+
         if let Some(stop_timeout) = pod_spec.termination_grace_period_seconds {
             unit.add_property(
                 Section::Service,
@@ -499,6 +514,7 @@ mod test {
         indoc! {"
             [Service]
             Restart=always
+            TimeoutStopSec=30
             User=pod-user"}
     )]
     #[case::with_container_on_system_bus(
@@ -538,6 +554,7 @@ mod test {
             Restart=no
             StandardError=journal
             StandardOutput=journal
+            TimeoutStopSec=30
             User=container-user
 
             [Install]
@@ -571,44 +588,28 @@ mod test {
             Restart=no
             StandardError=journal
             StandardOutput=journal
+            TimeoutStopSec=30
 
             [Install]
             WantedBy=multi-user.target"#}
     )]
-    #[case::with_container_on_session_bus_stoptimeout(
-    BusType::Session,
-    indoc! {r#"
+    #[case::set_termination_timeout(
+        BusType::System,
+        indoc! {"
             apiVersion: v1
             kind: Pod
             metadata:
               name: stackable
             spec:
               terminationGracePeriodSeconds: 10
-              containers:
-                - name: test-container.service
-                  command:
-                    - start.sh
-                  securityContext:
-                    windowsOptions:
-                      runAsUserName: container-user
-              securityContext:
-                windowsOptions:
-                  runAsUserName: pod-user"#},
-    "default-stackable-test-container.service",
-    indoc! {r#"
-            [Unit]
-            Description=default-stackable-test-container
-
+              containers: []"},
+        "stackable.service",
+        indoc! {"
             [Service]
-            ExecStart=start.sh
             Restart=no
-            StandardError=journal
-            StandardOutput=journal
-            TimeoutStopSec=10
-
-            [Install]
-            WantedBy=multi-user.target"#}
+            TimeoutStopSec=10"}
     )]
+
     fn create_unit_from_pod(
         #[case] bus_type: BusType,
         #[case] pod_config: &str,
