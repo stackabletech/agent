@@ -9,19 +9,20 @@ use systemd::{journal, journal::JournalRef};
 /// contained messages.
 ///
 /// The options `tail` and `follow` in [`sender`] are taken into account.
-/// If `follow` is `true` then messages are sent until the channel of
-/// [`sender`] is closed. In this case an
+///
+/// If `tail` is set with `Some(line_count)` then only the last
+/// `line_count` messages (or less if not enough available) are sent
+/// otherwise all available messages are sent.
+///
+/// If `follow` is `true` then additionally all new messages are sent
+/// until the channel of [`sender`] is closed. In this case an
 /// [`Err(kubelet::log::SendError::ChannelClosed)`] will be returned.
 pub async fn send_messages(sender: &mut Sender, invocation_id: &str) -> Result<()> {
     let mut journal = journal::OpenOptions::default().open()?;
     let journal = journal.match_add("_SYSTEMD_INVOCATION_ID", invocation_id)?;
 
     if let Some(line_count) = sender.tail() {
-        journal.seek_tail()?;
-        let skipped = journal.previous_skip(line_count as u64 + 1)?;
-        if skipped < line_count + 1 {
-            journal.seek_head()?;
-        }
+        seek_journal_backwards(journal, line_count)?;
 
         if sender.follow() {
             send_remaining_messages(journal, sender).await?;
@@ -35,6 +36,23 @@ pub async fn send_messages(sender: &mut Sender, invocation_id: &str) -> Result<(
     while sender.follow() {
         journal.wait(None)?;
         send_remaining_messages(journal, sender).await?;
+    }
+
+    Ok(())
+}
+
+/// Sets the cursor of the journal to the position before the last `count`
+/// entries so that the next entry is the first of `count` remaining
+/// entries. If the beginning of the journal is reached then the cursor is
+/// set to the position before the first entry.
+fn seek_journal_backwards(journal: &mut JournalRef, count: usize) -> Result<()> {
+    journal.seek_tail()?;
+
+    let entries_to_skip = count + 1;
+    let skipped = journal.previous_skip(entries_to_skip as u64)?;
+    let beginning_reached = skipped < entries_to_skip;
+    if beginning_reached {
+        journal.seek_head()?;
     }
 
     Ok(())
@@ -80,9 +98,11 @@ fn next_message(journal: &mut JournalRef) -> Result<Option<String>> {
             if let Some(value) = entry.value() {
                 String::from_utf8_lossy(value).into()
             } else {
+                // The MESSAGE field contains no text, i.e. `MESSAGE=`.
                 String::new()
             }
         } else {
+            // The journal entry contains no MESSAGE field.
             String::new()
         };
         Some(message)

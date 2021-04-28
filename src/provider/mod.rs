@@ -55,6 +55,14 @@ pub struct ProviderState {
 }
 
 /// Contains handles for running pods.
+///
+/// A `PodHandleMap` maps a pod key to a pod handle which in turn
+/// contains/is a map from a container key to a container handle.
+/// A container handle contains all necessary runtime information like the
+/// name of the service unit.
+///
+/// The implementation of `PodHandleMap` contains functions to access the
+/// parts of this structure while preserving the invariants.
 #[derive(Debug, Default)]
 struct PodHandleMap {
     handles: HashMap<PodKey, PodHandle>,
@@ -308,10 +316,13 @@ impl Provider for StackableProvider {
         container: String,
         mut sender: Sender,
     ) -> anyhow::Result<()> {
-        debug!("Logs requested");
-
         let pod_key = PodKey::new(&namespace, &pod);
         let container_key = ContainerKey::App(container);
+
+        debug!(
+            "Logs for pod [{:?}] and container [{:?}] requested",
+            pod_key, container_key
+        );
 
         let maybe_container_handle = {
             let handles = self.shared.handles.read().await;
