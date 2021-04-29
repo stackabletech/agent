@@ -1,122 +1,145 @@
-use kubelet::pod::state::prelude::*;
-use kubelet::pod::Pod;
-
-use super::failed::Failed;
 use super::running::Running;
-use super::setup_failed::SetupFailed;
-use crate::provider::{PodState, ProviderState};
-use anyhow::anyhow;
-use log::{debug, error, info, warn};
+use crate::provider::{
+    systemdmanager::manager::SystemdManager, PodHandle, PodState, ProviderState,
+};
+
+use anyhow::{anyhow, Result};
+use kubelet::pod::state::prelude::*;
+use kubelet::{
+    container::ContainerKey,
+    pod::{Pod, PodKey},
+};
+use log::{debug, error, info};
 use std::time::Instant;
-use tokio::time::Duration;
+use tokio::time::{self, Duration};
 
 #[derive(Default, Debug, TransitionTo)]
-#[transition_to(Running, Failed, SetupFailed)]
+#[transition_to(Running)]
 pub struct Starting;
 
 #[async_trait::async_trait]
 impl State<PodState> for Starting {
     async fn next(
         self: Box<Self>,
-        provider_state: SharedState<ProviderState>,
+        shared: SharedState<ProviderState>,
         pod_state: &mut PodState,
-        _: Manifest<Pod>,
+        pod: Manifest<Pod>,
     ) -> Transition<PodState> {
-        let systemd_manager = {
-            let provider_state = provider_state.read().await;
-            provider_state.systemd_manager.clone()
-        };
+        let pod = pod.latest();
 
-        if let Some(systemd_units) = &pod_state.service_units {
-            for unit in systemd_units {
-                match systemd_manager.is_running(&unit.get_name()) {
-                    Ok(true) => {
-                        debug!(
-                            "Unit [{}] for service [{}] already running, nothing to do..",
-                            &unit.get_name(),
-                            &pod_state.service_name
-                        );
-                        // Skip rest of loop as the service is already running
-                        continue;
-                    }
-                    Err(dbus_error) => {
-                        debug!(
-                            "Error retrieving activestate of unit [{}] for service [{}]: [{}]",
-                            &unit.get_name(),
-                            &pod_state.service_name,
-                            dbus_error
-                        );
-                        return Transition::Complete(Err(dbus_error));
-                    }
-                    _ => { // nothing to do, just keep going
-                    }
-                }
-                info!("Starting systemd unit [{}]", unit);
-                if let Err(start_error) = systemd_manager.start(&unit.get_name()) {
-                    error!(
-                        "Error occurred starting systemd unit [{}]: [{}]",
-                        unit.get_name(),
-                        start_error
-                    );
-                    return Transition::Complete(Err(start_error));
-                }
-
-                info!("Enabling systemd unit [{}]", unit);
-                if let Err(enable_error) = systemd_manager.enable(&unit.get_name()) {
-                    error!(
-                        "Error occurred starting systemd unit [{}]: [{}]",
-                        unit.get_name(),
-                        enable_error
-                    );
-                    return Transition::Complete(Err(enable_error));
-                }
-
-                let start_time = Instant::now();
-                // TODO: does this need to be configurable, or ar we happy with a hard coded value
-                //  for now. I've briefly looked at the podspec and couldn't identify a good field
-                //  to use for this - also, currently this starts containers (= systemd units) in
-                //  order and waits 10 seconds for every unit, so a service with five containers
-                //  would take 50 seconds until it reported running - which is totally fine in case
-                //  the units actually depend on each other, but a case could be made for waiting
-                //  once at the end
-                while start_time.elapsed().as_secs() < 10 {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    debug!(
-                        "Checking if unit [{}] is still up and running.",
-                        &unit.get_name()
-                    );
-                    match systemd_manager.is_running(&unit.get_name()) {
-                        Ok(true) => debug!(
-                            "Service [{}] still running after [{}] seconds",
-                            &unit.get_name(),
-                            start_time.elapsed().as_secs()
-                        ),
-                        Ok(false) => {
-                            return Transition::Complete(Err(anyhow!(format!(
-                                "Unit [{}] stopped unexpectedly during startup after [{}] seconds.",
-                                &unit.get_name(),
-                                start_time.elapsed().as_secs()
-                            ))))
-                        }
-                        Err(dbus_error) => return Transition::Complete(Err(dbus_error)),
-                    }
-                }
+        match start_service_units(shared, pod_state, &pod).await {
+            Ok(()) => Transition::next(self, Running::default()),
+            Err(error) => {
+                error!("{}", error);
+                Transition::Complete(Err(error))
             }
-        } else {
-            warn!(
-                "No unit definitions found, not starting anything for pod [{}]!",
-                pod_state.service_name
-            );
         }
-        Transition::next(
-            self,
-            Running {
-                ..Default::default()
-            },
-        )
     }
 
-    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
-        Ok(make_status(Phase::Pending, &"Starting"))
+    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> Result<PodStatus> {
+        Ok(make_status(Phase::Pending, "Starting"))
     }
+}
+
+/// Starts the service units for the containers of the given pod.
+///
+/// The units are started and enabled if they are not already running.
+/// The startup is considered successful if the unit is still running
+/// after 10 seconds.
+async fn start_service_units(
+    shared: SharedState<ProviderState>,
+    pod_state: &PodState,
+    pod: &Pod,
+) -> Result<()> {
+    let pod_key = &PodKey::from(pod);
+
+    let (systemd_manager, pod_handle) = {
+        let provider_state = shared.read().await;
+        let handles = provider_state.handles.read().await;
+        (
+            provider_state.systemd_manager.clone(),
+            handles.get(&pod_key).map(PodHandle::to_owned),
+        )
+    };
+
+    for (container_key, container_handle) in pod_handle.unwrap_or_default() {
+        let service_unit = &container_handle.service_unit;
+
+        if systemd_manager.is_running(service_unit)? {
+            debug!(
+                "Unit [{}] for service [{}] is already running. Skip startup.",
+                service_unit, &pod_state.service_name
+            );
+        } else {
+            info!("Starting systemd unit [{}]", service_unit);
+            systemd_manager.start(service_unit)?;
+
+            info!("Enabling systemd unit [{}]", service_unit);
+            systemd_manager.enable(service_unit)?;
+
+            // TODO: does this need to be configurable, or ar we happy with a hard coded value
+            //  for now. I've briefly looked at the podspec and couldn't identify a good field
+            //  to use for this - also, currently this starts containers (= systemd units) in
+            //  order and waits 10 seconds for every unit, so a service with five containers
+            //  would take 50 seconds until it reported running - which is totally fine in case
+            //  the units actually depend on each other, but a case could be made for waiting
+            //  once at the end
+            await_startup(&systemd_manager, service_unit, Duration::from_secs(10)).await?;
+        }
+
+        let invocation_id = systemd_manager.get_invocation_id(service_unit)?;
+        store_invocation_id(shared.clone(), pod_key, &container_key, &invocation_id).await?;
+    }
+
+    Ok(())
+}
+
+/// Checks if the given service unit is still running after the given duration.
+async fn await_startup(
+    systemd_manager: &SystemdManager,
+    service_unit: &str,
+    duration: Duration,
+) -> Result<()> {
+    let start_time = Instant::now();
+    while start_time.elapsed() < duration {
+        time::sleep(Duration::from_secs(1)).await;
+
+        debug!(
+            "Checking if unit [{}] is still up and running.",
+            service_unit
+        );
+
+        if systemd_manager.is_running(service_unit)? {
+            debug!(
+                "Service [{}] still running after [{}] seconds",
+                service_unit,
+                start_time.elapsed().as_secs()
+            );
+        } else {
+            return Err(anyhow!(
+                "Unit [{}] stopped unexpectedly during startup after [{}] seconds.",
+                service_unit,
+                start_time.elapsed().as_secs()
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Stores the given invocation ID into the corresponding container handle.
+async fn store_invocation_id(
+    shared: SharedState<ProviderState>,
+    pod_key: &PodKey,
+    container_key: &ContainerKey,
+    invocation_id: &str,
+) -> Result<()> {
+    debug!(
+        "Set invocation ID [{}] for pod [{:?}] and container [{}].",
+        invocation_id, pod_key, container_key
+    );
+
+    let provider_state = shared.write().await;
+    let mut handles = provider_state.handles.write().await;
+    handles.set_invocation_id(&pod_key, &container_key, invocation_id)
 }

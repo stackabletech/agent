@@ -7,13 +7,16 @@ use anyhow::anyhow;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{Api, Client};
 use kubelet::backoff::ExponentialBackoffStrategy;
-use kubelet::log::Sender;
+use kubelet::log::{SendError, Sender};
 use kubelet::node::Builder;
 use kubelet::pod::state::prelude::*;
-use kubelet::pod::Pod;
-use kubelet::provider::Provider;
+use kubelet::pod::{Pod, PodKey};
+use kubelet::{
+    container::{ContainerKey, ContainerMap},
+    provider::Provider,
+};
 use log::{debug, error};
-use tokio::sync::RwLock;
+use tokio::{runtime::Runtime, sync::RwLock, task};
 
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::{
@@ -25,7 +28,8 @@ use crate::provider::states::pod::terminated::Terminated;
 use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::SystemdManager;
 use kube::error::ErrorResponse;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
+use systemdmanager::journal_reader;
 
 pub struct StackableProvider {
     shared: ProviderState,
@@ -45,8 +49,122 @@ mod systemdmanager;
 /// Provider-level state shared between all pods
 #[derive(Clone)]
 pub struct ProviderState {
+    handles: Arc<RwLock<PodHandleMap>>,
     client: Client,
     systemd_manager: Arc<SystemdManager>,
+}
+
+/// Contains handles for running pods.
+///
+/// A `PodHandleMap` maps a pod key to a pod handle which in turn
+/// contains/is a map from a container key to a container handle.
+/// A container handle contains all necessary runtime information like the
+/// name of the service unit.
+///
+/// The implementation of `PodHandleMap` contains functions to access the
+/// parts of this structure while preserving the invariants.
+#[derive(Debug, Default)]
+struct PodHandleMap {
+    handles: HashMap<PodKey, PodHandle>,
+}
+
+impl PodHandleMap {
+    /// Returns the pod handle for the given key or [`None`] if not found.
+    pub fn get(&self, pod_key: &PodKey) -> Option<&PodHandle> {
+        self.handles.get(pod_key)
+    }
+
+    /// Removes the pod handle with the given key and returns it.
+    pub fn remove(&mut self, pod_key: &PodKey) -> Option<PodHandle> {
+        self.handles.remove(pod_key)
+    }
+
+    /// Inserts a new [`ContainerHandle`] for the given pod and container key.
+    ///
+    /// A pod handle is created if not already existent.
+    pub fn insert_container_handle(
+        &mut self,
+        pod_key: &PodKey,
+        container_key: &ContainerKey,
+        container_handle: &ContainerHandle,
+    ) {
+        self.handles
+            .entry(pod_key.to_owned())
+            .or_insert_with(ContainerMap::new)
+            .insert(container_key.to_owned(), container_handle.to_owned());
+    }
+
+    /// Sets the invocation ID for the given pod and container key.
+    ///
+    /// If there is no corresponding container handle then an error is
+    /// returned.
+    pub fn set_invocation_id(
+        &mut self,
+        pod_key: &PodKey,
+        container_key: &ContainerKey,
+        invocation_id: &str,
+    ) -> anyhow::Result<()> {
+        if let Some(mut container_handle) = self.container_handle_mut(pod_key, container_key) {
+            container_handle.invocation_id = Some(String::from(invocation_id));
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "Invocation ID could not be stored. Container handle for
+                pod [{:?}] and container [{}] not found",
+                pod_key,
+                container_key
+            ))
+        }
+    }
+
+    /// Returns a reference to the container handle with the given pod and
+    /// container key or [`None`] if not found.
+    pub fn container_handle(
+        &self,
+        pod_key: &PodKey,
+        container_key: &ContainerKey,
+    ) -> Option<&ContainerHandle> {
+        self.handles
+            .get(pod_key)
+            .and_then(|pod_handle| pod_handle.get(container_key))
+    }
+
+    /// Returns a mutable reference to the container handle with the given
+    /// pod and container key or [`None`] if not found.
+    fn container_handle_mut(
+        &mut self,
+        pod_key: &PodKey,
+        container_key: &ContainerKey,
+    ) -> Option<&mut ContainerHandle> {
+        self.handles
+            .get_mut(pod_key)
+            .and_then(|pod_handle| pod_handle.get_mut(container_key))
+    }
+}
+
+/// Represents a handle to a running pod.
+type PodHandle = ContainerMap<ContainerHandle>;
+
+/// Represents a handle to a running container.
+#[derive(Clone, Debug)]
+pub struct ContainerHandle {
+    /// Contains the name of the corresponding service unit.
+    /// Can be used as reference in [`crate::provider::systemdmanager::manager`].
+    pub service_unit: String,
+
+    /// Contains the systemd invocation ID which identifies the
+    /// corresponding entries in the journal.
+    pub invocation_id: Option<String>,
+}
+
+impl ContainerHandle {
+    /// Creates an instance with the given service unit name.
+    pub fn new(service_unit: &str) -> Self {
+        ContainerHandle {
+            service_unit: String::from(service_unit),
+            invocation_id: None,
+        }
+    }
 }
 
 impl StackableProvider {
@@ -61,6 +179,7 @@ impl StackableProvider {
         let systemd_manager = Arc::new(SystemdManager::new(session, Duration::from_secs(5))?);
 
         let provider_state = ProviderState {
+            handles: Default::default(),
             client,
             systemd_manager,
         };
@@ -187,17 +306,60 @@ impl Provider for StackableProvider {
             service_name,
             service_uid,
             package,
-            service_units: None,
         })
     }
 
     async fn logs(
         &self,
-        _namespace: String,
-        _pod: String,
-        _container: String,
-        _sender: Sender,
+        namespace: String,
+        pod: String,
+        container: String,
+        mut sender: Sender,
     ) -> anyhow::Result<()> {
+        let pod_key = PodKey::new(&namespace, &pod);
+        let container_key = ContainerKey::App(container);
+
+        debug!(
+            "Logs for pod [{:?}] and container [{:?}] requested",
+            pod_key, container_key
+        );
+
+        let maybe_container_handle = {
+            let handles = self.shared.handles.read().await;
+            handles
+                .container_handle(&pod_key, &container_key)
+                .map(ContainerHandle::to_owned)
+        };
+
+        let container_handle = maybe_container_handle.ok_or_else(|| {
+            anyhow!(
+                "Container handle for pod [{:?}] and container [{:?}] not found",
+                pod_key,
+                container_key
+            )
+        })?;
+        let invocation_id = container_handle.invocation_id.ok_or_else(|| {
+            anyhow!(
+                "Invocation ID for container [{}] in pod [{:?}] is unknown. \
+                The service is probably not started yet.",
+                container_key,
+                pod_key
+            )
+        })?;
+
+        task::spawn_blocking(move || {
+            let result = Runtime::new()
+                .unwrap()
+                .block_on(journal_reader::send_messages(&mut sender, &invocation_id));
+
+            if let Err(error) = result {
+                match error.downcast_ref::<SendError>() {
+                    Some(SendError::ChannelClosed) => (),
+                    _ => error!("Log could not be sent. {}", error),
+                }
+            }
+        });
+
         Ok(())
     }
 }

@@ -7,7 +7,7 @@ use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::StackableError;
 use crate::provider::StackableError::RuntimeError;
 use anyhow::anyhow;
-use dbus::arg::{AppendAll, ReadAll, Variant};
+use dbus::arg::{AppendAll, Get, ReadAll, RefArg, Variant};
 use dbus::blocking::SyncConnection;
 use dbus::strings::Member;
 use dbus::Path;
@@ -373,7 +373,31 @@ impl SystemdManager {
         }
     }
 
-    pub fn is_running(&self, unit: &str) -> Result<bool, anyhow::Error> {
+    /// Checks if the ActiveState of the given unit is set to active.
+    pub fn is_running(&self, unit: &str) -> anyhow::Result<bool> {
+        self.get_value::<String>(unit, "ActiveState")
+            .map(|v| v.as_str() == Some("active"))
+            .map_err(|dbus_error| {
+                anyhow!(
+                    "Error receiving ActiveState of unit [{}]. {}",
+                    unit,
+                    dbus_error
+                )
+            })
+    }
+
+    /// Retrieves the invocation ID for the given unit.
+    pub fn get_invocation_id(&self, unit: &str) -> anyhow::Result<String> {
+        self.get_value::<Vec<u8>>(unit, "InvocationID")
+            .map(|Variant(vec)| vec.iter().map(|byte| format!("{:02x}", byte)).collect())
+    }
+
+    /// Retrieves the value for the given property of the given unit.
+    pub fn get_value<T: for<'a> Get<'a>>(
+        &self,
+        unit: &str,
+        property: &str,
+    ) -> anyhow::Result<Variant<T>> {
         // We are using `LoadUnit` here, as GetUnit can fail seemingly at random, when the unit
         // is not loaded due to systemd garbage collection.
         // see https://github.com/systemd/systemd/issues/1929 for more information
@@ -385,17 +409,15 @@ impl SystemdManager {
             .connection
             .with_proxy(SYSTEMD_DESTINATION, &unit_node, self.timeout);
 
-        let active_state = proxy
+        let value = proxy
             .method_call(
                 DBUS_PROPERTIES_INTERFACE,
                 "Get",
-                ("org.freedesktop.systemd1.Unit", "ActiveState"),
+                ("org.freedesktop.systemd1.Unit", property),
             )
-            .map(|r: (Variant<String>,)| r.0)?;
+            .map(|r: (Variant<T>,)| r.0)?;
 
-        // TODO: I think this can panic, there should be a get() method on Variant that returns
-        //   an option, but I've not yet been able to get that to work
-        Ok(active_state.0 == "active")
+        Ok(value)
     }
 
     // Symlink a unit file into the systemd unit folder

@@ -5,7 +5,6 @@ use kubelet::pod::state::prelude::*;
 use kubelet::pod::{Pod, Status};
 
 use crate::provider::repository::package::Package;
-use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::ProviderState;
 
 pub(crate) mod creating_config;
@@ -29,7 +28,6 @@ pub struct PodState {
     pub service_name: String,
     pub service_uid: String,
     pub package: Package,
-    pub service_units: Option<Vec<SystemDUnit>>,
 }
 
 impl PodState {

@@ -1,4 +1,4 @@
-use kubelet::pod::state::prelude::*;
+use kubelet::pod::{state::prelude::*, PodKey};
 use log::{error, info, warn};
 
 use crate::provider::{PodState, ProviderState};
@@ -13,40 +13,48 @@ pub struct Terminated {
 impl State<PodState> for Terminated {
     async fn next(
         self: Box<Self>,
-        provider_state: SharedState<ProviderState>,
+        shared: SharedState<ProviderState>,
         pod_state: &mut PodState,
-        _pod: Manifest<Pod>,
+        pod: Manifest<Pod>,
     ) -> Transition<PodState> {
         info!(
             "Pod {} was terminated, stopping service!",
             &pod_state.service_name
         );
 
-        let systemd_manager = {
-            let provider_state = provider_state.read().await;
-            provider_state.systemd_manager.clone()
+        let pod = pod.latest();
+        let pod_key = &PodKey::from(pod);
+
+        let (systemd_manager, pod_handle) = {
+            let provider_state = shared.write().await;
+            let mut handles = provider_state.handles.write().await;
+            (
+                provider_state.systemd_manager.clone(),
+                handles.remove(&pod_key),
+            )
         };
 
         // TODO: We need some additional error handling here, wait for the services to actually
         //  shut down and try to remove the rest of the services if one fails (tbd, do we want that?)
-        if let Some(systemd_units) = &pod_state.service_units {
-            for unit in systemd_units {
-                info!("Stopping systemd unit [{}]", unit);
-                if let Err(stop_error) = systemd_manager.stop(&unit.get_name()) {
+        if let Some(containers) = pod_handle {
+            for container_handle in containers.values() {
+                let service_unit = &container_handle.service_unit;
+
+                info!("Stopping systemd unit [{}]", service_unit);
+                if let Err(stop_error) = systemd_manager.stop(service_unit) {
                     error!(
                         "Error occurred stopping systemd unit [{}]: [{}]",
-                        unit.get_name(),
-                        stop_error
+                        service_unit, stop_error
                     );
                     return Transition::Complete(Err(stop_error));
                 }
 
                 // Daemon reload is false here, we'll do that once after all units have been removed
-                info!("Removing systemd unit [{}]", &unit);
-                if let Err(remove_error) = systemd_manager.remove_unit(&unit.get_name(), false) {
+                info!("Removing systemd unit [{}]", service_unit);
+                if let Err(remove_error) = systemd_manager.remove_unit(service_unit, false) {
                     error!(
                         "Error occurred removing systemd unit [{}]: [{}]",
-                        unit, remove_error
+                        service_unit, remove_error
                     );
                     return Transition::Complete(Err(remove_error));
                 }
