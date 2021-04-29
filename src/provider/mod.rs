@@ -367,12 +367,13 @@ impl Provider for StackableProvider {
 #[cfg(test)]
 mod test {
     use super::*;
-    use indoc::indoc;
     use rstest::rstest;
+    use std::ops::Deref;
+    use std::str::FromStr;
 
     #[test]
     fn try_to_get_package_from_complete_configuration() {
-        let pod = parse_pod_from_yaml(indoc! {"
+        let pod = "
             apiVersion: v1
             kind: Pod
             metadata:
@@ -381,7 +382,9 @@ mod test {
               containers:
               - name: kafka
                 image: kafka:2.7
-        "});
+        "
+        .parse::<TestPod>()
+        .unwrap();
 
         let maybe_package = StackableProvider::get_package(&pod);
 
@@ -394,7 +397,8 @@ mod test {
     }
 
     #[rstest]
-    #[case(indoc! {"
+    #[case(
+        "
             apiVersion: v1
             kind: Pod
             metadata:
@@ -405,10 +409,11 @@ mod test {
                 image: kafka:2.7
               - name: zookeeper
                 image: zookeeper:3.6.2
-        "},
+        ",
         "Only one container is supported in the PodSpec."
     )]
-    #[case(indoc! {"
+    #[case(
+        "
             apiVersion: v1
             kind: Pod
             metadata:
@@ -416,10 +421,11 @@ mod test {
             spec:
               containers:
               - name: kafka
-        "},
+        ",
         "Unable to get package reference from pod [test]: Image is required."
     )]
-    #[case(indoc! {"
+    #[case(
+        "
             apiVersion: v1
             kind: Pod
             metadata:
@@ -428,15 +434,13 @@ mod test {
               containers:
               - name: kafka
                 image: kafka
-        "},
+        ",
         "Unable to get package reference from pod [test]: Tag is required."
     )]
     fn try_to_get_package_from_insufficient_configuration(
-        #[case] pod_config: &str,
+        #[case] pod: TestPod,
         #[case] expected_err: &str,
     ) {
-        let pod = parse_pod_from_yaml(pod_config);
-
         let maybe_package = StackableProvider::get_package(&pod);
 
         if let Err(PodValidationError { msg }) = maybe_package {
@@ -446,8 +450,46 @@ mod test {
         }
     }
 
-    fn parse_pod_from_yaml(pod_config: &str) -> Pod {
-        let kube_pod: k8s_openapi::api::core::v1::Pod = serde_yaml::from_str(pod_config).unwrap();
-        Pod::from(kube_pod)
+    /// Encapsulates a [`Pod`] with implementations for [`FromStr`] to
+    /// deserialize from YAML and [`Deref`] to dereference into a [`Pod`].
+    ///
+    /// This struct can also be used in rstest cases.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// #[rstest]
+    /// #[case("
+    ///    apiVersion: v1
+    ///    kind: Pod
+    ///    metadata:
+    ///      name: test
+    ///    spec:
+    ///      containers:
+    ///      - name: kafka
+    ///        image: kafka
+    ///   ")]
+    /// fn test(#[case] pod: TestPod) {
+    ///     do_with_pod(&pod);
+    /// }
+    /// ```
+    #[derive(Debug)]
+    pub struct TestPod(Pod);
+
+    impl FromStr for TestPod {
+        type Err = serde_yaml::Error;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let kube_pod: k8s_openapi::api::core::v1::Pod = serde_yaml::from_str(s)?;
+            Ok(TestPod(Pod::from(kube_pod)))
+        }
+    }
+
+    impl Deref for TestPod {
+        type Target = Pod;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
     }
 }

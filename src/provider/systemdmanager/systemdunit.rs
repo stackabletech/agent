@@ -491,6 +491,7 @@ impl Display for SystemDUnit {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::provider::test::TestPod;
     use dbus::channel::BusType;
     use indoc::indoc;
     use rstest::rstest;
@@ -499,7 +500,7 @@ mod test {
     #[rstest]
     #[case::without_containers_on_system_bus(
         BusType::System,
-        indoc! {"
+        "
             apiVersion: v1
             kind: Pod
             metadata:
@@ -509,7 +510,7 @@ mod test {
               restartPolicy: Always
               securityContext:
                 windowsOptions:
-                  runAsUserName: pod-user"},
+                  runAsUserName: pod-user",
         "stackable.service",
         indoc! {"
             [Service]
@@ -519,7 +520,7 @@ mod test {
     )]
     #[case::with_container_on_system_bus(
         BusType::System,
-        indoc! {r#"
+        r#"
             apiVersion: v1
             kind: Pod
             metadata:
@@ -542,7 +543,7 @@ mod test {
                       runAsUserName: container-user
               securityContext:
                 windowsOptions:
-                  runAsUserName: pod-user"#},
+                  runAsUserName: pod-user"#,
         "default-stackable-test-container.service",
         indoc! {r#"
             [Unit]
@@ -562,7 +563,7 @@ mod test {
     )]
     #[case::with_container_on_session_bus(
         BusType::Session,
-        indoc! {r#"
+        r#"
             apiVersion: v1
             kind: Pod
             metadata:
@@ -577,7 +578,7 @@ mod test {
                       runAsUserName: container-user
               securityContext:
                 windowsOptions:
-                  runAsUserName: pod-user"#},
+                  runAsUserName: pod-user"#,
         "default-stackable-test-container.service",
         indoc! {r#"
             [Unit]
@@ -595,14 +596,14 @@ mod test {
     )]
     #[case::set_termination_timeout(
         BusType::System,
-        indoc! {"
+        "
             apiVersion: v1
             kind: Pod
             metadata:
               name: stackable
             spec:
               terminationGracePeriodSeconds: 10
-              containers: []"},
+              containers: []",
         "stackable.service",
         indoc! {"
             [Service]
@@ -612,12 +613,10 @@ mod test {
 
     fn create_unit_from_pod(
         #[case] bus_type: BusType,
-        #[case] pod_config: &str,
+        #[case] pod: TestPod,
         #[case] expected_unit_file_name: &str,
         #[case] expected_unit_file_content: &str,
     ) {
-        let pod = parse_pod_from_yaml(pod_config);
-
         let mut result = SystemDUnit::new_from_pod(&pod, bus_type == BusType::Session);
 
         if let Ok(common_properties) = &result {
@@ -653,10 +652,5 @@ mod test {
         } else {
             panic!("Systemd unit expected but got {:?}", result);
         }
-    }
-
-    fn parse_pod_from_yaml(pod_config: &str) -> Pod {
-        let kube_pod: k8s_openapi::api::core::v1::Pod = serde_yaml::from_str(pod_config).unwrap();
-        Pod::from(kube_pod)
     }
 }
