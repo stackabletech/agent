@@ -1196,7 +1196,7 @@ dependencies = [
 [[package]]
 name = "krator"
 version = "0.2.0"
-source = "git+https://github.com/stackabletech/krustlet.git?rev=297fe2c29207dc0c26233b906de243ca6e17148c#297fe2c29207dc0c26233b906de243ca6e17148c"
+source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#297fe2c29207dc0c26233b906de243ca6e17148c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1216,7 +1216,7 @@ dependencies = [
 [[package]]
 name = "krator-derive"
 version = "0.1.0"
-source = "git+https://github.com/stackabletech/krustlet.git?rev=297fe2c29207dc0c26233b906de243ca6e17148c#297fe2c29207dc0c26233b906de243ca6e17148c"
+source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#297fe2c29207dc0c26233b906de243ca6e17148c"
 dependencies = [
  "quote",
  "syn",
@@ -1290,7 +1290,7 @@ dependencies = [
 [[package]]
 name = "kubelet"
 version = "0.7.0"
-source = "git+https://github.com/stackabletech/krustlet.git?rev=297fe2c29207dc0c26233b906de243ca6e17148c#297fe2c29207dc0c26233b906de243ca6e17148c"
+source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#297fe2c29207dc0c26233b906de243ca6e17148c"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1377,8 +1377,7 @@ dependencies = [
 [[package]]
 name = "libsystemd-sys"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e03fd580bcecda68dcdcd5297085ade6a3dc552cd8b030d2b94a9b089ef7ab8"
+source = "git+https://github.com/stackabletech/rust-systemd.git?branch=stackable_patches_v0.8.2#c0361c69362ebf9c073493bc2e4e82d0bd5552b3"
 dependencies = [
  "build-env",
  "libc",
@@ -1639,7 +1638,7 @@ dependencies = [
 [[package]]
 name = "oci-distribution"
 version = "0.6.0"
-source = "git+https://github.com/stackabletech/krustlet.git?rev=297fe2c29207dc0c26233b906de243ca6e17148c#297fe2c29207dc0c26233b906de243ca6e17148c"
+source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#297fe2c29207dc0c26233b906de243ca6e17148c"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -2782,8 +2781,7 @@ dependencies = [
 [[package]]
 name = "systemd"
 version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f722cabda922e471742300045f56dbaa53fafbb4520fca304e51258019bfe91d"
+source = "git+https://github.com/stackabletech/rust-systemd.git?branch=stackable_patches_v0.8.2#c0361c69362ebf9c073493bc2e4e82d0bd5552b3"
 dependencies = [
  "cstr-argument",
  "foreign-types 0.5.0",
