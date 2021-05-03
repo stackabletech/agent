@@ -364,11 +364,16 @@ impl State<PodState> for CreatingConfig {
             );
         };
 
-        // Write the config files
-        let config_dir = pod_state.get_service_config_directory();
         for (target_path, volume) in volume_mounts {
+            let joined_target_path = if target_path.starts_with("{{packageroot}}") {
+                pod_state
+                    .get_service_package_directory()
+                    .join(target_path.replace("{{packageroot}}/", ""))
+            } else {
+                pod_state.get_service_config_directory().join(&target_path)
+            };
+
             let volume = volume.clone();
-            let joined_target_path = config_dir.join(&target_path);
 
             debug!("Applying config map {} to {}", volume, target_path);
             if let Some(volume_content) = config_map_data.get(&volume) {
