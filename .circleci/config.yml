@@ -2,17 +2,18 @@
 version: 2.1
 
 commands:
-  foo:
+  rustbuild:
     steps:
-      - run: which java
+      - checkout
+      - run: cargo --version
 
 executors:
   docker-executor:
     docker:
-      - image: circleci/openjdk
+      - image: cimg/rust:1.51.0
 
 jobs:
   build: 
     executor: docker-executor
     steps:
-      - foo
+      - rustbuild
