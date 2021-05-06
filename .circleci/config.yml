@@ -5,7 +5,8 @@ commands:
   rustbuild:
     steps:
       - checkout
-      - run: cargo --version
+      - run: cargo build --verbose 
+      - run: cargo test --verbose 
 
 executors:
   docker-executor:
