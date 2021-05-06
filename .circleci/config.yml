@@ -4,9 +4,7 @@ version: 2.1
 commands:
   foo:
     steps:
-      - run: |
-          which jdk
-          java --version
+      - run: which jdk
 
 executors:
   docker-executor:
