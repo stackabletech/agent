@@ -492,10 +492,15 @@ impl Display for SystemDUnit {
 mod test {
     use super::*;
     use crate::provider::test::TestPod;
-    use dbus::channel::BusType;
     use indoc::indoc;
     use rstest::rstest;
     use std::path::PathBuf;
+
+    #[derive(PartialEq)]
+    enum BusType {
+        Session,
+        System,
+    }
 
     #[rstest]
     #[case::without_containers_on_system_bus(

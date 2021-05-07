@@ -48,12 +48,12 @@ For the build process to work these need to be installed on the build system.
 |Distribution |Package Names
 
 |Ubuntu
-a|- libdbus-1-dev
-- pkg-config
-- libdbus-1-3
+a|- pkg-config
+- libsystemd-dev
 
 |Centos
-a|- dbus-devel
+a|- pkg-config
+- libsystemd-dev
 
 |===
 
