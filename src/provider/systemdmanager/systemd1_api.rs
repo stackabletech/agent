@@ -1,3 +1,4 @@
+//! Binding to the D-Bus interface of systemd
 use fmt::Display;
 use inflector::cases::kebabcase;
 use serde::{de::Visitor, Deserialize, Serialize};
@@ -149,13 +150,26 @@ impl Type for StopMode {
 ///
 /// Currently not all methods of the systemd object are exposed.
 ///
-/// # Example
+/// # Examples
+///
+/// Synchronous API:
 ///
 /// ```
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::ManagerProxy;
 /// let connection = zbus::Connection::new_session().unwrap();
 /// let manager = ManagerProxy::new(&connection).unwrap();
 /// let unit = manager.load_unit("my_service.service").unwrap();
+/// ```
+///
+/// Asynchronous API:
+///
+/// ```
+/// # use stackable_agent::provider::systemdmanager::systemd1_api::AsyncManagerProxy;
+/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+/// let connection = zbus::azync::Connection::new_session().await.unwrap();
+/// let manager = AsyncManagerProxy::new(&connection).unwrap();
+/// let unit = manager.load_unit("my_service.service").await.unwrap();
+/// # });
 /// ```
 #[dbus_proxy(
     default_service = "org.freedesktop.systemd1",
@@ -279,7 +293,7 @@ impl Display for InvocationId {
 
 /// A systemd unit object
 ///
-/// A [`UnitProxy`] can be retrieved e.g. by [`Manager::load_unit`].
+/// A [`UnitProxy`] can be retrieved e.g. by [`ManagerProxy::load_unit`].
 ///
 /// Currently not all methods of the systemd object are exposed.
 #[dbus_proxy(
@@ -299,7 +313,7 @@ trait Unit {
 
 /// A systemd job object
 ///
-/// The [`JobProxy`] is returned by various functions in [`Manager`].
+/// The [`JobProxy`] is returned by various functions in [`ManagerProxy`].
 ///
 /// Currently no methods of the systemd object are exposed.
 #[dbus_proxy(

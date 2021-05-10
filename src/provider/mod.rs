@@ -176,7 +176,7 @@ impl StackableProvider {
         session: bool,
         pod_cidr: String,
     ) -> Result<Self, StackableError> {
-        let systemd_manager = Arc::new(SystemdManager::new(session)?);
+        let systemd_manager = Arc::new(SystemdManager::new(session).await?);
 
         let provider_state = ProviderState {
             handles: Default::default(),

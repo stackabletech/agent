@@ -186,7 +186,7 @@ impl SystemDUnit {
     /// Parse a pod object and retrieve the generic settings which will be the same across
     /// all service units created for containers in this pod.
     /// This is designed to then be used as `common_properties` parameter when calling
-    ///[`SystemdUnit::new`]
+    ///[`SystemDUnit::new`]
     pub fn new_from_pod(pod: &Pod, user_mode: bool) -> Result<Self, StackableError> {
         let mut unit = SystemDUnit {
             name: pod.name().to_string(),

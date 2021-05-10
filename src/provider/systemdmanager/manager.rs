@@ -3,7 +3,7 @@
 //! The module offers the ability to create, remove, start, stop, enable and
 //! disable systemd units.
 //!
-use super::systemd1_api::{ActiveState, ManagerProxy, StartMode, StopMode};
+use super::systemd1_api::{ActiveState, AsyncManagerProxy, StartMode, StopMode};
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::StackableError;
 use crate::provider::StackableError::RuntimeError;
@@ -13,7 +13,7 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use zbus::Connection;
+use zbus::azync::Connection;
 
 /// Enum that lists the supported unit types
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -27,34 +27,24 @@ pub enum UnitTypes {
 /// Use [`SystemdManager::new`] to create a new instance.
 pub struct SystemdManager {
     units_directory: PathBuf,
-    proxy: ManagerProxy<'static>,
+    proxy: AsyncManagerProxy<'static>,
     user_mode: bool, // TODO Use the same naming (user_mode or session_mode) everywhere
-}
-
-/// By default the manager will connect to the system-wide instance of systemd,
-/// which requires root access to the os.
-impl Default for SystemdManager {
-    fn default() -> Self {
-        // If this panics we broke something in the code, as this is all constant values that
-        // should work
-        SystemdManager::new(false).unwrap()
-    }
 }
 
 impl SystemdManager {
     /// Creates a new instance, takes a flag whether to run within the
     /// user session or manage services system-wide.
-    pub fn new(user_mode: bool) -> Result<Self, StackableError> {
+    pub async fn new(user_mode: bool) -> Result<Self, StackableError> {
         // Connect to session or system bus depending on the value of [user_mode]
         let connection = if user_mode {
-            Connection::new_session().map_err(|e| RuntimeError {
+            Connection::new_session().await.map_err(|e| RuntimeError {
                 msg: format!(
                     "Could not create a connection to the systemd session bus: {}",
                     e
                 ),
             })?
         } else {
-            Connection::new_system().map_err(|e| RuntimeError {
+            Connection::new_system().await.map_err(|e| RuntimeError {
                 msg: format!(
                     "Could not create a connection to the systemd system-wide bus: {}",
                     e
@@ -63,7 +53,7 @@ impl SystemdManager {
         };
 
         let proxy =
-            ManagerProxy::new(&connection).map_err(|e| RuntimeError { msg: e.to_string() })?;
+            AsyncManagerProxy::new(&connection).map_err(|e| RuntimeError { msg: e.to_string() })?;
 
         // Depending on whether we are supposed to run in user space or system-wide
         // we'll pick the default directory to initialize the systemd manager with
@@ -105,21 +95,21 @@ impl SystemdManager {
     }
 
     /// Write the proper unit file for [unit] to disk.
-    /// The location of the unit file is determined by the value of [unit_file_path]:
+    /// The location of the unit file is determined by the value of `unit_file_path`:
     ///
     /// * None, the unit file will be created in the base directory that this manager was initialized
     /// with, which is either /lib/systemd/system or ~/.config/systemd/user depending on the value of
-    /// [session].
+    /// `session`.
     /// * Some<PathBuf>, the unit file will be created at this location and linked into the proper
     /// systemd unit directory
     ///
-    /// [force] determines if an existing unit file should be overwritten, if no  external unit file
-    /// path is specified in [unit_file_path]. If this is false and the target file exists an error
+    /// `force` determines if an existing unit file should be overwritten, if no  external unit file
+    /// path is specified in `unit_file_path`. If this is false and the target file exists an error
     /// is returned.
     ///
-    /// The value of [daemon_reload] controls whether a daemon reload is triggered after creating or
+    /// The value of `daemon_reload` controls whether a daemon reload is triggered after creating or
     /// linking the unit file.
-    pub fn create_unit(
+    pub async fn create_unit(
         &self,
         unit: &SystemDUnit,
         unit_file_path: Option<PathBuf>,
@@ -199,12 +189,13 @@ impl SystemdManager {
 
         // If this is a linked unit file we need to call out to systemd to link this file
         if linked_unit_file {
-            self.link_unit_file(&target_file.into_os_string().to_string_lossy(), force)?;
+            self.link_unit_file(&target_file.into_os_string().to_string_lossy(), force)
+                .await?;
         }
 
         // Perform daemon reload if requested
         if daemon_reload {
-            self.reload()?;
+            self.reload().await?;
         }
         Ok(())
     }
@@ -218,9 +209,9 @@ impl SystemdManager {
     ///
     /// Calling this function means an implicit disabling of the service, if it was enabled.
     ///
-    pub fn remove_unit(&self, unit: &str, daemon_reload: bool) -> anyhow::Result<()> {
+    pub async fn remove_unit(&self, unit: &str, daemon_reload: bool) -> anyhow::Result<()> {
         debug!("Disabling unit [{}]", unit);
-        if let Err(disable_error) = self.disable(unit) {
+        if let Err(disable_error) = self.disable(unit).await {
             debug!(
                 "Error disabling systemd unit [{}]: [{}]",
                 unit, disable_error
@@ -238,7 +229,7 @@ impl SystemdManager {
         }
 
         if daemon_reload {
-            self.reload()?;
+            self.reload().await?;
         }
         Ok(())
     }
@@ -249,13 +240,13 @@ impl SystemdManager {
     /// to work.
     ///
     /// For a unit file to be _known_ it needs to either be located in the systemd unit folder, or
-    /// linked into that folder - both actions can be performed by calling [create_unit]
-    pub fn enable(&self, unit: &str) -> anyhow::Result<()> {
+    /// linked into that folder - both actions can be performed by calling [`SystemdManager::create_unit`]
+    pub async fn enable(&self, unit: &str) -> anyhow::Result<()> {
         // We don't do any checking around this and simply trust the user that either the name
         // of an existing and linked service was provided or this is an absolute path
         debug!("Trying to enable systemd unit [{}]", unit);
 
-        match self.proxy.enable_unit_files(&[unit], false, true) {
+        match self.proxy.enable_unit_files(&[unit], false, true).await {
             Ok(_) => {
                 debug!("Successfully enabled service [{}]", unit);
                 Ok(())
@@ -266,9 +257,9 @@ impl SystemdManager {
 
     // Disable the systemd unit - which effectively means removing the symlink from the
     // multi-user.target subdirectory.
-    pub fn disable(&self, unit: &str) -> anyhow::Result<()> {
+    pub async fn disable(&self, unit: &str) -> anyhow::Result<()> {
         debug!("Trying to disable systemd unit [{}]", unit);
-        match self.proxy.disable_unit_files(&[unit], false) {
+        match self.proxy.disable_unit_files(&[unit], false).await {
             Ok(_) => {
                 debug!("Successfully disabled service [{}]", unit);
                 Ok(())
@@ -280,11 +271,11 @@ impl SystemdManager {
     /// Attempts to start a systemd unit
     /// [unit] is expected to be the name (including .<unittype>) of a service that is known to
     /// systemd at the time this is called.
-    /// To make a service known please take a look at the [enable] function.
-    pub fn start(&self, unit: &str) -> anyhow::Result<()> {
+    /// To make a service known please take a look at the [`SystemdManager::enable`] function.
+    pub async fn start(&self, unit: &str) -> anyhow::Result<()> {
         debug!("Attempting to start unit {}", unit);
 
-        match self.proxy.start_unit(unit, StartMode::Fail) {
+        match self.proxy.start_unit(unit, StartMode::Fail).await {
             Ok(result) => {
                 debug!("Successfully started service [{}]: [{:?}]", unit, result);
                 Ok(())
@@ -296,11 +287,11 @@ impl SystemdManager {
     /// Attempts to stop a systemd unit
     /// [unit] is expected to be the name (including .<unittype>) of a service that is known to
     /// systemd at the time this is called.
-    /// To make a service known please take a look at the [enable] function.
-    pub fn stop(&self, unit: &str) -> anyhow::Result<()> {
+    /// To make a service known please take a look at the [`SystemdManager::enable`] function.
+    pub async fn stop(&self, unit: &str) -> anyhow::Result<()> {
         debug!("Trying to stop systemd unit [{}]", unit);
 
-        match self.proxy.stop_unit(unit, StopMode::Fail) {
+        match self.proxy.stop_unit(unit, StopMode::Fail).await {
             Ok(result) => {
                 debug!("Successfully stopped service [{}]: [{:?}]", unit, result);
                 Ok(())
@@ -313,10 +304,10 @@ impl SystemdManager {
     // discover changes that have been performed since the last reload
     // This needs to be done after creating a new service unit before it can be targeted by
     // start / stop and similar commands.
-    pub fn reload(&self) -> anyhow::Result<()> {
+    pub async fn reload(&self) -> anyhow::Result<()> {
         debug!("Performing daemon-reload..");
 
-        match self.proxy.reload() {
+        match self.proxy.reload().await {
             Ok(_) => {
                 debug!("Successfully performed daemon-reload");
                 Ok(())
@@ -326,19 +317,23 @@ impl SystemdManager {
     }
 
     /// Checks if the ActiveState of the given unit is set to active.
-    pub fn is_running(&self, unit: &str) -> anyhow::Result<bool> {
+    pub async fn is_running(&self, unit: &str) -> anyhow::Result<bool> {
         self.proxy
-            .load_unit(unit)?
+            .load_unit(unit)
+            .await?
             .active_state()
+            .await
             .map(|state| state == ActiveState::Active)
             .map_err(|e| anyhow!("Error receiving ActiveState of unit [{}]. {}", unit, e))
     }
 
     /// Retrieves the invocation ID for the given unit.
-    pub fn get_invocation_id(&self, unit: &str) -> anyhow::Result<String> {
+    pub async fn get_invocation_id(&self, unit: &str) -> anyhow::Result<String> {
         self.proxy
-            .load_unit(unit)?
+            .load_unit(unit)
+            .await?
             .invocation_id()
+            .await
             .map(|invocation_id| invocation_id.to_string())
             .map_err(|e| anyhow!("Error receiving InvocationID of unit [{}]. {}", unit, e))
     }
@@ -346,9 +341,9 @@ impl SystemdManager {
     // Symlink a unit file into the systemd unit folder
     // This is not public on purpose, as [create] should be the normal way to link unit files
     // when using this crate
-    fn link_unit_file(&self, unit: &str, force: bool) -> anyhow::Result<()> {
+    async fn link_unit_file(&self, unit: &str, force: bool) -> anyhow::Result<()> {
         debug!("Linking [{}]", unit);
-        self.proxy.link_unit_files(&[unit], false, force)?;
+        self.proxy.link_unit_files(&[unit], false, force).await?;
         Ok(())
     }
 

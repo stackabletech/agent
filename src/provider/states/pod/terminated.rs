@@ -41,7 +41,7 @@ impl State<PodState> for Terminated {
                 let service_unit = &container_handle.service_unit;
 
                 info!("Stopping systemd unit [{}]", service_unit);
-                if let Err(stop_error) = systemd_manager.stop(service_unit) {
+                if let Err(stop_error) = systemd_manager.stop(service_unit).await {
                     error!(
                         "Error occurred stopping systemd unit [{}]: [{}]",
                         service_unit, stop_error
@@ -51,7 +51,7 @@ impl State<PodState> for Terminated {
 
                 // Daemon reload is false here, we'll do that once after all units have been removed
                 info!("Removing systemd unit [{}]", service_unit);
-                if let Err(remove_error) = systemd_manager.remove_unit(service_unit, false) {
+                if let Err(remove_error) = systemd_manager.remove_unit(service_unit, false).await {
                     error!(
                         "Error occurred removing systemd unit [{}]: [{}]",
                         service_unit, remove_error
@@ -67,7 +67,7 @@ impl State<PodState> for Terminated {
         }
 
         info!("Performing daemon-reload");
-        return match systemd_manager.reload() {
+        return match systemd_manager.reload().await {
             Ok(()) => Transition::Complete(Ok(())),
             Err(reload_error) => {
                 error!("Failed to perform daemon-reload: [{}]", reload_error);
