@@ -156,9 +156,9 @@ impl Type for StopMode {
 ///
 /// ```
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::ManagerProxy;
-/// let connection = zbus::Connection::new_session().unwrap();
+/// let connection = zbus::Connection::new_system().unwrap();
 /// let manager = ManagerProxy::new(&connection).unwrap();
-/// let unit = manager.load_unit("my_service.service").unwrap();
+/// let unit = manager.load_unit("dbus.service").unwrap();
 /// ```
 ///
 /// Asynchronous API:
@@ -166,9 +166,9 @@ impl Type for StopMode {
 /// ```
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::AsyncManagerProxy;
 /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
-/// let connection = zbus::azync::Connection::new_session().await.unwrap();
+/// let connection = zbus::azync::Connection::new_system().await.unwrap();
 /// let manager = AsyncManagerProxy::new(&connection).unwrap();
-/// let unit = manager.load_unit("my_service.service").await.unwrap();
+/// let unit = manager.load_unit("dbus.service").await.unwrap();
 /// # });
 /// ```
 #[dbus_proxy(
