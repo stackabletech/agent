@@ -1,6 +1,0 @@
-= Changelog
-
-== 0.1.0 - unreleased
-
-=== Changed
-* Removed dependency to libdbus ([#148]).
