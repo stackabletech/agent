@@ -251,7 +251,7 @@ impl SystemdManager {
                 debug!("Successfully enabled service [{}]", unit);
                 Ok(())
             }
-            Err(e) => Err(anyhow!("Error starting service [{}]: {}", unit, e)),
+            Err(e) => Err(anyhow!("Error enabling service [{}]: {}", unit, e)),
         }
     }
 
