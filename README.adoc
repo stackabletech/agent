@@ -39,7 +39,7 @@ After rust is installed simply run
 To create the binary file in _target/debug_.
 
 ==== Build dependencies
-The agent depends on native dbus libraries to communicate with systemd.
+The agent depends on native systemd libraries to communicate with systemd.
 For the build process to work these need to be installed on the build system.
 
 
@@ -53,7 +53,7 @@ a|- pkg-config
 
 |Centos
 a|- pkg-config
-- libsystemd-dev
+- systemd-devel
 
 |===
 
