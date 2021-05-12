@@ -13,7 +13,7 @@ jobs:
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v2.3.4
     - run: rustup update stable && rustup default stable
     - run: sudo apt-get install libdbus-1-dev libsystemd-dev pkg-config libdbus-1-3
     - run: rustup component add rustfmt
@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Install dbus dependencies
         run: sudo apt-get install libdbus-1-dev libsystemd-dev pkg-config libdbus-1-3
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2.3.4
       - uses: actions-rs/toolchain@v1
         with:
             toolchain: stable
@@ -38,7 +38,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v2.3.4
     - name: Install dbus dependencies
       run: sudo apt-get install libdbus-1-dev libsystemd-dev pkg-config libdbus-1-3
     - name: Build
@@ -50,7 +50,7 @@ jobs:
     name: Run security audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v2.3.4
       - uses: actions-rs/audit-check@v1.2.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
