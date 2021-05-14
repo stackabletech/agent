@@ -365,6 +365,9 @@ impl State<PodState> for CreatingConfig {
         };
 
         for (target_path, volume) in volume_mounts {
+            // This is a hack for the NiFi operator. We need the volume mounts for NiFi to point to
+            // the package root, not the config root. Therefore we replace a path that starts with
+            // {{packageroot}} with the actual package root (default is config root).
             let joined_target_path = if target_path.starts_with("{{packageroot}}") {
                 pod_state
                     .get_service_package_directory()
@@ -372,6 +375,7 @@ impl State<PodState> for CreatingConfig {
             } else {
                 pod_state.get_service_config_directory().join(&target_path)
             };
+            // end hack
 
             let volume = volume.clone();
 
