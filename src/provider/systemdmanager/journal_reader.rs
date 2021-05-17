@@ -8,14 +8,14 @@ use systemd::{journal, journal::JournalRef};
 /// Reads journal entries with the given invocation ID and sends the
 /// contained messages.
 ///
-/// The options `tail` and `follow` in [`sender`] are taken into account.
+/// The options `tail` and `follow` in `sender` are taken into account.
 ///
 /// If `tail` is set with `Some(line_count)` then only the last
 /// `line_count` messages (or less if not enough available) are sent
 /// otherwise all available messages are sent.
 ///
 /// If `follow` is `true` then additionally all new messages are sent
-/// until the channel of [`sender`] is closed. In this case an
+/// until the channel of `sender` is closed. In this case an
 /// [`Err(kubelet::log::SendError::ChannelClosed)`] will be returned.
 pub async fn send_messages(sender: &mut Sender, invocation_id: &str) -> Result<()> {
     let mut journal = journal::OpenOptions::default().open()?;

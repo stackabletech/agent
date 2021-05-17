@@ -28,7 +28,7 @@ use crate::provider::states::pod::terminated::Terminated;
 use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::SystemdManager;
 use kube::error::ErrorResponse;
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 use systemdmanager::journal_reader;
 
 pub struct StackableProvider {
@@ -44,7 +44,7 @@ pub const CRDS: &[&str] = &["repositories.stable.stackable.de"];
 mod error;
 mod repository;
 mod states;
-mod systemdmanager;
+pub mod systemdmanager;
 
 /// Provider-level state shared between all pods
 #[derive(Clone)]
@@ -176,7 +176,7 @@ impl StackableProvider {
         session: bool,
         pod_cidr: String,
     ) -> Result<Self, StackableError> {
-        let systemd_manager = Arc::new(SystemdManager::new(session, Duration::from_secs(5))?);
+        let systemd_manager = Arc::new(SystemdManager::new(session).await?);
 
         let provider_state = ProviderState {
             handles: Default::default(),
