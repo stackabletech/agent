@@ -39,7 +39,7 @@ strum_macros = "0.20"
 systemd = { git = "https://github.com/stackabletech/rust-systemd.git", branch = "stackable_patches_v0.8.2", default-features = false, features = ["journal"] }
 tar = "0.4"
 thiserror = "1.0"
-tokio = { version = "1.5", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.6", features = ["macros", "rt-multi-thread", "time"] }
 url = "2.2"
 zbus = "2.0.0-beta.3"
 zvariant = "2.6"
