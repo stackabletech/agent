@@ -46,7 +46,7 @@ zvariant = "2.6"
 
 [dev-dependencies]
 indoc = "1.0"
-rstest = "0.9"
+rstest = "0.10"
 serde_yaml = "0.8"
 
 [profile.release]
