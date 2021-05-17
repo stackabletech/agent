@@ -72,7 +72,7 @@ impl State<PodState> for Running {
             for container_handle in containers.values() {
                 let service_unit = &container_handle.service_unit;
 
-                match systemd_manager.is_running(&service_unit) {
+                match systemd_manager.is_running(&service_unit).await {
                     Ok(true) => trace!(
                         "Unit [{}] of service [{}] still running ...",
                         service_unit,

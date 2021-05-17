@@ -65,17 +65,17 @@ async fn start_service_units(
     for (container_key, container_handle) in pod_handle.unwrap_or_default() {
         let service_unit = &container_handle.service_unit;
 
-        if systemd_manager.is_running(service_unit)? {
+        if systemd_manager.is_running(service_unit).await? {
             debug!(
                 "Unit [{}] for service [{}] is already running. Skip startup.",
                 service_unit, &pod_state.service_name
             );
         } else {
             info!("Starting systemd unit [{}]", service_unit);
-            systemd_manager.start(service_unit)?;
+            systemd_manager.start(service_unit).await?;
 
             info!("Enabling systemd unit [{}]", service_unit);
-            systemd_manager.enable(service_unit)?;
+            systemd_manager.enable(service_unit).await?;
 
             // TODO: does this need to be configurable, or ar we happy with a hard coded value
             //  for now. I've briefly looked at the podspec and couldn't identify a good field
@@ -87,7 +87,7 @@ async fn start_service_units(
             await_startup(&systemd_manager, service_unit, Duration::from_secs(10)).await?;
         }
 
-        let invocation_id = systemd_manager.get_invocation_id(service_unit)?;
+        let invocation_id = systemd_manager.get_invocation_id(service_unit).await?;
         store_invocation_id(shared.clone(), pod_key, &container_key, &invocation_id).await?;
     }
 
@@ -109,7 +109,7 @@ async fn await_startup(
             service_unit
         );
 
-        if systemd_manager.is_running(service_unit)? {
+        if systemd_manager.is_running(service_unit).await? {
             debug!(
                 "Service [{}] still running after [{}] seconds",
                 service_unit,

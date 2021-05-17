@@ -86,7 +86,7 @@ impl State<PodState> for CreatingService {
             // Create the service
             // As per ADR005 we currently write the unit files directly in the systemd
             // unit directory (by passing None as [unit_file_path]).
-            match systemd_manager.create_unit(&unit, None, true, true) {
+            match systemd_manager.create_unit(&unit, None, true, true).await {
                 Ok(()) => {}
                 Err(e) => {
                     // TODO: We need to discuss what to do here, in theory we could have loaded

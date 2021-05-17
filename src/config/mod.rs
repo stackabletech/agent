@@ -340,8 +340,8 @@ impl Configurable for AgentConfig {
     fn get_config_description() -> Configuration {
         Configuration {
             name: "Stackable Agent",
-            version: "0.1",
-            about: "Manages local state according to what the central orchestrator defines.",
+            version: env!("CARGO_PKG_VERSION"),
+            about: env!("CARGO_PKG_DESCRIPTION"),
             options: AgentConfig::get_options(),
         }
     }
