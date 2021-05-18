@@ -368,8 +368,8 @@ impl State<PodState> for CreatingConfig {
             // This is a hack for the NiFi operator. We need the volume mounts for NiFi to point to
             // the package root, not the config root.
             // TODO: remove if a better solution for NiFi is implemented.
-            let joined_target_path = pod_state.get_service_package_directory().join(
-                CreatingConfig::render_config_template(&template_data, &target_path).unwrap(),
+            let joined_target_path = pod_state.get_service_config_directory().join(
+                &CreatingConfig::render_config_template(&template_data, &target_path).unwrap(),
             );
             // end hack
 
