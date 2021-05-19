@@ -278,7 +278,7 @@ impl SystemdManager {
     /// systemd at the time this is called.
     /// To make a service known please take a look at the [`SystemdManager::enable`] function.
     pub async fn start(&self, unit: &str) -> anyhow::Result<()> {
-        debug!("Trying to start unit [{}].", unit);
+        debug!("Trying to start unit [{}]", unit);
 
         let result = self
             .process_job(|proxy| proxy.start_unit(unit, StartMode::Fail))
@@ -296,7 +296,7 @@ impl SystemdManager {
     /// systemd at the time this is called.
     /// To make a service known please take a look at the [`SystemdManager::enable`] function.
     pub async fn stop(&self, unit: &str) -> anyhow::Result<()> {
-        debug!("Trying to stop systemd unit [{}].", unit);
+        debug!("Trying to stop systemd unit [{}]", unit);
 
         let result = self
             .process_job(|proxy| proxy.stop_unit(unit, StopMode::Fail))
