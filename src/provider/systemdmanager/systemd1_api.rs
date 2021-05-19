@@ -11,6 +11,74 @@ use strum::{AsRefStr, Display, EnumString, EnumVariantNames, IntoStaticStr, Vari
 use zbus::dbus_proxy;
 use zvariant::{derive::Type, OwnedObjectPath, OwnedValue, Signature, Type};
 
+/// Implements [`Serialize`] for an enum.
+///
+/// The variants are serialized to strings in kebab-case.
+/// The enum must be annotated with `#[derive(AsRefStr)]`.
+macro_rules! impl_serialize_for_enum {
+    ($t:ty) => {
+        impl Serialize for $t {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                serializer.serialize_str(&kebabcase::to_kebab_case(self.as_ref()))
+            }
+        }
+    };
+}
+
+/// Implements [`Deserialize`] for an enum.
+///
+/// The variants are deserialized from strings in kebab-case.
+/// The enum must be annotated with the following attributes:
+/// ```
+/// #[derive(EnumString, EnumVariantNames)]
+/// #[strum(serialize_all = "kebab-case")]
+/// ```
+macro_rules! impl_deserialize_for_enum {
+    ($t:ty) => {
+        impl<'de> Deserialize<'de> for $t {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct VariantVisitor;
+
+                impl<'de> Visitor<'de> for VariantVisitor {
+                    type Value = $t;
+
+                    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+                        write!(formatter, "Expecting one of {:?}", Self::Value::VARIANTS)
+                    }
+
+                    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        FromStr::from_str(v)
+                            .map_err(|_| E::unknown_variant(v, Self::Value::VARIANTS))
+                    }
+                }
+
+                deserializer.deserialize_str(VariantVisitor)
+            }
+        }
+    };
+}
+
+/// Implements [`Type`] for an enum which is serialized from or
+/// deserialized to a string.
+macro_rules! impl_type_for_enum {
+    ($t:ty) => {
+        impl Type for $t {
+            fn signature() -> Signature<'static> {
+                String::signature()
+            }
+        }
+    };
+}
+
 /// Type of an entry in a changes list
 #[derive(Debug, Display, EnumString, EnumVariantNames, Eq, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
@@ -19,37 +87,8 @@ pub enum ChangeType {
     Unlink,
 }
 
-impl<'de> Deserialize<'de> for ChangeType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct VariantVisitor;
-
-        impl<'de> Visitor<'de> for VariantVisitor {
-            type Value = ChangeType;
-
-            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-                write!(formatter, "Expecting one of {:?}", Self::Value::VARIANTS)
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                FromStr::from_str(v).map_err(|_| E::unknown_variant(v, Self::Value::VARIANTS))
-            }
-        }
-
-        deserializer.deserialize_str(VariantVisitor)
-    }
-}
-
-impl Type for ChangeType {
-    fn signature() -> Signature<'static> {
-        String::signature()
-    }
-}
+impl_deserialize_for_enum!(ChangeType);
+impl_type_for_enum!(ChangeType);
 
 /// Entry of a changes list
 #[derive(Debug, Type, Deserialize)]
@@ -91,20 +130,8 @@ pub enum StartMode {
     IgnoreRequirements,
 }
 
-impl Serialize for StartMode {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&kebabcase::to_kebab_case(self.as_ref()))
-    }
-}
-
-impl Type for StartMode {
-    fn signature() -> Signature<'static> {
-        String::signature()
-    }
-}
+impl_serialize_for_enum!(StartMode);
+impl_type_for_enum!(StartMode);
 
 /// Mode in which a unit will be stopped
 #[derive(Debug, Display, AsRefStr)]
@@ -131,20 +158,8 @@ pub enum StopMode {
     IgnoreRequirements,
 }
 
-impl Serialize for StopMode {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&kebabcase::to_kebab_case(self.as_ref()))
-    }
-}
-
-impl Type for StopMode {
-    fn signature() -> Signature<'static> {
-        String::signature()
-    }
-}
+impl_serialize_for_enum!(StopMode);
+impl_type_for_enum!(StopMode);
 
 /// The manager object is the central entry point for clients.
 ///
@@ -286,37 +301,8 @@ pub enum JobRemovedResult {
     Skipped,
 }
 
-impl<'de> Deserialize<'de> for JobRemovedResult {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct VariantVisitor;
-
-        impl<'de> Visitor<'de> for VariantVisitor {
-            type Value = JobRemovedResult;
-
-            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-                write!(formatter, "Expecting one of {:?}", Self::Value::VARIANTS)
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                FromStr::from_str(v).map_err(|_| E::unknown_variant(v, Self::Value::VARIANTS))
-            }
-        }
-
-        deserializer.deserialize_str(VariantVisitor)
-    }
-}
-
-impl Type for JobRemovedResult {
-    fn signature() -> Signature<'static> {
-        String::signature()
-    }
-}
+impl_deserialize_for_enum!(JobRemovedResult);
+impl_type_for_enum!(JobRemovedResult);
 
 /// Message body of [`ManagerSignals::JobRemoved`]
 #[derive(Debug, Deserialize, Type)]
