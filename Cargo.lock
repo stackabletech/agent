@@ -2704,6 +2704,7 @@ dependencies = [
  "byteorder",
  "env_logger 0.8.3",
  "flate2",
+ "futures-util",
  "handlebars",
  "hostname",
  "indoc",

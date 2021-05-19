@@ -3,14 +3,19 @@
 //! The module offers the ability to create, remove, start, stop, enable and
 //! disable systemd units.
 //!
-use super::systemd1_api::{ActiveState, AsyncManagerProxy, StartMode, StopMode};
+use super::systemd1_api::{
+    ActiveState, AsyncJobProxy, AsyncManagerProxy, JobRemovedResult, JobRemovedSignal,
+    ManagerSignals, StartMode, StopMode,
+};
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::StackableError;
 use crate::provider::StackableError::RuntimeError;
 use anyhow::anyhow;
+use futures_util::{future, stream::StreamExt};
 use log::debug;
 use std::fs;
 use std::fs::File;
+use std::future::Future;
 use std::io::Write;
 use std::path::PathBuf;
 use zbus::azync::Connection;
@@ -273,15 +278,17 @@ impl SystemdManager {
     /// systemd at the time this is called.
     /// To make a service known please take a look at the [`SystemdManager::enable`] function.
     pub async fn start(&self, unit: &str) -> anyhow::Result<()> {
-        debug!("Attempting to start unit {}", unit);
+        debug!("Trying to start unit [{}].", unit);
 
-        match self.proxy.start_unit(unit, StartMode::Fail).await {
-            Ok(result) => {
-                debug!("Successfully started service [{}]: [{:?}]", unit, result);
-                Ok(())
-            }
-            Err(e) => Err(anyhow!("Error starting service [{}]: {}", unit, e)),
+        let result = self
+            .process_job(|proxy| proxy.start_unit(unit, StartMode::Fail))
+            .await;
+
+        if result.is_ok() {
+            debug!("Successfully started service [{}]", unit);
         }
+
+        result.map_err(|e| anyhow!("Error starting service [{}]: {}", unit, e))
     }
 
     /// Attempts to stop a systemd unit
@@ -289,14 +296,46 @@ impl SystemdManager {
     /// systemd at the time this is called.
     /// To make a service known please take a look at the [`SystemdManager::enable`] function.
     pub async fn stop(&self, unit: &str) -> anyhow::Result<()> {
-        debug!("Trying to stop systemd unit [{}]", unit);
+        debug!("Trying to stop systemd unit [{}].", unit);
 
-        match self.proxy.stop_unit(unit, StopMode::Fail).await {
-            Ok(result) => {
-                debug!("Successfully stopped service [{}]: [{:?}]", unit, result);
-                Ok(())
-            }
-            Err(e) => Err(anyhow!("Error stopping service [{}]: {}", unit, e)),
+        let result = self
+            .process_job(|proxy| proxy.stop_unit(unit, StopMode::Fail))
+            .await;
+
+        if result.is_ok() {
+            debug!("Successfully stopped service [{}]", unit);
+        }
+
+        result.map_err(|e| anyhow!("Error stopping service [{}]: {}", unit, e))
+    }
+
+    /// Runs the given task and waits until the job returned by the task
+    /// is finished.
+    async fn process_job<'a, F, Fut>(&'a self, task: F) -> anyhow::Result<()>
+    where
+        F: Fn(&'a AsyncManagerProxy) -> Fut,
+        Fut: Future<Output = zbus::Result<AsyncJobProxy<'a>>>,
+    {
+        let signals = self
+            .proxy
+            .receive_signal(ManagerSignals::JobRemoved.into())
+            .await?
+            .map(|message| message.body::<JobRemovedSignal>().unwrap());
+
+        let job = task(&self.proxy).await?;
+
+        let signal = signals
+            .filter(|signal| future::ready(&signal.job.to_owned().into_inner() == job.path()))
+            .next()
+            .await;
+
+        match signal {
+            Some(message) if message.result == JobRemovedResult::Done => Ok(()),
+            Some(message) => Err(anyhow!("The systemd job failed: {:?}", message)),
+            None => Err(anyhow!(
+                "No signal was returned for the systemd job: {:?}",
+                job
+            )),
         }
     }
 
