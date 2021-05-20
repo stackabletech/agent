@@ -411,8 +411,10 @@ impl State<PodState> for CreatingConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
+    use std::str::FromStr;
 
     #[test]
     fn test_render_template() {
@@ -444,5 +446,26 @@ mod tests {
         let legal_path = PathBuf::from(input_path_string);
         let legal_path_string = CreatingConfig::pathbuf_to_string("testfield", legal_path).unwrap();
         assert_eq!(input_path_string, legal_path_string);
+    }
+
+    #[rstest]
+    #[case("{{packageroot}}/test", "/opt/stackable/packages/test")]
+    #[case("/test", "/test")]
+    #[case("test", "/etc/stackable/config/test")]
+    fn test_create_config_path(#[case] input: &str, #[case] expected_output: &str) {
+        let mut template_data: BTreeMap<String, String> = BTreeMap::new();
+
+        template_data.insert(
+            "packageroot".to_string(),
+            "/opt/stackable/packages".to_string(),
+        );
+
+        let config_dir = PathBuf::from_str("/etc/stackable/config").unwrap();
+
+        let output = config_dir
+            .join(&CreatingConfig::render_config_template(&template_data, input).unwrap());
+
+        let output = output.to_string_lossy();
+        assert_eq!(output, expected_output);
     }
 }
