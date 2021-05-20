@@ -1,8 +1,12 @@
 = Changelog
 
-== 0.1.1 - 2021-05-20
+== 0.2.0 - 2021-05-20
 
+:159: https://github.com/stackabletech/agent/pull/159[#159]
 :164: https://github.com/stackabletech/agent/pull/164[#164]
+
+=== Added
+* Templating facility added to the `config-directory` parameter ({159}).
 
 === Fixed
 * Pod state synchronized with systemd service state ({164}).
