@@ -364,11 +364,16 @@ impl State<PodState> for CreatingConfig {
             );
         };
 
-        // Write the config files
-        let config_dir = pod_state.get_service_config_directory();
         for (target_path, volume) in volume_mounts {
+            // This is a hack for the NiFi operator. We need the volume mounts for NiFi to point to
+            // the package root, not the config root.
+            // TODO: remove if a better solution for NiFi is implemented.
+            let joined_target_path = pod_state.get_service_config_directory().join(
+                &CreatingConfig::render_config_template(&template_data, &target_path).unwrap(),
+            );
+            // end hack
+
             let volume = volume.clone();
-            let joined_target_path = config_dir.join(&target_path);
 
             debug!("Applying config map {} to {}", volume, target_path);
             if let Some(volume_content) = config_map_data.get(&volume) {
@@ -406,8 +411,10 @@ impl State<PodState> for CreatingConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
+    use std::str::FromStr;
 
     #[test]
     fn test_render_template() {
@@ -439,5 +446,27 @@ mod tests {
         let legal_path = PathBuf::from(input_path_string);
         let legal_path_string = CreatingConfig::pathbuf_to_string("testfield", legal_path).unwrap();
         assert_eq!(input_path_string, legal_path_string);
+    }
+
+    // This only tests the render template function, not the actual code that generates the directory that is used
+    #[rstest]
+    #[case("{{packageroot}}/test", "/opt/stackable/packages/test")]
+    #[case("/test", "/test")]
+    #[case("test", "/etc/stackable/config/test")]
+    fn test_create_config_path(#[case] input: &str, #[case] expected_output: &str) {
+        let mut template_data: BTreeMap<String, String> = BTreeMap::new();
+
+        template_data.insert(
+            "packageroot".to_string(),
+            "/opt/stackable/packages".to_string(),
+        );
+
+        let config_dir = PathBuf::from_str("/etc/stackable/config").unwrap();
+
+        let output = config_dir
+            .join(&CreatingConfig::render_config_template(&template_data, input).unwrap());
+
+        let output = output.to_string_lossy();
+        assert_eq!(output, expected_output);
     }
 }
