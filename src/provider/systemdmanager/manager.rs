@@ -316,6 +316,7 @@ impl SystemdManager {
         F: Fn(&'a AsyncManagerProxy) -> Fut,
         Fut: Future<Output = zbus::Result<AsyncJobProxy<'a>>>,
     {
+        // Listen for `JobRemoved` signals.
         let signals = self
             .proxy
             .receive_signal(ManagerSignals::JobRemoved.into())
@@ -324,10 +325,18 @@ impl SystemdManager {
 
         let job = task(&self.proxy).await?;
 
-        let signal = signals
-            .filter(|signal| future::ready(&signal.job.to_owned().into_inner() == job.path()))
-            .next()
-            .await;
+        // Narrow signal stream down to the corresponding job.
+        let mut signals = signals
+            .filter(|signal| future::ready(&signal.job.to_owned().into_inner() == job.path()));
+
+        // Await the `JobRemoved` signal.
+        let signal = signals.next().await;
+
+        // Unsubscribe from `JobRemoved` signals.
+        // If `signals` goes out of scope prematurely due to an error
+        // then the subscription is cancelled synchronously in the
+        // destructor of `SignalStream`.
+        let _ = signals.into_inner().into_inner().close().await;
 
         match signal {
             Some(message) if message.result == JobRemovedResult::Done => Ok(()),
