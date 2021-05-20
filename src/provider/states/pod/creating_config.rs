@@ -448,6 +448,7 @@ mod tests {
         assert_eq!(input_path_string, legal_path_string);
     }
 
+    // This only tests the render template function, not the actual code that generates the directory that is used
     #[rstest]
     #[case("{{packageroot}}/test", "/opt/stackable/packages/test")]
     #[case("/test", "/test")]
