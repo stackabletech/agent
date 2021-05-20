@@ -281,7 +281,7 @@ impl SystemdManager {
         debug!("Trying to start unit [{}]", unit);
 
         let result = self
-            .process_job(|proxy| proxy.start_unit(unit, StartMode::Fail))
+            .call_method(|proxy| proxy.start_unit(unit, StartMode::Fail))
             .await;
 
         if result.is_ok() {
@@ -299,7 +299,7 @@ impl SystemdManager {
         debug!("Trying to stop systemd unit [{}]", unit);
 
         let result = self
-            .process_job(|proxy| proxy.stop_unit(unit, StopMode::Fail))
+            .call_method(|proxy| proxy.stop_unit(unit, StopMode::Fail))
             .await;
 
         if result.is_ok() {
@@ -309,30 +309,39 @@ impl SystemdManager {
         result.map_err(|e| anyhow!("Error stopping service [{}]: {}", unit, e))
     }
 
-    /// Runs the given task and waits until the job returned by the task
-    /// is finished.
-    async fn process_job<'a, F, Fut>(&'a self, task: F) -> anyhow::Result<()>
+    /// Calls a systemd method and waits until the dependent job is
+    /// finished.
+    ///
+    /// The given method enqueues a job in systemd and returns the job
+    /// object. Systemd sends out a `JobRemoved` signal when the job is
+    /// dequeued. The signal contains the reason for the dequeuing like
+    /// `"done"`, `"failed"`, or `"canceled"`.
+    ///
+    /// This function subscribes to `JobRemoved` signals, calls the
+    /// given method, awaits the signal for the corresponding job, and
+    /// returns `Ok(())` if the result is [`JobRemovedResult::Done`].
+    /// If the signal contains another result or no signal is returned
+    /// (which should never happen) then an error with a corresponding
+    /// message is returned.
+    async fn call_method<'a, F, Fut>(&'a self, method: F) -> anyhow::Result<()>
     where
         F: Fn(&'a AsyncManagerProxy) -> Fut,
         Fut: Future<Output = zbus::Result<AsyncJobProxy<'a>>>,
     {
-        // Listen for `JobRemoved` signals.
         let signals = self
             .proxy
             .receive_signal(ManagerSignals::JobRemoved.into())
             .await?
             .map(|message| message.body::<JobRemovedSignal>().unwrap());
 
-        let job = task(&self.proxy).await?;
+        let job = method(&self.proxy).await?;
 
-        // Narrow signal stream down to the corresponding job.
         let mut signals = signals
             .filter(|signal| future::ready(&signal.job.to_owned().into_inner() == job.path()));
 
-        // Await the `JobRemoved` signal.
         let signal = signals.next().await;
 
-        // Unsubscribe from `JobRemoved` signals.
+        // Unsubscribe from receiving signals.
         // If `signals` goes out of scope prematurely due to an error
         // then the subscription is cancelled synchronously in the
         // destructor of `SignalStream`.
