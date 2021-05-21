@@ -57,8 +57,12 @@ impl SystemdManager {
             })?
         };
 
-        let proxy =
-            AsyncManagerProxy::new(&connection).map_err(|e| RuntimeError { msg: e.to_string() })?;
+        // The maximum number of queued DBus messages must be higher
+        // than the number of containers which can be started and
+        // stopped simultaneously.
+        let connection = connection.set_max_queued(1024);
+
+        let proxy = AsyncManagerProxy::new(&connection);
 
         // Depending on whether we are supposed to run in user space or system-wide
         // we'll pick the default directory to initialize the systemd manager with

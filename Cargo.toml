@@ -42,8 +42,15 @@ tar = "0.4"
 thiserror = "1.0"
 tokio = { version = "1.6", features = ["macros", "rt-multi-thread", "time"] }
 url = "2.2"
-zbus = "2.0.0-beta.3"
-zvariant = "2.6"
+# The current zbus version 2.0.0-beta.3 causes deadlocks (see
+# https://gitlab.freedesktop.org/dbus/zbus/-/issues/150). So the
+# dependency is pinned to the current HEAD of the main branch until the
+# next version is released.
+zbus = { git = "https://gitlab.freedesktop.org/dbus/zbus.git", rev = "9c551554e665532abc76469cdc73c1943bfb6285" }
+# The current zvariant version 2.6.0 is not compatible with the pinned
+# zbus version. So the dependency is pinned to the current HEAD of the
+# main branch until the next version is released.
+zvariant = { git = "https://gitlab.freedesktop.org/dbus/zbus.git", rev = "9c551554e665532abc76469cdc73c1943bfb6285" }
 
 [dev-dependencies]
 indoc = "1.0"
