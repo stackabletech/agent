@@ -3,14 +3,19 @@
 //! The module offers the ability to create, remove, start, stop, enable and
 //! disable systemd units.
 //!
-use super::systemd1_api::{ActiveState, AsyncManagerProxy, StartMode, StopMode};
+use super::systemd1_api::{
+    ActiveState, AsyncJobProxy, AsyncManagerProxy, JobRemovedResult, JobRemovedSignal,
+    ManagerSignals, StartMode, StopMode,
+};
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::StackableError;
 use crate::provider::StackableError::RuntimeError;
 use anyhow::anyhow;
+use futures_util::{future, stream::StreamExt};
 use log::debug;
 use std::fs;
 use std::fs::File;
+use std::future::Future;
 use std::io::Write;
 use std::path::PathBuf;
 use zbus::azync::Connection;
@@ -273,15 +278,17 @@ impl SystemdManager {
     /// systemd at the time this is called.
     /// To make a service known please take a look at the [`SystemdManager::enable`] function.
     pub async fn start(&self, unit: &str) -> anyhow::Result<()> {
-        debug!("Attempting to start unit {}", unit);
+        debug!("Trying to start unit [{}]", unit);
 
-        match self.proxy.start_unit(unit, StartMode::Fail).await {
-            Ok(result) => {
-                debug!("Successfully started service [{}]: [{:?}]", unit, result);
-                Ok(())
-            }
-            Err(e) => Err(anyhow!("Error starting service [{}]: {}", unit, e)),
+        let result = self
+            .call_method(|proxy| proxy.start_unit(unit, StartMode::Fail))
+            .await;
+
+        if result.is_ok() {
+            debug!("Successfully started service [{}]", unit);
         }
+
+        result.map_err(|e| anyhow!("Error starting service [{}]: {}", unit, e))
     }
 
     /// Attempts to stop a systemd unit
@@ -291,12 +298,62 @@ impl SystemdManager {
     pub async fn stop(&self, unit: &str) -> anyhow::Result<()> {
         debug!("Trying to stop systemd unit [{}]", unit);
 
-        match self.proxy.stop_unit(unit, StopMode::Fail).await {
-            Ok(result) => {
-                debug!("Successfully stopped service [{}]: [{:?}]", unit, result);
-                Ok(())
-            }
-            Err(e) => Err(anyhow!("Error stopping service [{}]: {}", unit, e)),
+        let result = self
+            .call_method(|proxy| proxy.stop_unit(unit, StopMode::Fail))
+            .await;
+
+        if result.is_ok() {
+            debug!("Successfully stopped service [{}]", unit);
+        }
+
+        result.map_err(|e| anyhow!("Error stopping service [{}]: {}", unit, e))
+    }
+
+    /// Calls a systemd method and waits until the dependent job is
+    /// finished.
+    ///
+    /// The given method enqueues a job in systemd and returns the job
+    /// object. Systemd sends out a `JobRemoved` signal when the job is
+    /// dequeued. The signal contains the reason for the dequeuing like
+    /// `"done"`, `"failed"`, or `"canceled"`.
+    ///
+    /// This function subscribes to `JobRemoved` signals, calls the
+    /// given method, awaits the signal for the corresponding job, and
+    /// returns `Ok(())` if the result is [`JobRemovedResult::Done`].
+    /// If the signal contains another result or no signal is returned
+    /// (which should never happen) then an error with a corresponding
+    /// message is returned.
+    async fn call_method<'a, F, Fut>(&'a self, method: F) -> anyhow::Result<()>
+    where
+        F: Fn(&'a AsyncManagerProxy) -> Fut,
+        Fut: Future<Output = zbus::Result<AsyncJobProxy<'a>>>,
+    {
+        let signals = self
+            .proxy
+            .receive_signal(ManagerSignals::JobRemoved.into())
+            .await?
+            .map(|message| message.body::<JobRemovedSignal>().unwrap());
+
+        let job = method(&self.proxy).await?;
+
+        let mut signals = signals
+            .filter(|signal| future::ready(&signal.job.to_owned().into_inner() == job.path()));
+
+        let signal = signals.next().await;
+
+        // Unsubscribe from receiving signals.
+        // If `signals` goes out of scope prematurely due to an error
+        // then the subscription is cancelled synchronously in the
+        // destructor of `SignalStream`.
+        let _ = signals.into_inner().into_inner().close().await;
+
+        match signal {
+            Some(message) if message.result == JobRemovedResult::Done => Ok(()),
+            Some(message) => Err(anyhow!("The systemd job failed: {:?}", message)),
+            None => Err(anyhow!(
+                "No signal was returned for the systemd job: {:?}",
+                job
+            )),
         }
     }
 

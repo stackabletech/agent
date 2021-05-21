@@ -7,49 +7,88 @@ use std::{
     fmt::{self, Formatter},
     str::FromStr,
 };
-use strum::{AsRefStr, EnumString, EnumVariantNames, VariantNames};
+use strum::{AsRefStr, Display, EnumString, EnumVariantNames, IntoStaticStr, VariantNames};
 use zbus::dbus_proxy;
-use zvariant::{derive::Type, OwnedValue, Signature, Type};
+use zvariant::{derive::Type, OwnedObjectPath, OwnedValue, Signature, Type};
+
+/// Implements [`Serialize`] for an enum.
+///
+/// The variants are serialized to strings in kebab-case.
+/// The enum must be annotated with `#[derive(AsRefStr)]`.
+macro_rules! impl_serialize_for_enum {
+    ($t:ty) => {
+        impl Serialize for $t {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                serializer.serialize_str(&kebabcase::to_kebab_case(self.as_ref()))
+            }
+        }
+    };
+}
+
+/// Implements [`Deserialize`] for an enum.
+///
+/// The variants are deserialized from strings in kebab-case.
+/// The enum must be annotated with the following attributes:
+/// ```
+/// #[derive(EnumString, EnumVariantNames)]
+/// #[strum(serialize_all = "kebab-case")]
+/// ```
+macro_rules! impl_deserialize_for_enum {
+    ($t:ty) => {
+        impl<'de> Deserialize<'de> for $t {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct VariantVisitor;
+
+                impl<'de> Visitor<'de> for VariantVisitor {
+                    type Value = $t;
+
+                    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+                        write!(formatter, "Expecting one of {:?}", Self::Value::VARIANTS)
+                    }
+
+                    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        FromStr::from_str(v)
+                            .map_err(|_| E::unknown_variant(v, Self::Value::VARIANTS))
+                    }
+                }
+
+                deserializer.deserialize_str(VariantVisitor)
+            }
+        }
+    };
+}
+
+/// Implements [`Type`] for an enum which is serialized from or
+/// deserialized to a string.
+macro_rules! impl_type_for_enum {
+    ($t:ty) => {
+        impl Type for $t {
+            fn signature() -> Signature<'static> {
+                String::signature()
+            }
+        }
+    };
+}
 
 /// Type of an entry in a changes list
-#[derive(Debug, EnumString, EnumVariantNames, PartialEq)]
+#[derive(Debug, Display, EnumString, EnumVariantNames, Eq, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
 pub enum ChangeType {
     Symlink,
     Unlink,
 }
 
-impl<'de> Deserialize<'de> for ChangeType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct VariantVisitor;
-
-        impl<'de> Visitor<'de> for VariantVisitor {
-            type Value = ChangeType;
-
-            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-                write!(formatter, "Expecting one of {:?}", Self::Value::VARIANTS)
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                FromStr::from_str(v).map_err(|_| E::unknown_variant(v, Self::Value::VARIANTS))
-            }
-        }
-
-        deserializer.deserialize_str(VariantVisitor)
-    }
-}
-
-impl Type for ChangeType {
-    fn signature() -> Signature<'static> {
-        String::signature()
-    }
-}
+impl_deserialize_for_enum!(ChangeType);
+impl_type_for_enum!(ChangeType);
 
 /// Entry of a changes list
 #[derive(Debug, Type, Deserialize)]
@@ -63,8 +102,8 @@ pub struct Change {
 type Changes = Vec<Change>;
 
 /// Mode in which a unit will be started
-#[derive(Debug, AsRefStr)]
-#[allow(dead_code)]
+#[derive(Debug, Display, AsRefStr)]
+#[strum(serialize_all = "kebab-case")]
 pub enum StartMode {
     /// The unit and its dependencies will be started, possibly
     /// replacing already queued jobs that conflict with it.
@@ -91,24 +130,12 @@ pub enum StartMode {
     IgnoreRequirements,
 }
 
-impl Serialize for StartMode {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&kebabcase::to_kebab_case(self.as_ref()))
-    }
-}
-
-impl Type for StartMode {
-    fn signature() -> Signature<'static> {
-        String::signature()
-    }
-}
+impl_serialize_for_enum!(StartMode);
+impl_type_for_enum!(StartMode);
 
 /// Mode in which a unit will be stopped
-#[derive(Debug, AsRefStr)]
-#[allow(dead_code)]
+#[derive(Debug, Display, AsRefStr)]
+#[strum(serialize_all = "kebab-case")]
 pub enum StopMode {
     /// The unit and its dependencies will be stopped, possibly
     /// replacing already queued jobs that conflict with it.
@@ -131,20 +158,8 @@ pub enum StopMode {
     IgnoreRequirements,
 }
 
-impl Serialize for StopMode {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&kebabcase::to_kebab_case(self.as_ref()))
-    }
-}
-
-impl Type for StopMode {
-    fn signature() -> Signature<'static> {
-        String::signature()
-    }
-}
+impl_serialize_for_enum!(StopMode);
+impl_type_for_enum!(StopMode);
 
 /// The manager object is the central entry point for clients.
 ///
@@ -155,7 +170,7 @@ impl Type for StopMode {
 /// Synchronous API:
 ///
 /// ```
-/// # use stackable_agent::provider::systemdmanager::systemd1_api::ManagerProxy;
+/// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
 /// let connection = zbus::Connection::new_system().unwrap();
 /// let manager = ManagerProxy::new(&connection).unwrap();
 /// let unit = manager.load_unit("dbus.service").unwrap();
@@ -164,7 +179,7 @@ impl Type for StopMode {
 /// Asynchronous API:
 ///
 /// ```
-/// # use stackable_agent::provider::systemdmanager::systemd1_api::AsyncManagerProxy;
+/// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
 /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
 /// let connection = zbus::azync::Connection::new_system().await.unwrap();
 /// let manager = AsyncManagerProxy::new(&connection).unwrap();
@@ -234,9 +249,80 @@ trait Manager {
     fn link_unit_files(&self, files: &[&str], runtime: bool, force: bool) -> zbus::Result<Changes>;
 }
 
+/// Signals of the manager object.
+///
+/// Currently not all signals are listed.
+///
+/// # Example
+///
+/// ```
+/// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
+/// // necessary when calling `map` on `zbus::azync::SignalStream`
+/// use futures_util::stream::StreamExt;
+///
+/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+/// let connection = zbus::azync::Connection::new_system().await.unwrap();
+/// let manager = AsyncManagerProxy::new(&connection).unwrap();
+/// let signals = manager
+///     .receive_signal(ManagerSignals::JobRemoved.into()).await.unwrap()
+///     .map(|message| message.body::<JobRemovedSignal>().unwrap());
+/// # });
+/// ```
+#[derive(Debug, Display, Eq, PartialEq, IntoStaticStr)]
+pub enum ManagerSignals {
+    /// Sent out each time a job is dequeued
+    JobRemoved,
+}
+
+/// Result in the `JobRemoved` signal.
+#[derive(Debug, Display, EnumString, EnumVariantNames, Eq, PartialEq)]
+#[strum(serialize_all = "kebab-case")]
+pub enum JobRemovedResult {
+    /// Indicates successful execution of a job
+    Done,
+
+    /// Indicates that a job has been canceled before it finished
+    /// execution; This doesn't necessarily mean though that the job
+    /// operation is actually cancelled too.
+    Canceled,
+
+    /// Indicates that the job timeout was reached
+    Timeout,
+
+    /// Indicates that the job failed
+    Failed,
+
+    /// Indicates that a job this job depended on failed and the job
+    /// hence was removed as well
+    Dependency,
+
+    /// Indicates that a job was skipped because it didn't apply to the
+    /// unit's current state
+    Skipped,
+}
+
+impl_deserialize_for_enum!(JobRemovedResult);
+impl_type_for_enum!(JobRemovedResult);
+
+/// Message body of [`ManagerSignals::JobRemoved`]
+#[derive(Debug, Deserialize, Type)]
+pub struct JobRemovedSignal {
+    /// Numeric job ID
+    pub id: u32,
+
+    /// Bus path
+    pub job: OwnedObjectPath,
+
+    /// Primary unit name for this job
+    pub unit: String,
+
+    /// Result
+    pub result: JobRemovedResult,
+}
+
 /// ActiveState contains a state value that reflects whether the unit is
 /// currently active or not.
-#[derive(Debug, EnumString, PartialEq)]
+#[derive(Debug, Display, EnumString, Eq, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
 pub enum ActiveState {
     /// The unit is active.
@@ -272,6 +358,7 @@ impl TryFrom<OwnedValue> for ActiveState {
 }
 
 /// Unique ID for a runtime cycle of a unit
+#[derive(Debug, Eq, PartialEq)]
 pub struct InvocationId(Vec<u8>);
 
 impl TryFrom<OwnedValue> for InvocationId {
@@ -334,10 +421,23 @@ mod test {
     }
 
     #[test]
+    fn display_change_type() {
+        assert_eq!("symlink", ChangeType::Symlink.to_string());
+    }
+
+    #[test]
     fn serialize_start_mode() {
         assert_eq!(
             serialize("ignore-dependencies"),
             serialize(&StartMode::IgnoreDependencies)
+        );
+    }
+
+    #[test]
+    fn display_start_mode() {
+        assert_eq!(
+            "ignore-dependencies",
+            StartMode::IgnoreDependencies.to_string()
         );
     }
 
@@ -350,6 +450,35 @@ mod test {
     }
 
     #[test]
+    fn display_stop_mode() {
+        assert_eq!(
+            "ignore-dependencies",
+            StopMode::IgnoreDependencies.to_string()
+        );
+    }
+
+    #[test]
+    fn display_manager_signals() {
+        assert_eq!("JobRemoved", ManagerSignals::JobRemoved.to_string());
+    }
+
+    #[test]
+    fn convert_manager_signals_into_static_str() {
+        let static_str: &'static str = ManagerSignals::JobRemoved.into();
+        assert_eq!("JobRemoved", static_str);
+    }
+
+    #[test]
+    fn deserialize_job_removed_result() {
+        assert_eq!(JobRemovedResult::Done, deserialize(&serialize("done")));
+    }
+
+    #[test]
+    fn display_job_removed_result() {
+        assert_eq!("done", JobRemovedResult::Done.to_string());
+    }
+
+    #[test]
     fn try_active_state_from_owned_value() {
         assert_eq!(
             ActiveState::Active,
@@ -358,7 +487,23 @@ mod test {
     }
 
     #[test]
-    fn invocation_id_to_string() {
+    fn display_active_state() {
+        assert_eq!("active", ActiveState::Active.to_string());
+    }
+
+    #[test]
+    fn try_invocation_id_from_owned_value() {
+        let bytes = vec![
+            0xbe, 0x44, 0xae, 0xfc, 0xa3, 0xbf, 0x46, 0xba, 0xb0, 0x4b, 0x37, 0x52, 0x09, 0x5d,
+            0xd9, 0x97,
+        ];
+        let invocation_id = InvocationId(bytes.clone());
+        let owned_value = OwnedValue::from(Value::from(bytes));
+        assert_eq!(invocation_id, InvocationId::try_from(owned_value).unwrap());
+    }
+
+    #[test]
+    fn display_invocation_id() {
         let invocation_id = InvocationId(vec![
             0xbe, 0x44, 0xae, 0xfc, 0xa3, 0xbf, 0x46, 0xba, 0xb0, 0x4b, 0x37, 0x52, 0x09, 0x5d,
             0xd9, 0x97,
