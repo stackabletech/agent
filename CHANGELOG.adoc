@@ -1,6 +1,12 @@
 = Changelog
 
-== 0.3.0 - unreleased
+== 0.2.1 - 2021-05-25
+
+:168: https://github.com/stackabletech/agent/pull/168[#168]
+
+=== Fixed
+* Deadlock fixed which occurred when multiple pods were started or
+  stopped simultaneously ({168}).
 
 == 0.2.0 - 2021-05-20
 
