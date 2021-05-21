@@ -172,7 +172,7 @@ impl_type_for_enum!(StopMode);
 /// ```
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
 /// let connection = zbus::Connection::new_system().unwrap();
-/// let manager = ManagerProxy::new(&connection).unwrap();
+/// let manager = ManagerProxy::new(&connection);
 /// let unit = manager.load_unit("dbus.service").unwrap();
 /// ```
 ///
@@ -182,7 +182,7 @@ impl_type_for_enum!(StopMode);
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
 /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
 /// let connection = zbus::azync::Connection::new_system().await.unwrap();
-/// let manager = AsyncManagerProxy::new(&connection).unwrap();
+/// let manager = AsyncManagerProxy::new(&connection);
 /// let unit = manager.load_unit("dbus.service").await.unwrap();
 /// # });
 /// ```
@@ -262,7 +262,7 @@ trait Manager {
 ///
 /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
 /// let connection = zbus::azync::Connection::new_system().await.unwrap();
-/// let manager = AsyncManagerProxy::new(&connection).unwrap();
+/// let manager = AsyncManagerProxy::new(&connection);
 /// let signals = manager
 ///     .receive_signal(ManagerSignals::JobRemoved.into()).await.unwrap()
 ///     .map(|message| message.body::<JobRemovedSignal>().unwrap());
