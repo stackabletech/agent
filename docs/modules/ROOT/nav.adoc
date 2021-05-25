@@ -1,0 +1,4 @@
+* Installation
+** xref:installation/building.adoc[]
+** xref:installation/binaries.adoc[]
+* xref:configuration.adoc[]

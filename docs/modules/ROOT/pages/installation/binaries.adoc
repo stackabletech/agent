@@ -1,0 +1,15 @@
+= Binaries & Packages
+
+== Download binary
+We do not at this time provide pre-compiled binaries, as we are still in the process of setting up the build jobs to create these.
+This readme will be updated as soon as binary downloads are available!
+
+== OS Packages
+
+We provide OS packages for RHEL/CentOS 7 & 8 as well as Debian 10 (buster).
+
+* EL7: https://repo.stackable.tech/repository/rpm-release/el7/
+* EL8: https://repo.stackable.tech/repository/rpm-release/el8/
+* Debian 10: https://repo.stackable.tech/repository/deb-release
+
+Add these repositories to your OS and then install the `stackable-agent` package.

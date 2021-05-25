@@ -1,0 +1,5 @@
+name: agent
+version: master
+title: Stackable Agent
+nav:
+  - modules/ROOT/nav.adoc

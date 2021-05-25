@@ -1,0 +1,42 @@
+= Configuration
+
+== Command Line Parameters
+The agent accepts the following command line parameters:
+
+include::commandline_args.adoc[]
+
+== Config File
+In addition to directly specifying them on the command line, the agent allows specifying a config file via the environment variable `CONFIG_FILE`. Values specified in the file will have to adhere to the format `--parameter=value`.
+
+This file can contain all command line parameters and will be parsed before the actual command line.
+For parameters that are present in the file and on the command line, the command line will take precedence, unless it is a parameter that can be specified multiple times, in which case parameters from both, file and commandline, will be merged.
+
+.Example config file
+    --package-directory=/opt/stackable/agent/work/packages
+    --config-directory=/etc/stackable/agent
+    --server-cert-file=/etc/stackable/agent/secure/cert.crt
+    --server-key-file=/etc/stackable/agent/secure/key.key
+
+== Kubernetes Config
+The agent uses the default way of looking for a kube-apiserver, so if your system is already set up to connect to Kubernetes with kubectl you should be good to go right of the bat.
+
+The default location for the Kubernetes client config is `~/.kube/config`, if you want to change this location you can override this via the `KUBECONFIG` environment variable.
+
+    export KUBECONFIG=/etc/stackable/agent/kubeconfig
+
+
+== Certificates
+The agent requires a keypair and signed certificate to start a webserver which can be used to handle callbacks.
+If these are not specified on the commandline, the agent will create a keypair, upload a certificate signing request to Kubernetes and wait for the certificate before continuing.
+These steps require a certificate manager to be set up and running in your Kubernetes cluster, which may or may not be the case.
+
+You can also manually create these files and specify them on the command line.
+The following example shows how to create these files using https://github.com/OpenVPN/easy-rsa[easy-rsa], but this can be done in any number of different ways as well.
+
+    ./easyrsa init-pki
+    ./easyrsa build-ca
+    ./easyrsa gen-req krustlet1
+    ./easyrsa import-req pki/reqs/krustlet1.req krustlet1-req
+    ./easyrsa sign-req serverClient krustlet1-req
+    # Convert key to pksc8 format
+    openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in pki/private/krustlet1.key -out pkcs8.key
