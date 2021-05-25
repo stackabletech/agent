@@ -1,0 +1,25 @@
+= Stackable Agent
+
+The Stackable Agent is an alternative to the Kubernetes Kubelet that executes Pods not in containers but using systemd as its backend.
+It is implemented in Rust as a https://github.com/deislabs/krustlet[Krustlet] provider.
+
+The agent registers itself as a node with a kube-apiserver and will be considered by the Kubernetes scheduler for workloads (pods).
+To avoid _normal_ Kubernetes pods being scheduled on the Stackable agent (it would not know what to do with these) the agent assigns the following taints to its `Node` object:
+
+|===
+|Taint |Type|Value
+
+|kubernetes.io/arch
+|NoSchedule
+|stackable-linux
+
+|kubernetes.io/arch
+|NoExecute
+|stackable-linux
+|===
+
+These taints _suggest_ to the Kubernetes scheduler that only pods with matching tolerations should be scheduled on this node.
+
+== Contributing
+The agent is developed as an open source tool, and we absolutely welcome any and all contributions!
+Don't hesitate to drop us a line at info@stackable.de or reach out directly to any of our committers / contributors.

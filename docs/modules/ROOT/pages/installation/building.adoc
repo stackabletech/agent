@@ -1,0 +1,29 @@
+= Building from source
+
+Building from source is fairly straightforward if you have the rust toolchain installed, our CI chain tests against the latest stable version at the time the checks are run.
+If you need to install this, generally the recommended way is to use https://rustup.rs/[rustup].
+
+After rust is installed simply run
+
+    cargo build
+
+To create the binary file in _target/debug_.
+
+== Build dependencies
+The agent depends on native systemd libraries to communicate with systemd.
+For the build process to work these need to be installed on the build system.
+
+
+
+|===
+|Distribution |Package Names
+
+|Ubuntu
+a|- pkg-config
+- libsystemd-dev
+
+|Centos
+a|- pkg-config
+- systemd-devel
+
+|===

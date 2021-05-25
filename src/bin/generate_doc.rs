@@ -10,7 +10,7 @@ fn main() {
     use stackable_agent::config::AgentConfig;
     use std::fs;
 
-    let target_file = "documentation/commandline_args.adoc";
+    let target_file = "docs/modules/ROOT/pages/commandline_args.adoc";
     fs::write(target_file, AgentConfig::get_documentation()).unwrap_or_else(|err| {
         panic!(
             "Could not write documentation to [{}]: {}",
