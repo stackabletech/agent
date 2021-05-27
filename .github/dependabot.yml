@@ -18,9 +18,9 @@ updates:
     reviewers:
       - "stackabletech/rust-developers"
     ignore:
-      # We never want to be notified about a kube-rs update
-      # It often contains breaking changes so can't be updated manually anyway
+      # We never want to be notified about a kube-rs update.
+      # It often contains breaking changes it has to be updated manually anyway
       # and it needs to be updated together with kube-runtime, kube-derive etc.
-      # Also: We need to use the version from Krustlet anyway to avoid conflicts
+      # Also: We need to use the version from Krustlet to avoid conflicts
       - dependency-name: "kube*"
       - dependency-name: "k8s-openapi"
