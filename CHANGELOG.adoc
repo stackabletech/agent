@@ -1,6 +1,22 @@
 = Changelog
 
-== 0.3.0 - unreleased
+== 0.3.0 - 2021-05-27
+
+:165: https://github.com/stackabletech/agent/pull/165[#165]
+:169: https://github.com/stackabletech/agent/pull/169[#169]
+:173: https://github.com/stackabletech/agent/pull/176[#173]
+:176: https://github.com/stackabletech/agent/pull/176[#176]
+
+=== Added
+* Artifacts for merge requests are created ({169}, {173}).
+
+=== Changed
+* Structure of the documentation changed so that it can be incorporated
+  into the overall Stackable documentation ({165}).
+
+=== Fixed
+* Deadlock fixed which occurred when multiple pods were started or
+  stopped simultaneously ({176}).
 
 == 0.2.0 - 2021-05-20
 

@@ -95,6 +95,7 @@ async fn main() -> anyhow::Result<()> {
         agent_config.log_directory.clone(),
         agent_config.session,
         agent_config.pod_cidr,
+        krustlet_config.max_pods,
     )
     .await
     .expect("Error initializing provider.");
