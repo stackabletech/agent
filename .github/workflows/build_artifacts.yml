@@ -62,6 +62,7 @@ jobs:
         run: ~/.cargo/bin/cargo +nightly build --verbose --release
       - name: Build RPM package
         run: packaging/buildrpm.sh stackable-agent
+        # Comment added to test the permissions check
       - name: Check workflow permissions
         id: check_permissions
         uses: scherermichael-oss/action-has-permission@1.0.6
