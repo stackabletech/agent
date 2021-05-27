@@ -16,7 +16,7 @@ byteorder = "1.4"
 env_logger = "0.8"
 flate2 = "1.0"
 futures-util = "0.3"
-handlebars = "3.5"
+handlebars = "4.0"
 hostname = "0.3"
 k8s-openapi = { version = "0.11", default-features = false, features = ["api", "v1_18"] }
 krator = { git = "https://github.com/stackabletech/krustlet.git", branch = "stackable_patches_v0.7.0" } # version = "0.2"
