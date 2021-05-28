@@ -1,10 +1,10 @@
 [package]
-name = "stackable-agent"
-description = "The component of the Stackable Platform that manages installation of services on the workers"
-version = "0.4.0-nightly"
 authors = ["Sönke Liebau <soenke.liebau@stackable.de>"]
+description = "The component of the Stackable Platform that manages installation of services on the workers"
 edition = "2018"
 license = "Apache-2.0"
+name = "stackable-agent"
+version = "0.4.0-nightly"
 
 [dependencies]
 # We are currently referencing the Krustlet directly from a Stackable fork of the official repository.
