@@ -175,8 +175,9 @@ impl StackableProvider {
         log_directory: PathBuf,
         session: bool,
         pod_cidr: String,
+        max_pods: u16,
     ) -> Result<Self, StackableError> {
-        let systemd_manager = Arc::new(SystemdManager::new(session).await?);
+        let systemd_manager = Arc::new(SystemdManager::new(session, max_pods).await?);
 
         let provider_state = ProviderState {
             handles: Default::default(),

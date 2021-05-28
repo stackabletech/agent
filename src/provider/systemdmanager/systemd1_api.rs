@@ -80,7 +80,7 @@ macro_rules! impl_type_for_enum {
 }
 
 /// Type of an entry in a changes list
-#[derive(Debug, Display, EnumString, EnumVariantNames, Eq, PartialEq)]
+#[derive(Clone, Debug, Display, EnumString, EnumVariantNames, Eq, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
 pub enum ChangeType {
     Symlink,
@@ -91,7 +91,7 @@ impl_deserialize_for_enum!(ChangeType);
 impl_type_for_enum!(ChangeType);
 
 /// Entry of a changes list
-#[derive(Debug, Type, Deserialize)]
+#[derive(Clone, Debug, Type, Deserialize)]
 pub struct Change {
     pub change_type: ChangeType,
     pub filename: String,
@@ -102,7 +102,7 @@ pub struct Change {
 type Changes = Vec<Change>;
 
 /// Mode in which a unit will be started
-#[derive(Debug, Display, AsRefStr)]
+#[derive(Clone, Debug, Display, AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
 pub enum StartMode {
     /// The unit and its dependencies will be started, possibly
@@ -134,7 +134,7 @@ impl_serialize_for_enum!(StartMode);
 impl_type_for_enum!(StartMode);
 
 /// Mode in which a unit will be stopped
-#[derive(Debug, Display, AsRefStr)]
+#[derive(Clone, Debug, Display, AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
 pub enum StopMode {
     /// The unit and its dependencies will be stopped, possibly
@@ -172,7 +172,7 @@ impl_type_for_enum!(StopMode);
 /// ```
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
 /// let connection = zbus::Connection::new_system().unwrap();
-/// let manager = ManagerProxy::new(&connection).unwrap();
+/// let manager = ManagerProxy::new(&connection);
 /// let unit = manager.load_unit("dbus.service").unwrap();
 /// ```
 ///
@@ -182,7 +182,7 @@ impl_type_for_enum!(StopMode);
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
 /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
 /// let connection = zbus::azync::Connection::new_system().await.unwrap();
-/// let manager = AsyncManagerProxy::new(&connection).unwrap();
+/// let manager = AsyncManagerProxy::new(&connection);
 /// let unit = manager.load_unit("dbus.service").await.unwrap();
 /// # });
 /// ```
@@ -262,20 +262,20 @@ trait Manager {
 ///
 /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
 /// let connection = zbus::azync::Connection::new_system().await.unwrap();
-/// let manager = AsyncManagerProxy::new(&connection).unwrap();
+/// let manager = AsyncManagerProxy::new(&connection);
 /// let signals = manager
 ///     .receive_signal(ManagerSignals::JobRemoved.into()).await.unwrap()
 ///     .map(|message| message.body::<JobRemovedSignal>().unwrap());
 /// # });
 /// ```
-#[derive(Debug, Display, Eq, PartialEq, IntoStaticStr)]
+#[derive(Clone, Debug, Display, Eq, PartialEq, IntoStaticStr)]
 pub enum ManagerSignals {
     /// Sent out each time a job is dequeued
     JobRemoved,
 }
 
 /// Result in the `JobRemoved` signal.
-#[derive(Debug, Display, EnumString, EnumVariantNames, Eq, PartialEq)]
+#[derive(Clone, Debug, Display, EnumString, EnumVariantNames, Eq, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
 pub enum JobRemovedResult {
     /// Indicates successful execution of a job
@@ -305,7 +305,7 @@ impl_deserialize_for_enum!(JobRemovedResult);
 impl_type_for_enum!(JobRemovedResult);
 
 /// Message body of [`ManagerSignals::JobRemoved`]
-#[derive(Debug, Deserialize, Type)]
+#[derive(Clone, Debug, Deserialize, Type)]
 pub struct JobRemovedSignal {
     /// Numeric job ID
     pub id: u32,
@@ -322,7 +322,7 @@ pub struct JobRemovedSignal {
 
 /// ActiveState contains a state value that reflects whether the unit is
 /// currently active or not.
-#[derive(Debug, Display, EnumString, Eq, PartialEq)]
+#[derive(Clone, Debug, Display, EnumString, Eq, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
 pub enum ActiveState {
     /// The unit is active.
@@ -358,7 +358,7 @@ impl TryFrom<OwnedValue> for ActiveState {
 }
 
 /// Unique ID for a runtime cycle of a unit
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvocationId(Vec<u8>);
 
 impl TryFrom<OwnedValue> for InvocationId {

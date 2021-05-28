@@ -4,7 +4,7 @@ description = "The component of the Stackable Platform that manages installation
 edition = "2018"
 license = "Apache-2.0"
 name = "stackable-agent"
-version = "0.3.0-nightly"
+version = "0.4.0-nightly"
 
 [dependencies]
 # We are currently referencing the Krustlet directly from a Stackable fork of the official repository.
@@ -16,7 +16,7 @@ byteorder = "1.4"
 env_logger = "0.8"
 flate2 = "1.0"
 futures-util = "0.3"
-handlebars = "3.5"
+handlebars = "4.0"
 hostname = "0.3"
 k8s-openapi = { version = "0.11", default-features = false, features = ["api", "v1_18"] }
 krator = { git = "https://github.com/stackabletech/krustlet.git", branch = "stackable_patches_v0.7.0" } # version = "0.2"
@@ -42,8 +42,15 @@ tar = "0.4"
 thiserror = "1.0"
 tokio = { version = "1.6", features = ["macros", "rt-multi-thread", "time"] }
 url = "2.2"
-zbus = "2.0.0-beta.3"
-zvariant = "2.6"
+# The current zbus version 2.0.0-beta.3 causes deadlocks (see
+# https://gitlab.freedesktop.org/dbus/zbus/-/issues/150). So the
+# dependency is pinned to the current HEAD of the main branch until the
+# next version is released.
+zbus = { git = "https://gitlab.freedesktop.org/dbus/zbus.git", rev = "9c551554e665532abc76469cdc73c1943bfb6285" }
+# The current zvariant version 2.6.0 is not compatible with the pinned
+# zbus version. So the dependency is pinned to the current HEAD of the
+# main branch until the next version is released.
+zvariant = { git = "https://gitlab.freedesktop.org/dbus/zbus.git", rev = "9c551554e665532abc76469cdc73c1943bfb6285" }
 
 [dev-dependencies]
 indoc = "1.0"
