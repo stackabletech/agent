@@ -4,12 +4,17 @@ use crate::provider::{
 };
 
 use anyhow::{anyhow, Result};
+use kube::{
+    api::{Patch, PatchParams},
+    Api, Client,
+};
 use kubelet::pod::state::prelude::*;
 use kubelet::{
     container::ContainerKey,
     pod::{Pod, PodKey},
 };
 use log::{debug, error, info};
+use serde_json::json;
 use std::time::Instant;
 use tokio::time::{self, Duration};
 
@@ -53,10 +58,11 @@ async fn start_service_units(
 ) -> Result<()> {
     let pod_key = &PodKey::from(pod);
 
-    let (systemd_manager, pod_handle) = {
+    let (client, systemd_manager, pod_handle) = {
         let provider_state = shared.read().await;
         let handles = provider_state.handles.read().await;
         (
+            provider_state.client.clone(),
             provider_state.systemd_manager.clone(),
             handles.get(&pod_key).map(PodHandle::to_owned),
         )
@@ -87,11 +93,37 @@ async fn start_service_units(
             await_startup(&systemd_manager, service_unit, Duration::from_secs(10)).await?;
         }
 
-        let invocation_id = systemd_manager.get_invocation_id(service_unit).await?;
-        store_invocation_id(shared.clone(), pod_key, &container_key, &invocation_id).await?;
+        let maybe_invocation_id = systemd_manager.get_invocation_id(service_unit).await.ok();
+        if let Some(invocation_id) = &maybe_invocation_id {
+            store_invocation_id(shared.clone(), pod_key, &container_key, &invocation_id).await?;
+        }
+        add_annotation(
+            client.clone(),
+            pod,
+            "featureLogs",
+            &maybe_invocation_id.is_some().to_string(),
+        )
+        .await?;
     }
 
     Ok(())
+}
+
+async fn add_annotation(client: Client, pod: &Pod, key: &str, value: &str) -> kube::Result<Pod> {
+    let api: Api<Pod> = Api::namespaced(client.clone(), pod.namespace());
+    let patch = json!({
+        "metadata": {
+            "annotations": {
+                key: value
+            }
+        }
+    });
+    api.patch(
+        pod.name(),
+        &PatchParams::default(),
+        &Patch::Strategic(patch),
+    )
+    .await
 }
 
 /// Checks if the given service unit is still running after the given duration.
