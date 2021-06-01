@@ -1,0 +1,28 @@
+= Logs
+
+The logs of a pod can be retrieved with `kubectl logs`.
+
+    $ kubectl logs kafka
+    [2021-06-01 13:51:03,852] INFO Registered kafka:type=kafka.Log4jController MBean (kafka.utils.Log4jControllerRegistration$)
+    [2021-06-01 13:51:04,361] INFO Registered signal handlers for TERM, INT, HUP (org.apache.kafka.common.utils.LoggingSignalHandler)
+    [2021-06-01 13:51:04,362] INFO starting (kafka.server.KafkaServer)
+
+For this to work systemd version 232 or newer must be installed on the
+node. This is the case for Debian 10 and CentOS 8 but not for CentOS 7.
+The annotation `featureLogs` with a value of `true` or `false` is added
+to all pods to indicate the availability of the logs.
+
+    $ kubectl describe pod kafka
+    …
+    Annotations:  featureLogs: true
+    …
+
+If `featureLogs` is `false` then the output of `kubectl logs` is empty.
+
+The following options are not yet supported:
+
+  * `--limit-bytes`
+  * `-p --previous`
+  * `--since`
+  * `--since-time`
+  * `--timestamps`
