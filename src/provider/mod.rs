@@ -353,6 +353,12 @@ impl Provider for StackableProvider {
                     }
                 }
             });
+        } else {
+            debug!(
+                "Logs for pod [{:?}] and container [{:?}] cannot be sent \
+                   because the invocation ID is not available.",
+                pod_key, container_key
+            );
         }
 
         Ok(())

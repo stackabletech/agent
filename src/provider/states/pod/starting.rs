@@ -98,7 +98,7 @@ async fn start_service_units(
             store_invocation_id(shared.clone(), pod_key, &container_key, &invocation_id).await?;
         }
         add_annotation(
-            client.clone(),
+            &client,
             pod,
             "featureLogs",
             &maybe_invocation_id.is_some().to_string(),
@@ -107,23 +107,6 @@ async fn start_service_units(
     }
 
     Ok(())
-}
-
-async fn add_annotation(client: Client, pod: &Pod, key: &str, value: &str) -> kube::Result<Pod> {
-    let api: Api<Pod> = Api::namespaced(client.clone(), pod.namespace());
-    let patch = json!({
-        "metadata": {
-            "annotations": {
-                key: value
-            }
-        }
-    });
-    api.patch(
-        pod.name(),
-        &PatchParams::default(),
-        &Patch::Strategic(patch),
-    )
-    .await
 }
 
 /// Checks if the given service unit is still running after the given duration.
@@ -174,4 +157,36 @@ async fn store_invocation_id(
     let provider_state = shared.write().await;
     let mut handles = provider_state.handles.write().await;
     handles.set_invocation_id(&pod_key, &container_key, invocation_id)
+}
+
+/// Adds an annotation to the given pod.
+///
+/// If there is already an annotation with the given key then the value
+/// is replaced.
+/// The function returns when the patch is sent. It does not await the
+/// changes to be visible to the watching clients.
+async fn add_annotation(client: &Client, pod: &Pod, key: &str, value: &str) -> kube::Result<Pod> {
+    debug!(
+        "Adding annotation [{}: {}] to pod [{:?}]",
+        key,
+        value,
+        PodKey::from(pod)
+    );
+
+    let api: Api<Pod> = Api::namespaced(client.clone(), pod.namespace());
+
+    let patch = json!({
+        "metadata": {
+            "annotations": {
+                key: value
+            }
+        }
+    });
+
+    api.patch(
+        pod.name(),
+        &PatchParams::default(),
+        &Patch::Strategic(patch),
+    )
+    .await
 }
