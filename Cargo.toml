@@ -25,7 +25,7 @@ kubelet = { git = "https://github.com/stackabletech/krustlet.git", branch = "sta
 Inflector = "0.11"
 lazy_static = "1.4"
 log = "0.4"
-nix = "0.20"
+nix = "0.21"
 oci-distribution = { git = "https://github.com/stackabletech/krustlet.git", branch = "stackable_patches_v0.7.0" } # version = "0.6"
 regex = "1.4"
 reqwest = "0.11"
