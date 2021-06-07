@@ -339,27 +339,27 @@ impl Provider for StackableProvider {
                 container_key
             )
         })?;
-        let invocation_id = container_handle.invocation_id.ok_or_else(|| {
-            anyhow!(
-                "Invocation ID for container [{}] in pod [{:?}] is unknown. \
-                The service is probably not started yet.",
-                container_key,
-                pod_key
-            )
-        })?;
 
-        task::spawn_blocking(move || {
-            let result = Runtime::new()
-                .unwrap()
-                .block_on(journal_reader::send_messages(&mut sender, &invocation_id));
+        if let Some(invocation_id) = container_handle.invocation_id {
+            task::spawn_blocking(move || {
+                let result = Runtime::new()
+                    .unwrap()
+                    .block_on(journal_reader::send_messages(&mut sender, &invocation_id));
 
-            if let Err(error) = result {
-                match error.downcast_ref::<SendError>() {
-                    Some(SendError::ChannelClosed) => (),
-                    _ => error!("Log could not be sent. {}", error),
+                if let Err(error) = result {
+                    match error.downcast_ref::<SendError>() {
+                        Some(SendError::ChannelClosed) => (),
+                        _ => error!("Log could not be sent. {}", error),
+                    }
                 }
-            }
-        });
+            });
+        } else {
+            debug!(
+                "Logs for pod [{:?}] and container [{:?}] cannot be sent \
+                   because the invocation ID is not available.",
+                pod_key, container_key
+            );
+        }
 
         Ok(())
     }

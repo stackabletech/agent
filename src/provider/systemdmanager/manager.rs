@@ -389,6 +389,8 @@ impl SystemdManager {
     }
 
     /// Retrieves the invocation ID for the given unit.
+    ///
+    /// The invocation ID was introduced in systemd version 232.
     pub async fn get_invocation_id(&self, unit: &str) -> anyhow::Result<String> {
         self.proxy
             .load_unit(unit)
