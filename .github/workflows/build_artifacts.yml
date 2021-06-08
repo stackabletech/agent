@@ -26,10 +26,15 @@ jobs:
         run: ~/.cargo/bin/cargo build --verbose --release
       - name: Build apt package
         run: ~/.cargo/bin/cargo deb --manifest-path Cargo.toml --no-build
-      - name: Publish apt package
+      - name: Check workflow permissions
+        id: check_permissions
+        uses: scherermichael-oss/action-has-permission@1.0.6
+        with:
+          required-permission: read
         env:
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        if: env.NEXUS_PASSWORD != null
+      - name: Publish apt package
+        if: steps.check_permissions.outputs.has-permission
         run: >-
           /usr/bin/curl
           --fail
@@ -57,10 +62,15 @@ jobs:
         run: ~/.cargo/bin/cargo build --verbose --release
       - name: Build RPM package
         run: packaging/buildrpm.sh stackable-agent
-      - name: Publish RPM package
+      - name: Check workflow permissions
+        id: check_permissions
+        uses: scherermichael-oss/action-has-permission@1.0.6
+        with:
+          required-permission: read
         env:
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        if: env.NEXUS_PASSWORD != null
+      - name: Publish RPM package
+        if: steps.check_permissions.outputs.has-permission
         run: >-
           /usr/bin/curl
           --fail
