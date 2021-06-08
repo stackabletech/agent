@@ -39,7 +39,7 @@ pub struct SystemdManager {
 impl SystemdManager {
     /// Creates a new instance, takes a flag whether to run within the
     /// user session or manage services system-wide.
-    pub async fn new(user_mode: bool) -> Result<Self, StackableError> {
+    pub async fn new(user_mode: bool, max_pods: u16) -> Result<Self, StackableError> {
         // Connect to session or system bus depending on the value of [user_mode]
         let connection = if user_mode {
             Connection::new_session().await.map_err(|e| RuntimeError {
@@ -57,8 +57,12 @@ impl SystemdManager {
             })?
         };
 
-        let proxy =
-            AsyncManagerProxy::new(&connection).map_err(|e| RuntimeError { msg: e.to_string() })?;
+        // The maximum number of queued DBus messages must be higher
+        // than the number of containers which can be started and
+        // stopped simultaneously.
+        let connection = connection.set_max_queued(max_pods as usize * 2);
+
+        let proxy = AsyncManagerProxy::new(&connection);
 
         // Depending on whether we are supposed to run in user space or system-wide
         // we'll pick the default directory to initialize the systemd manager with
@@ -385,6 +389,8 @@ impl SystemdManager {
     }
 
     /// Retrieves the invocation ID for the given unit.
+    ///
+    /// The invocation ID was introduced in systemd version 232.
     pub async fn get_invocation_id(&self, unit: &str) -> anyhow::Result<String> {
         self.proxy
             .load_unit(unit)
