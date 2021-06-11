@@ -1,0 +1,42 @@
+= Jobs
+
+Jobs which terminate after performing a task, must be created with
+`restartPolicy` set to `Never`:
+
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: <pod-name>
+    spec:
+      containers:
+        - name: <job-name>
+          image: <job-image>
+          command:
+            - <job-command>
+      restartPolicy: Never
+
+If the job terminated successfully then the pod phase is set to
+`Succeeded` and the exit code of the container state is `0`:
+
+    status:
+      phase: Succeeded
+      message: Completed
+      reason: Completed
+      containerStatuses:
+        - state:
+            terminated:
+              exitCode: 0
+              message: Completed
+
+If the job failed then the pod phase is set to `Failed` and the exit
+code of the container state is `1`:
+
+    status:
+      phase: Failed
+      message: Error
+      reason: Error
+      containerStatuses:
+        - state:
+            terminated:
+              exitCode: 1
+              message: Error

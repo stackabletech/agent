@@ -3,10 +3,14 @@
 == 0.4.0 - unreleased
 
 :188: https://github.com/stackabletech/agent/pull/188[#188]
+:204: https://github.com/stackabletech/agent/pull/204[#204]
 
 === Added
 * Annotation `featureLogs` added to the pods to indicate if logs can be
   retrieved with `kubectl logs` ({188}).
+
+=== Fixed
+* Pods with restart policy `Never` handled correctly ({204}).
 
 == 0.3.0 - 2021-05-27
 

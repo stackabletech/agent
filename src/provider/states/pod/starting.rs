@@ -1,6 +1,11 @@
 use super::running::Running;
 use crate::provider::{
-    systemdmanager::manager::SystemdManager, PodHandle, PodState, ProviderState,
+    kubernetes::{
+        accessor::{restart_policy, RestartPolicy},
+        status::patch_container_status,
+    },
+    systemdmanager::manager::SystemdManager,
+    PodHandle, PodState, ProviderState,
 };
 
 use anyhow::{anyhow, Result};
@@ -8,11 +13,11 @@ use kube::{
     api::{Patch, PatchParams},
     Api, Client,
 };
-use kubelet::pod::state::prelude::*;
 use kubelet::{
     container::ContainerKey,
     pod::{Pod, PodKey},
 };
+use kubelet::{container::Status, pod::state::prelude::*};
 use log::{debug, error, info};
 use serde_json::json;
 use std::time::Instant;
@@ -83,14 +88,16 @@ async fn start_service_units(
             info!("Enabling systemd unit [{}]", service_unit);
             systemd_manager.enable(service_unit).await?;
 
-            // TODO: does this need to be configurable, or ar we happy with a hard coded value
-            //  for now. I've briefly looked at the podspec and couldn't identify a good field
-            //  to use for this - also, currently this starts containers (= systemd units) in
-            //  order and waits 10 seconds for every unit, so a service with five containers
-            //  would take 50 seconds until it reported running - which is totally fine in case
-            //  the units actually depend on each other, but a case could be made for waiting
-            //  once at the end
-            await_startup(&systemd_manager, service_unit, Duration::from_secs(10)).await?;
+            if restart_policy(pod) != RestartPolicy::Never {
+                // TODO: does this need to be configurable, or ar we happy with a hard coded value
+                //  for now. I've briefly looked at the podspec and couldn't identify a good field
+                //  to use for this - also, currently this starts containers (= systemd units) in
+                //  order and waits 10 seconds for every unit, so a service with five containers
+                //  would take 50 seconds until it reported running - which is totally fine in case
+                //  the units actually depend on each other, but a case could be made for waiting
+                //  once at the end
+                await_startup(&systemd_manager, service_unit, Duration::from_secs(10)).await?;
+            }
         }
 
         let maybe_invocation_id = systemd_manager.get_invocation_id(service_unit).await.ok();
@@ -104,6 +111,8 @@ async fn start_service_units(
             &maybe_invocation_id.is_some().to_string(),
         )
         .await?;
+
+        patch_container_status(&client, &pod, &container_key, &Status::running()).await;
     }
 
     Ok(())

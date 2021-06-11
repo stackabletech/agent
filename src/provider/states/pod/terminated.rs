@@ -1,12 +1,12 @@
 use kubelet::pod::{state::prelude::*, PodKey};
-use log::{error, info, warn};
+use log::{debug, info, warn};
 
 use crate::provider::{PodState, ProviderState};
 
 #[derive(Default, Debug)]
 /// The pod object was deleted in Kubernetes
 pub struct Terminated {
-    pub message: String,
+    pub successful: bool,
 }
 
 #[async_trait::async_trait]
@@ -17,10 +17,7 @@ impl State<PodState> for Terminated {
         pod_state: &mut PodState,
         pod: Manifest<Pod>,
     ) -> Transition<PodState> {
-        info!(
-            "Pod {} was terminated, stopping service!",
-            &pod_state.service_name
-        );
+        info!("Pod {} was terminated", &pod_state.service_name);
 
         let pod = pod.latest();
         let pod_key = &PodKey::from(pod);
@@ -40,9 +37,9 @@ impl State<PodState> for Terminated {
             for container_handle in containers.values() {
                 let service_unit = &container_handle.service_unit;
 
-                info!("Stopping systemd unit [{}]", service_unit);
+                debug!("Stopping systemd unit [{}]", service_unit);
                 if let Err(stop_error) = systemd_manager.stop(service_unit).await {
-                    error!(
+                    warn!(
                         "Error occurred stopping systemd unit [{}]: [{}]",
                         service_unit, stop_error
                     );
@@ -50,33 +47,46 @@ impl State<PodState> for Terminated {
                 }
 
                 // Daemon reload is false here, we'll do that once after all units have been removed
-                info!("Removing systemd unit [{}]", service_unit);
+                debug!("Removing systemd unit [{}]", service_unit);
                 if let Err(remove_error) = systemd_manager.remove_unit(service_unit, false).await {
-                    error!(
+                    warn!(
                         "Error occurred removing systemd unit [{}]: [{}]",
                         service_unit, remove_error
                     );
                     return Transition::Complete(Err(remove_error));
                 }
             }
+
+            debug!("Performing daemon-reload");
+            if let Err(reload_error) = systemd_manager.reload().await {
+                warn!("Failed to perform daemon-reload: [{}]", reload_error);
+                return Transition::Complete(Err(reload_error));
+            };
         } else {
-            warn!(
-                "No unit definitions found, not stopping anything for pod [{}]!",
-                pod_state.service_name
-            );
+            debug!("Pod [{}] was already terminated", pod_state.service_name);
         }
 
-        info!("Performing daemon-reload");
-        return match systemd_manager.reload().await {
-            Ok(()) => Transition::Complete(Ok(())),
-            Err(reload_error) => {
-                error!("Failed to perform daemon-reload: [{}]", reload_error);
-                Transition::Complete(Err(reload_error))
-            }
-        };
+        Transition::Complete(Ok(()))
     }
 
-    async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
-        Ok(make_status(Phase::Succeeded, &self.message))
+    async fn status(&self, _pod_state: &mut PodState, pod: &Pod) -> anyhow::Result<PodStatus> {
+        let phase = pod
+            .as_kube_pod()
+            .status
+            .as_ref()
+            .and_then(|status| status.phase.as_ref())
+            .map(String::as_ref);
+
+        let already_terminated = phase == Some("Succeeded") || phase == Some("Failed");
+
+        let status = if already_terminated {
+            Default::default() // no changes to the current status
+        } else if self.successful {
+            make_status(Phase::Succeeded, "Completed")
+        } else {
+            make_status(Phase::Failed, "Error")
+        };
+
+        Ok(status)
     }
 }
