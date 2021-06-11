@@ -35,7 +35,6 @@ pub async fn find_repository(
         for repository in repos.iter() {
             debug!("got repo definition: [{:?}]", repository);
             // Convert repository to object implementing our trait
-            // TODO: add generic implementation here to support different types of repository
             let mut repo = StackableRepoProvider::try_from(repository)?;
             trace!("converted to stackable repo: {:?}", repository);
             if repo.provides_package(package.clone()).await? {

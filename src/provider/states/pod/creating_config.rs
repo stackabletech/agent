@@ -94,8 +94,6 @@ impl CreatingConfig {
         ns: &str,
         configmaps: Vec<String>,
     ) -> Result<HashMap<String, ConfigMap>, StackableError> {
-        // TODO: distinguish between an actually missing configmap and an error when talking to
-        // the apiserver
         let configmaps_api: Api<ConfigMap> = Api::namespaced(client.clone(), ns);
         let mut missing_configmaps = vec![];
         let mut found_configmaps = HashMap::new();
@@ -188,7 +186,6 @@ impl CreatingConfig {
                     debug!("done rendering");
                     let target_file = target_directory.join(&key);
 
-                    // TODO: compare existing file with intended state
                     if CreatingConfig::needs_update(&target_file, &rendered_content)? {
                         debug!(
                             "writing content of map entry {} to file {:?}",
@@ -242,7 +239,6 @@ impl State<PodState> for CreatingConfig {
     ) -> Transition<PodState> {
         let pod = pod.latest();
 
-        // TODO: this entire function needs to be heavily refactored
         let name = pod.name();
         let client = {
             let provider_state = provider_state.read().await;
@@ -306,7 +302,6 @@ impl State<PodState> for CreatingConfig {
         // been created in the api server
 
         // Retrieve all config map names that are referenced in the pods volume mounts
-        // TODO: refactor this to use the map created above
         let referenced_config_maps = CreatingConfig::get_config_maps(&pod).await;
 
         // Check if all required config maps have been created in the api-server

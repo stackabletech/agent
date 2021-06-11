@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Convert node tags to string in the form of key=value,key=value,...
-    // TODO: check for commas in the key value pairs themselves
+    // TODO: check for commas in the key value pairs themselves https://github.com/stackabletech/agent/issues/195
     let node_labels = agent_config
         .tags
         .iter()
@@ -71,7 +71,6 @@ async fn main() -> anyhow::Result<()> {
         data_dir: agent_config.data_directory.clone(),
         plugins_dir: plugins_directory.clone(),
         node_labels: agent_config.tags,
-        // TODO: Discuss whether we want this configurable or leave it at a high number for now
         max_pods: 110,
         bootstrap_file: agent_config.bootstrap_file,
         allow_local_modules: false,
