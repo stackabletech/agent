@@ -117,12 +117,10 @@ impl StackableRepoProvider {
         Ok(())
     }
 
-    // TODO: implement caching based on version of metadata
     async fn get_repo_metadata(&mut self) -> Result<RepositoryContent, StackableError> {
         trace!("entering get_repo_metadata");
         let mut metadata_url = self.base_url.clone();
 
-        // TODO: add error propagation
         // path_segments_mut returns () in an error case, not sure how to handle this
         metadata_url
             .path_segments_mut()
