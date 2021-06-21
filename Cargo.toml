@@ -19,16 +19,16 @@ futures-util = "0.3"
 handlebars = "4.0"
 hostname = "0.3"
 k8s-openapi = { version = "0.11", default-features = false, features = ["api", "v1_18"] }
-krator = { git = "https://github.com/stackabletech/krustlet.git", branch = "stackable_patches_v0.7.0" } # version = "0.2"
-kube = { version= "0.48", default-features = false, features = ["derive", "native-tls"] }
-kubelet = { git = "https://github.com/stackabletech/krustlet.git", branch = "stackable_patches_v0.7.0", default-features = true, features= ["derive", "cli"] } # version = "0.7"
+krator = { git = "https://github.com/stackabletech/krustlet.git", branch = "stackable_patches_v0.7.0", default-features = false, features = ["rustls-tls"] } # version = "0.2"
+kube = { version= "0.48", default-features = false, features = ["derive", "rustls-tls"] }
+kubelet = { git = "https://github.com/stackabletech/krustlet.git", branch = "stackable_patches_v0.7.0", default-features = false, features= ["derive", "cli", "rustls-tls"] } # version = "0.7"
 Inflector = "0.11"
 lazy_static = "1.4"
 log = "0.4"
 nix = "0.21"
-oci-distribution = { git = "https://github.com/stackabletech/krustlet.git", branch = "stackable_patches_v0.7.0" } # version = "0.6"
+oci-distribution = { git = "https://github.com/stackabletech/krustlet.git", branch = "stackable_patches_v0.7.0", default-features = false, features = ["rustls-tls"] } # version = "0.6"
 regex = "1.4"
-reqwest = "0.11"
+reqwest = { version = "0.11", default-features = false }
 schemars = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
