@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2.3.4
+      - name: Update package index
+        run: sudo apt-get update
       - name: Install dependencies
         run: sudo apt-get install libsystemd-dev pkg-config
       - uses: actions-rs/toolchain@v1.0.7
@@ -36,6 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2.3.4
+      - name: Update package index
+        run: sudo apt-get update
       - name: Install dependencies
         run: sudo apt-get install libsystemd-dev pkg-config
       - uses: actions-rs/toolchain@v1.0.7
@@ -54,6 +58,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2.3.4
+      - name: Update package index
+        run: sudo apt-get update
       - name: Install dependencies
         run: sudo apt-get install libsystemd-dev pkg-config
       - uses: actions-rs/toolchain@v1.0.7
