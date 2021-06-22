@@ -37,7 +37,7 @@ shellexpand = "2.1"
 stackable_config = { git = "https://github.com/stackabletech/common.git", branch = "main" }
 strum = { version = "0.21", features = ["derive"] }
 strum_macros = "0.21"
-systemd = { git = "https://github.com/stackabletech/rust-systemd.git", branch = "stackable_patches_v0.8.2", default-features = false, features = ["journal"] }
+systemd = { version = "0.9", default-features = false, features = ["journal"] }
 tar = "0.4"
 thiserror = "1.0"
 tokio = { version = "1.7", features = ["macros", "rt-multi-thread", "time"] }
