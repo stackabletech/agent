@@ -2,5 +2,5 @@
 
 The Stackable Agent has limitations, some of which are documented here.
 
-* The maximum number of Pods supported by the Agent is currently hardcoded to _110_.
-This restriction can be lifted if the need arises.
+* The maximum number of pods supported by the agent is currently hardcoded to 110.
+  This restriction can be lifted if the need arises.
