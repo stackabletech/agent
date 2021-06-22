@@ -3,5 +3,8 @@
 ** xref:installation/binaries.adoc[]
 * xref:configuration.adoc[]
 * xref:limitations.adoc[]
+* Pod types
+** xref:pod_types/services.adoc[]
+** xref:pod_types/jobs.adoc[]
 * Monitoring
 ** xref:monitoring/logs.adoc[]
