@@ -79,6 +79,19 @@ macro_rules! impl_type_for_enum {
     };
 }
 
+macro_rules! impl_tryfrom_ownedvalue_for_enum {
+    ($t:ty) => {
+        impl TryFrom<OwnedValue> for $t {
+            type Error = zvariant::Error;
+
+            fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
+                FromStr::from_str(&String::try_from(value)?)
+                    .map_err(|e: strum::ParseError| Self::Error::Message(e.to_string()))
+            }
+        }
+    };
+}
+
 /// Type of an entry in a changes list
 #[derive(Clone, Debug, Display, EnumString, EnumVariantNames, Eq, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
@@ -348,14 +361,7 @@ pub enum ActiveState {
     Deactivating,
 }
 
-impl TryFrom<OwnedValue> for ActiveState {
-    type Error = zvariant::Error;
-
-    fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
-        FromStr::from_str(&String::try_from(value)?)
-            .map_err(|e: strum::ParseError| Self::Error::Message(e.to_string()))
-    }
-}
+impl_tryfrom_ownedvalue_for_enum!(ActiveState);
 
 /// Unique ID for a runtime cycle of a unit
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -396,6 +402,83 @@ trait Unit {
     /// Unique ID for a runtime cycle of a unit
     #[dbus_proxy(property, name = "InvocationID")]
     fn invocation_id(&self) -> zbus::Result<InvocationId>;
+}
+
+/// Execution result of the last run of the service.
+///
+/// It is useful to determine the reason a service failed if it is in
+/// the "failed" state (see ['ActiveState::Failed`]).
+#[derive(Clone, Debug, Display, EnumString, Eq, PartialEq)]
+#[strum(serialize_all = "kebab-case")]
+pub enum ServiceResult {
+    /// Is set if the unit didn't fail.
+    Success,
+
+    /// Indicates that not enough resources were available to fork off
+    /// and execute the service processes.
+    Resources,
+
+    /// Indicates that a timeout occurred while executing a service
+    /// operation.
+    Timeout,
+
+    /// Indicates that a service process exited with an unclean exit
+    /// code.
+    ExitCode,
+
+    /// Indicates that a service process exited with an uncaught signal.
+    Signal,
+
+    /// Indicates that a service process exited uncleanly and dumped
+    /// core.
+    CoreDump,
+
+    /// Indicates that a service did not send out watchdog ping messages
+    /// often enough.
+    Watchdog,
+
+    /// Indicates that a service has been started too frequently in a
+    /// specific time frame (as configured in `StartLimitInterval`,
+    /// `StartLimitBurst`).
+    StartLimit,
+}
+
+impl_tryfrom_ownedvalue_for_enum!(ServiceResult);
+
+/// A systemd service unit object
+///
+/// A [`ServiceUnitProxy`] can be created from a [`UnitProxy`] with
+/// [`ServiceProxy::from`].
+///
+/// Currently not all methods of the systemd object are exposed.
+#[dbus_proxy(
+    default_service = "org.freedesktop.systemd1",
+    interface = "org.freedesktop.systemd1.Service"
+)]
+trait Service {
+    /// Execution result of the last run of the service. It is useful to
+    /// determine the reason a service failed if it is in the "failed"
+    /// state (see ['ActiveState::Failed`]).
+    #[dbus_proxy(property)]
+    fn result(&self) -> zbus::Result<ServiceResult>;
+}
+
+impl<'c> From<UnitProxy<'c>> for ServiceProxy<'c> {
+    fn from(unit_proxy: UnitProxy<'c>) -> Self {
+        ServiceProxy::builder(unit_proxy.connection())
+            .path(unit_proxy.path().to_owned())
+            .unwrap()
+            .build()
+    }
+}
+
+impl<'c> From<AsyncUnitProxy<'c>> for AsyncServiceProxy<'c> {
+    fn from(unit_proxy: AsyncUnitProxy<'c>) -> Self {
+        AsyncServiceProxy::builder(unit_proxy.connection())
+            .path(unit_proxy.path().to_owned())
+            .unwrap()
+            .build()
+    }
 }
 
 /// A systemd job object

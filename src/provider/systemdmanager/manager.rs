@@ -4,10 +4,10 @@
 //! disable systemd units.
 //!
 use super::systemd1_api::{
-    ActiveState, AsyncJobProxy, AsyncManagerProxy, JobRemovedResult, JobRemovedSignal,
-    ManagerSignals, StartMode, StopMode,
+    ActiveState, AsyncJobProxy, AsyncManagerProxy, AsyncServiceProxy, JobRemovedResult,
+    JobRemovedSignal, ManagerSignals, StartMode, StopMode,
 };
-use crate::provider::systemdmanager::systemdunit::SystemDUnit;
+use crate::provider::systemdmanager::{systemd1_api::ServiceResult, systemdunit::SystemDUnit};
 use crate::provider::StackableError;
 use crate::provider::StackableError::RuntimeError;
 use anyhow::anyhow;
@@ -386,6 +386,17 @@ impl SystemdManager {
             .await
             .map(|state| state == ActiveState::Active)
             .map_err(|e| anyhow!("Error receiving ActiveState of unit [{}]. {}", unit, e))
+    }
+
+    /// Checks if the result of the given service unit is not set to success.
+    pub async fn failed(&self, unit: &str) -> anyhow::Result<bool> {
+        let unit_proxy = self.proxy.load_unit(unit).await?;
+        let service_proxy = AsyncServiceProxy::from(unit_proxy);
+        service_proxy
+            .result()
+            .await
+            .map(|state| state != ServiceResult::Success)
+            .map_err(|e| anyhow!("Error receiving Result of unit [{}]. {}", unit, e))
     }
 
     /// Retrieves the invocation ID for the given unit.

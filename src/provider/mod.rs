@@ -42,6 +42,7 @@ pub struct StackableProvider {
 pub const CRDS: &[&str] = &["repositories.stable.stackable.de"];
 
 mod error;
+pub mod kubernetes;
 mod repository;
 mod states;
 pub mod systemdmanager;
@@ -366,7 +367,7 @@ impl Provider for StackableProvider {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
     use rstest::rstest;
     use std::ops::Deref;

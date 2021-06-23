@@ -3,5 +3,7 @@
 ** xref:installation/binaries.adoc[]
 * xref:configuration.adoc[]
 * xref:limitations.adoc[]
+* xref:services.adoc[]
+* xref:jobs.adoc[]
 * Monitoring
 ** xref:monitoring/logs.adoc[]

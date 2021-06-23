@@ -3,10 +3,19 @@
 == 0.4.0 - unreleased
 
 :188: https://github.com/stackabletech/agent/pull/188[#188]
+:205: https://github.com/stackabletech/agent/pull/205[#205]
 
 === Added
 * Annotation `featureLogs` added to the pods to indicate if logs can be
   retrieved with `kubectl logs` ({188}).
+
+=== Changed
+* Restart setting in systemd units removed because the agent already
+  monitors the units and restarts them according to the restart policy
+  in the pod spec ({205}).
+
+=== Fixed
+* Pods with restart policy `Never` handled correctly ({205}).
 
 == 0.3.0 - 2021-05-27
 

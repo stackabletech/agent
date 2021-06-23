@@ -5,7 +5,6 @@ use kubelet::container::Container;
 use kubelet::pod::Pod;
 
 use crate::provider::error::StackableError;
-
 use crate::provider::error::StackableError::PodValidationError;
 use crate::provider::states::pod::creating_config::CreatingConfig;
 use crate::provider::states::pod::PodState;
@@ -17,15 +16,6 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::iter;
 use strum::{Display, EnumIter, IntoEnumIterator};
-
-lazy_static! {
-    // This is used to map from Kubernetes restart lingo to systemd restart terms
-    static ref RESTART_POLICY_MAP: HashMap<&'static str, &'static str> = [
-            ("Always", "always"),
-            ("OnFailure", "on-failure"),
-            ("Never", "no")
-        ].iter().cloned().collect();
-}
 
 /// The default timeout for stopping a service, after this has passed systemd will terminate
 /// the process
@@ -204,26 +194,6 @@ impl SystemDUnit {
                 })
             }
         };
-
-        // Get restart policy from pod, if none is specified default to "Never"
-        let restart_policy = pod_spec.restart_policy.as_deref().unwrap_or("Never");
-
-        // Lookup the equivalent systemd restart policy for the configured one
-        // If this lookup fails (which means a restart policy was specified which we do not know
-        // about) then we fail the entire service to avoid unpredictable behavior
-        let restart_policy = match RESTART_POLICY_MAP.get(restart_policy) {
-            Some(policy) => policy,
-            None => {
-                return Err(PodValidationError {
-                    msg: format!(
-                        "Unknown value [{}] for RestartPolicy in pod [{}]",
-                        restart_policy, unit.name
-                    ),
-                })
-            }
-        };
-
-        unit.add_property(Section::Service, "Restart", restart_policy);
 
         // If `terminationGracePeriodSeconds` was specified in the PodSpec set the value as
         // 'TimeOutStopSec` on the systemd unit
@@ -512,14 +482,12 @@ mod test {
               name: stackable
             spec:
               containers: []
-              restartPolicy: Always
               securityContext:
                 windowsOptions:
                   runAsUserName: pod-user",
         "stackable.service",
         indoc! {"
             [Service]
-            Restart=always
             TimeoutStopSec=30
             User=pod-user"}
     )]
@@ -557,7 +525,6 @@ mod test {
             [Service]
             Environment="LOG_DIR=/var/log/default-stackable" "LOG_LEVEL=INFO"
             ExecStart=start.sh arg /etc/default-stackable
-            Restart=no
             StandardError=journal
             StandardOutput=journal
             TimeoutStopSec=30
@@ -591,7 +558,6 @@ mod test {
 
             [Service]
             ExecStart=start.sh
-            Restart=no
             StandardError=journal
             StandardOutput=journal
             TimeoutStopSec=30
@@ -612,7 +578,6 @@ mod test {
         "stackable.service",
         indoc! {"
             [Service]
-            Restart=no
             TimeoutStopSec=10"}
     )]
 
