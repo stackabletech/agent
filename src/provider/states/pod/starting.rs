@@ -88,7 +88,7 @@ async fn start_service_units(
             info!("Enabling systemd unit [{}]", service_unit);
             systemd_manager.enable(service_unit).await?;
 
-            if restart_policy(pod) != RestartPolicy::Never {
+            if restart_policy(pod) == RestartPolicy::Always {
                 // TODO: does this need to be configurable, or ar we happy with a hard coded value
                 //  for now. I've briefly looked at the podspec and couldn't identify a good field
                 //  to use for this - also, currently this starts containers (= systemd units) in
