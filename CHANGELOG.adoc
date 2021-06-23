@@ -1,6 +1,6 @@
 = Changelog
 
-== 0.4.0 - unreleased
+== 0.4.0 - 2021-06-23
 
 :188: https://github.com/stackabletech/agent/pull/188[#188]
 :205: https://github.com/stackabletech/agent/pull/205[#205]
