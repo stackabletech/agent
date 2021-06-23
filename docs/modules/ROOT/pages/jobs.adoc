@@ -1,7 +1,7 @@
 = Jobs
 
-Jobs which terminate after performing a task, must be created with
-`restartPolicy` set to `Never`:
+A job performs a task which terminates after some time. The
+`restartPolicy` must be explicitly set to `Never` or `OnFailure`:
 
     apiVersion: v1
     kind: Pod

@@ -1,10 +1,8 @@
 = Services
 
-Services do not terminate on their own. They run until the pod is
-deleted. The `restartPolicy` must be set to `Always` or `OnFailure`. As
-services cannot terminate successfully, there is no difference between
-these two policies. `restartPolicy` defaults to `Always` and can
-therefore be omitted.
+A pod which provides a service should never terminate on its own, so the
+`restartPolicy` must be set to `Always`. As `restartPolicy` defaults to
+`Always`, it can also be omitted.
 
     apiVersion: v1
     kind: Pod
