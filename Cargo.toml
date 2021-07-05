@@ -40,7 +40,7 @@ strum_macros = "0.21"
 systemd = { version = "0.9", default-features = false, features = ["journal"] }
 tar = "0.4"
 thiserror = "1.0"
-tokio = { version = "1.7", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.8", features = ["macros", "rt-multi-thread", "time"] }
 url = "2.2"
 # The current zbus version 2.0.0-beta.3 causes deadlocks (see
 # https://gitlab.freedesktop.org/dbus/zbus/-/issues/150). So the

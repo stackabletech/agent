@@ -78,7 +78,7 @@ dependencies = [
  "futures-core",
  "memchr",
  "pin-project-lite 0.2.6",
- "tokio 1.7.1",
+ "tokio 1.8.0",
 ]
 
 [[package]]
@@ -898,7 +898,7 @@ dependencies = [
  "http 0.2.4",
  "indexmap",
  "slab",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-util",
  "tracing",
 ]
@@ -1061,7 +1061,7 @@ dependencies = [
  "itoa",
  "pin-project-lite 0.2.6",
  "socket2",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tower-service",
  "tracing",
  "want",
@@ -1076,7 +1076,7 @@ dependencies = [
  "bytes 1.0.1",
  "hyper",
  "native-tls",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-native-tls",
 ]
 
@@ -1294,7 +1294,7 @@ dependencies = [
  "kube-runtime",
  "serde",
  "serde_json",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-stream",
  "tracing",
  "tracing-futures",
@@ -1338,7 +1338,7 @@ dependencies = [
  "static_assertions",
  "thiserror",
  "time 0.2.27",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "url 2.2.2",
 ]
 
@@ -1370,7 +1370,7 @@ dependencies = [
  "serde",
  "smallvec",
  "snafu",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-util",
 ]
 
@@ -1414,7 +1414,7 @@ dependencies = [
  "tempdir",
  "thiserror",
  "tokio 0.2.25",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-compat-02",
  "tokio-stream",
  "tonic",
@@ -1748,7 +1748,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tracing",
  "www-authenticate",
 ]
@@ -2312,7 +2312,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-native-tls",
  "tokio-util",
  "url 2.2.2",
@@ -2755,7 +2755,7 @@ dependencies = [
  "systemd",
  "tar",
  "thiserror",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "url 2.2.2",
  "zbus",
  "zvariant",
@@ -3083,9 +3083,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.7.1"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fb2ed024293bb19f7a5dc54fe83bf86532a44c12a2bb8ba40d64a4509395ca2"
+checksum = "570c2eb13b3ab38208130eccd41be92520388791207fde783bda7c1e8ace28d4"
 dependencies = [
  "autocfg",
  "bytes 1.0.1",
@@ -3110,7 +3110,7 @@ dependencies = [
  "once_cell",
  "pin-project-lite 0.2.6",
  "tokio 0.2.25",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-stream",
 ]
 
@@ -3143,7 +3143,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
 dependencies = [
  "native-tls",
- "tokio 1.7.1",
+ "tokio 1.8.0",
 ]
 
 [[package]]
@@ -3153,7 +3153,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
  "rustls",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "webpki",
 ]
 
@@ -3165,7 +3165,7 @@ checksum = "f8864d706fdb3cc0843a49647ac892720dac98a6eeb818b77190592cf4994066"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.6",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-util",
 ]
 
@@ -3178,7 +3178,7 @@ dependencies = [
  "futures-util",
  "log",
  "pin-project 1.0.7",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tungstenite",
 ]
 
@@ -3194,7 +3194,7 @@ dependencies = [
  "log",
  "pin-project-lite 0.2.6",
  "slab",
- "tokio 1.7.1",
+ "tokio 1.8.0",
 ]
 
 [[package]]
@@ -3226,7 +3226,7 @@ dependencies = [
  "pin-project 1.0.7",
  "prost",
  "prost-derive",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-rustls",
  "tokio-stream",
  "tokio-util",
@@ -3260,7 +3260,7 @@ dependencies = [
  "pin-project 1.0.7",
  "rand 0.8.4",
  "slab",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-stream",
  "tokio-util",
  "tower-layer",
@@ -3560,7 +3560,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "tokio 1.7.1",
+ "tokio 1.8.0",
  "tokio-rustls",
  "tokio-stream",
  "tokio-tungstenite",
