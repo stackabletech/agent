@@ -185,7 +185,7 @@ impl_type_for_enum!(StopMode);
 /// ```
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
 /// let connection = zbus::Connection::new_system().unwrap();
-/// let manager = ManagerProxy::new(&connection);
+/// let manager = ManagerProxy::new(&connection).unwrap();
 /// let unit = manager.load_unit("dbus.service").unwrap();
 /// ```
 ///
@@ -195,7 +195,7 @@ impl_type_for_enum!(StopMode);
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
 /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
 /// let connection = zbus::azync::Connection::new_system().await.unwrap();
-/// let manager = AsyncManagerProxy::new(&connection);
+/// let manager = AsyncManagerProxy::new(&connection).unwrap();
 /// let unit = manager.load_unit("dbus.service").await.unwrap();
 /// # });
 /// ```
@@ -275,7 +275,7 @@ trait Manager {
 ///
 /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
 /// let connection = zbus::azync::Connection::new_system().await.unwrap();
-/// let manager = AsyncManagerProxy::new(&connection);
+/// let manager = AsyncManagerProxy::new(&connection).unwrap();
 /// let signals = manager
 ///     .receive_signal(ManagerSignals::JobRemoved.into()).await.unwrap()
 ///     .map(|message| message.body::<JobRemovedSignal>().unwrap());
@@ -467,8 +467,9 @@ impl<'c> From<UnitProxy<'c>> for ServiceProxy<'c> {
     fn from(unit_proxy: UnitProxy<'c>) -> Self {
         ServiceProxy::builder(unit_proxy.connection())
             .path(unit_proxy.path().to_owned())
-            .unwrap()
+            .unwrap() // safe because the path is taken from an existing proxy
             .build()
+            .unwrap() // safe because build() never returns an error
     }
 }
 
@@ -476,8 +477,9 @@ impl<'c> From<AsyncUnitProxy<'c>> for AsyncServiceProxy<'c> {
     fn from(unit_proxy: AsyncUnitProxy<'c>) -> Self {
         AsyncServiceProxy::builder(unit_proxy.connection())
             .path(unit_proxy.path().to_owned())
-            .unwrap()
+            .unwrap() // safe because the path is taken from an existing proxy
             .build()
+            .unwrap() // safe because build() never returns an error
     }
 }
 
