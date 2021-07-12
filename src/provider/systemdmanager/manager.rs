@@ -62,7 +62,12 @@ impl SystemdManager {
         // stopped simultaneously.
         let connection = connection.set_max_queued(max_pods as usize * 2);
 
-        let proxy = AsyncManagerProxy::new(&connection);
+        let proxy = AsyncManagerProxy::new(&connection).map_err(|e| RuntimeError {
+            msg: format!(
+                "Proxy for org.freedesktop.systemd1.Manager could not be created: {}",
+                e
+            ),
+        })?;
 
         // Depending on whether we are supposed to run in user space or system-wide
         // we'll pick the default directory to initialize the systemd manager with
@@ -344,12 +349,6 @@ impl SystemdManager {
             .filter(|signal| future::ready(&signal.job.to_owned().into_inner() == job.path()));
 
         let signal = signals.next().await;
-
-        // Unsubscribe from receiving signals.
-        // If `signals` goes out of scope prematurely due to an error
-        // then the subscription is cancelled synchronously in the
-        // destructor of `SignalStream`.
-        let _ = signals.into_inner().into_inner().close().await;
 
         match signal {
             Some(message) if message.result == JobRemovedResult::Done => Ok(()),
