@@ -18,11 +18,11 @@ For the build process to work these need to be installed on the build system.
 |===
 |Distribution |Package Names
 
-|Ubuntu
+|Ubuntu/Debian
 a|- pkg-config
 - libsystemd-dev
 
-|Centos
+|CentOS/RHEL
 a|- pkg-config
 - systemd-devel
 
