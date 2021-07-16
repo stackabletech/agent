@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::fs;
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -18,18 +19,19 @@ use kubelet::{
 use log::{debug, error};
 use tokio::{runtime::Runtime, sync::RwLock, task};
 
+use crate::config::AgentConfig;
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::{
     CrdMissing, KubeError, MissingObjectKey, PodValidationError,
 };
 use crate::provider::repository::package::Package;
-use crate::provider::states::pod::downloading::Downloading;
-use crate::provider::states::pod::terminated::Terminated;
 use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::SystemdManager;
 use kube::error::ErrorResponse;
 use std::collections::HashMap;
 use systemdmanager::journal_reader;
+
+use self::states::pod::{initializing::Initializing, terminated::Terminated};
 
 pub struct StackableProvider {
     shared: ProviderState,
@@ -53,6 +55,7 @@ pub struct ProviderState {
     handles: Arc<RwLock<PodHandleMap>>,
     client: Client,
     systemd_manager: Arc<SystemdManager>,
+    server_ip_address: IpAddr,
 }
 
 /// Contains handles for running pods.
@@ -171,27 +174,24 @@ impl ContainerHandle {
 impl StackableProvider {
     pub async fn new(
         client: Client,
-        parcel_directory: PathBuf,
-        config_directory: PathBuf,
-        log_directory: PathBuf,
-        session: bool,
-        pod_cidr: String,
+        agent_config: &AgentConfig,
         max_pods: u16,
     ) -> Result<Self, StackableError> {
-        let systemd_manager = Arc::new(SystemdManager::new(session, max_pods).await?);
+        let systemd_manager = Arc::new(SystemdManager::new(agent_config.session, max_pods).await?);
 
         let provider_state = ProviderState {
             handles: Default::default(),
             client,
             systemd_manager,
+            server_ip_address: agent_config.server_ip_address,
         };
 
         let provider = StackableProvider {
             shared: provider_state,
-            parcel_directory,
-            config_directory,
-            log_directory,
-            pod_cidr,
+            parcel_directory: agent_config.parcel_directory.to_owned(),
+            config_directory: agent_config.config_directory.to_owned(),
+            log_directory: agent_config.log_directory.to_owned(),
+            pod_cidr: agent_config.pod_cidr.to_owned(),
         };
         let missing_crds = provider.check_crds().await?;
         return if missing_crds.is_empty() {
@@ -255,7 +255,7 @@ impl StackableProvider {
 impl Provider for StackableProvider {
     type ProviderState = ProviderState;
     type PodState = PodState;
-    type InitialState = Downloading;
+    type InitialState = Initializing;
     type TerminatedState = Terminated;
 
     const ARCH: &'static str = "stackable-linux";

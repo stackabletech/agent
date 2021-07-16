@@ -57,22 +57,22 @@ async fn main() -> anyhow::Result<()> {
     let server_config = ServerConfig {
         addr: agent_config.server_ip_address,
         port: agent_config.server_port,
-        cert_file: agent_config.server_cert_file.unwrap_or_default(),
-        private_key_file: agent_config.server_key_file.unwrap_or_default(),
+        cert_file: agent_config.server_cert_file.to_owned().unwrap_or_default(),
+        private_key_file: agent_config.server_key_file.to_owned().unwrap_or_default(),
     };
 
     let plugins_directory = agent_config.data_directory.join("plugins");
 
     let krustlet_config = Config {
         node_ip: agent_config.server_ip_address,
-        hostname: agent_config.hostname.clone(),
-        node_name: agent_config.hostname,
+        hostname: agent_config.hostname.to_owned(),
+        node_name: agent_config.hostname.to_owned(),
         server_config,
-        data_dir: agent_config.data_directory.clone(),
-        plugins_dir: plugins_directory.clone(),
-        node_labels: agent_config.tags,
+        data_dir: agent_config.data_directory.to_owned(),
+        plugins_dir: plugins_directory.to_owned(),
+        node_labels: agent_config.tags.to_owned(),
         max_pods: 110,
-        bootstrap_file: agent_config.bootstrap_file,
+        bootstrap_file: agent_config.bootstrap_file.to_owned(),
         allow_local_modules: false,
         insecure_registries: None,
     };
@@ -89,11 +89,7 @@ async fn main() -> anyhow::Result<()> {
 
     let provider = StackableProvider::new(
         kube::Client::new(kubeconfig.clone()),
-        agent_config.parcel_directory.clone(),
-        agent_config.config_directory.clone(),
-        agent_config.log_directory.clone(),
-        agent_config.session,
-        agent_config.pod_cidr,
+        &agent_config,
         krustlet_config.max_pods,
     )
     .await
