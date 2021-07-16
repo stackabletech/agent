@@ -2,6 +2,11 @@
 
 == 0.5.0 - unreleased
 
+:224: https://github.com/stackabletech/agent/pull/224[#224]
+
+=== Added
+* `hostIP` and `podIP` added to the pod status ({224}).
+
 == 0.4.0 - 2021-06-23
 
 :188: https://github.com/stackabletech/agent/pull/188[#188]
