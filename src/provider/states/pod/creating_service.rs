@@ -3,14 +3,17 @@ use kubelet::{
     container::ContainerKey,
     pod::{Pod, PodKey},
 };
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 use super::setup_failed::SetupFailed;
 use super::starting::Starting;
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::{ContainerHandle, PodState, ProviderState};
 use anyhow::Error;
+use dirs::home_dir;
+use std::env;
 use std::fs::create_dir_all;
+use std::path::PathBuf;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Starting, SetupFailed)]
@@ -72,7 +75,7 @@ impl State<PodState> for CreatingService {
         // systemd unit file/service.
         // Map every container from the pod object to a systemdunit
         for container in &pod.containers() {
-            let unit = match SystemDUnit::new(
+            let mut unit = match SystemDUnit::new(
                 &unit_template,
                 &service_prefix,
                 &container,
@@ -82,6 +85,30 @@ impl State<PodState> for CreatingService {
                 Ok(unit) => unit,
                 Err(err) => return Transition::Complete(Err(Error::from(err))),
             };
+
+            if let Some(kubeconfig_path) = find_kubeconfig() {
+                const UNIT_ENV_KEY: &str = "KUBECONFIG";
+                if let Some(kubeconfig_path) = kubeconfig_path.to_str() {
+                    unit.add_env_var(UNIT_ENV_KEY, kubeconfig_path);
+                } else {
+                    warn!(
+                        "Environment variable {} cannot be added to \
+                        the systemd service [{}] because the path [{}] \
+                        is not valid unicode.",
+                        UNIT_ENV_KEY,
+                        service_name,
+                        kubeconfig_path.to_string_lossy()
+                    );
+                }
+            } else {
+                warn!(
+                    "Kubeconfig file not found. It will not be added \
+                    to the environment variables of the systemd \
+                    service [{}]. If no kubeconfig is present then the \
+                    Stackable agent should have generated one.",
+                    service_name
+                );
+            }
 
             // Create the service
             // As per ADR005 we currently write the unit files directly in the systemd
@@ -120,4 +147,13 @@ impl State<PodState> for CreatingService {
     async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
         Ok(make_status(Phase::Pending, &"CreatingService"))
     }
+}
+
+/// Tries to find the kubeconfig file in the environment variable
+/// `KUBECONFIG` and on the path `$HOME/.kube/config`
+fn find_kubeconfig() -> Option<PathBuf> {
+    let env_var = env::var_os("KUBECONFIG").map(PathBuf::from);
+    let default_path = || home_dir().map(|home| home.join(".kube").join("config"));
+
+    env_var.or_else(default_path).filter(|path| path.exists())
 }
