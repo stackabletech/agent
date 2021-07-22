@@ -1,11 +1,16 @@
 = Building from source
 
 Building from source is fairly straightforward if you have the rust toolchain installed, our CI chain tests against the latest stable version at the time the checks are run.
-If you need to install this, generally the recommended way is to use https://rustup.rs/[rustup].
+If you need to install this, generally the recommended way is to use https://rustup.rs/[rustup]. Since `rustup` warns if you already have `rust` installed, you might wish to run within a container image.
 
-After rust is installed simply run
+After rust is installed simply run:
 
     cargo build
+    
+or to use a container image for the toolchain:
+
+    podman run -v `pwd`:/src docker.io/library/rust:latest \
+           sh -c "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y libsystemd-dev && rustup component add rustfmt && cd /src && cargo build"
 
 To create the binary file in _target/debug_.
 
