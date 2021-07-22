@@ -60,7 +60,7 @@ impl State<PodState> for Downloading {
                 },
             );
         }
-        let repo = find_repository(client, &package, None).await;
+        let repo = find_repository(client, &package).await;
         return match repo {
             Ok(Some(mut repo)) => {
                 // We found a repository providing the package, proceed with download
