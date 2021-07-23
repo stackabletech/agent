@@ -5,6 +5,7 @@
 :224: https://github.com/stackabletech/agent/pull/224[#224]
 :229: https://github.com/stackabletech/agent/pull/229[#229]
 :234: https://github.com/stackabletech/agent/pull/234[#234]
+:235: https://github.com/stackabletech/agent/pull/235[#235]
 
 === Added
 * `hostIP` and `podIP` added to the pod status ({224}).
@@ -13,6 +14,10 @@
 === Fixed
 * Invalid or unreachable repositories are skipped when searching for
   packages ({229}).
+* Access rights of the private key file restricted to the owner ({235}).
+  The permissions are set when the file is created. On existing
+  installations the permissions must be set manually, e.g. with
+  `chmod 600 /etc/stackable/stackable-agent/secret/agent.key`.
 
 == 0.4.0 - 2021-06-23
 
