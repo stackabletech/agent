@@ -4,9 +4,11 @@
 
 :224: https://github.com/stackabletech/agent/pull/224[#224]
 :229: https://github.com/stackabletech/agent/pull/229[#229]
+:234: https://github.com/stackabletech/agent/pull/234[#234]
 
 === Added
 * `hostIP` and `podIP` added to the pod status ({224}).
+* Environment variable `KUBECONFIG` set in systemd services ({234}).
 
 === Fixed
 * Invalid or unreachable repositories are skipped when searching for
