@@ -1,5 +1,7 @@
 = Changelog
 
+== 0.6.0 - unreleased
+
 == 0.5.0 - 2021-07-26
 
 :224: https://github.com/stackabletech/agent/pull/224[#224]
