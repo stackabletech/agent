@@ -1304,7 +1304,7 @@ dependencies = [
 [[package]]
 name = "krator"
 version = "0.2.0"
-source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#297fe2c29207dc0c26233b906de243ca6e17148c"
+source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#1a9b8ea204c2777a07fa4105cae4d9f2f3f5423c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1324,7 +1324,7 @@ dependencies = [
 [[package]]
 name = "krator-derive"
 version = "0.1.0"
-source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#297fe2c29207dc0c26233b906de243ca6e17148c"
+source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#1a9b8ea204c2777a07fa4105cae4d9f2f3f5423c"
 dependencies = [
  "quote",
  "syn",
@@ -1398,7 +1398,7 @@ dependencies = [
 [[package]]
 name = "kubelet"
 version = "0.7.0"
-source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#297fe2c29207dc0c26233b906de243ca6e17148c"
+source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#1a9b8ea204c2777a07fa4105cae4d9f2f3f5423c"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1762,7 +1762,7 @@ dependencies = [
 [[package]]
 name = "oci-distribution"
 version = "0.6.0"
-source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#297fe2c29207dc0c26233b906de243ca6e17148c"
+source = "git+https://github.com/stackabletech/krustlet.git?branch=stackable_patches_v0.7.0#1a9b8ea204c2777a07fa4105cae4d9f2f3f5423c"
 dependencies = [
  "anyhow",
  "futures-util",
