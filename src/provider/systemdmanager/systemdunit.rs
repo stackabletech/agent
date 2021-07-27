@@ -205,14 +205,6 @@ impl SystemDUnit {
 
         unit.set_property(Section::Service, "TimeoutStopSec", &termination_timeout);
 
-        if let Some(stop_timeout) = pod_spec.termination_grace_period_seconds {
-            unit.set_property(
-                Section::Service,
-                "TimeoutStopSec",
-                stop_timeout.to_string().as_str(),
-            );
-        }
-
         if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
             if !user_mode {
                 unit.set_property(Section::Service, "User", user_name);
