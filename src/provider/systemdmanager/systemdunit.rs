@@ -11,10 +11,11 @@ use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::UnitTypes;
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
+use multimap::MultiMap;
 use regex::Regex;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::iter;
+use std::iter::{self, repeat};
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 /// The default timeout for stopping a service, after this has passed systemd will terminate
@@ -43,7 +44,7 @@ lazy_static! {
 pub struct SystemDUnit {
     pub name: String,
     pub unit_type: UnitTypes,
-    pub sections: HashMap<Section, HashMap<String, String>>,
+    pub sections: HashMap<Section, MultiMap<String, String>>,
 }
 
 // TODO: The parsing code is also highly stackable specific, we should
@@ -106,41 +107,35 @@ impl SystemDUnit {
 
         unit.name = format!("{}{}", name_prefix, trimmed_name);
 
-        unit.add_property(Section::Unit, "Description", &unit.name.clone());
+        unit.set_property(Section::Unit, "Description", &unit.name.clone());
 
-        unit.add_property(
+        unit.set_property(
             Section::Service,
             "ExecStart",
             &SystemDUnit::get_command(container, template_data, package_root)?,
         );
 
         let env_vars = SystemDUnit::get_environment(container, service_name, template_data)?;
-        if !env_vars.is_empty() {
-            let mut assignments = env_vars
-                .iter()
-                .map(|(k, v)| format!("\"{}={}\"", k, v))
-                .collect::<Vec<_>>();
-            assignments.sort();
-            // TODO Put every environment variable on a separate line
-            unit.add_property(Section::Service, "Environment", &assignments.join(" "));
+        for (key, value) in env_vars {
+            unit.add_env_var(&key, &value);
         }
 
         // These are currently hard-coded, as this is not something we expect to change soon
-        unit.add_property(Section::Service, "StandardOutput", "journal");
-        unit.add_property(Section::Service, "StandardError", "journal");
+        unit.set_property(Section::Service, "StandardOutput", "journal");
+        unit.set_property(Section::Service, "StandardError", "journal");
 
         if let Some(user_name) =
             SystemDUnit::get_user_name_from_security_context(container, &unit.name)?
         {
             if !user_mode {
-                unit.add_property(Section::Service, "User", user_name);
+                unit.set_property(Section::Service, "User", user_name);
             } else {
                 info!("The user name [{}] in spec.containers[name = {}].securityContext.windowsOptions.runAsUserName is not set in the systemd unit because the agent runs in session mode.", user_name, container.name());
             }
         }
 
         // This one is mandatory, as otherwise enabling the unit fails
-        unit.add_property(Section::Install, "WantedBy", "multi-user.target");
+        unit.set_property(Section::Install, "WantedBy", "multi-user.target");
 
         Ok(unit)
     }
@@ -208,10 +203,10 @@ impl SystemDUnit {
         }
         .to_string();
 
-        unit.add_property(Section::Service, "TimeoutStopSec", &termination_timeout);
+        unit.set_property(Section::Service, "TimeoutStopSec", &termination_timeout);
 
         if let Some(stop_timeout) = pod_spec.termination_grace_period_seconds {
-            unit.add_property(
+            unit.set_property(
                 Section::Service,
                 "TimeoutStopSec",
                 stop_timeout.to_string().as_str(),
@@ -220,7 +215,7 @@ impl SystemDUnit {
 
         if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
             if !user_mode {
-                unit.add_property(Section::Service, "User", user_name);
+                unit.set_property(Section::Service, "User", user_name);
             } else {
                 info!("The user name [{}] in spec.securityContext.windowsOptions.runAsUserName is not set in the systemd unit because the agent runs in session mode.", user_name);
             }
@@ -262,9 +257,29 @@ impl SystemDUnit {
         format!("{}.{}", self.name, lower_type)
     }
 
-    /// Add a key=value entry to the specified section
+    /// Adds an environment variable to the service section of the unit file
+    pub fn add_env_var(&mut self, key: &str, value: &str) {
+        self.add_property(
+            Section::Service,
+            "Environment",
+            &format!("\"{}={}\"", key, value),
+        );
+    }
+
+    /// Sets a property in the given section
+    ///
+    /// If properties with the given key already exist then they are
+    /// replaced with the given one.
+    fn set_property(&mut self, section: Section, key: &str, value: &str) {
+        let section = self.sections.entry(section).or_default();
+        *section.entry(String::from(key)).or_insert_vec(Vec::new()) = vec![String::from(value)];
+    }
+
+    /// Adds a property to the given section
+    ///
+    /// Properties with the same key remain untouched.
     fn add_property(&mut self, section: Section, key: &str, value: &str) {
-        let section = self.sections.entry(section).or_insert_with(HashMap::new);
+        let section = self.sections.entry(section).or_default();
         section.insert(String::from(key), String::from(value));
     }
 
@@ -278,11 +293,12 @@ impl SystemDUnit {
             .join("\n\n")
     }
 
-    fn write_section(section: &Section, entries: &HashMap<String, String>) -> String {
+    fn write_section(section: &Section, entries: &MultiMap<String, String>) -> String {
         let header = format!("[{}]", section);
 
         let mut body = entries
-            .iter()
+            .iter_all()
+            .flat_map(|(key, values)| repeat(key).zip(values))
             .map(|(key, value)| format!("{}={}", key, value))
             .collect::<Vec<_>>();
         body.sort();
@@ -523,7 +539,8 @@ mod test {
             Description=default-stackable-test-container
 
             [Service]
-            Environment="LOG_DIR=/var/log/default-stackable" "LOG_LEVEL=INFO"
+            Environment="LOG_DIR=/var/log/default-stackable"
+            Environment="LOG_LEVEL=INFO"
             ExecStart=start.sh arg /etc/default-stackable
             StandardError=journal
             StandardOutput=journal
