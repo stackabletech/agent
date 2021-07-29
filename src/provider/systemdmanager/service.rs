@@ -3,6 +3,18 @@ use super::systemd1_api::{ActiveState, AsyncManagerProxy, AsyncServiceProxy, Asy
 use crate::provider::systemdmanager::systemd1_api::ServiceResult;
 use anyhow::anyhow;
 
+/// ServiceState represents a coarse-grained state of the service unit.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ServiceState {
+    /// The service has not finished yet. Either it is currently running
+    /// or it is scheduled to run.
+    Running,
+    /// The service terminated successfully and will not be restarted.
+    Succeeded,
+    /// The service terminated unsuccessfully and will not be restarted.
+    Failed,
+}
+
 /// Stores proxies of a systemd unit and service
 #[derive(Clone, Debug)]
 pub struct SystemdService {
@@ -49,19 +61,28 @@ impl SystemdService {
         self.file.clone()
     }
 
-    /// Checks if the ActiveState is set to active.
-    pub async fn is_running(&self) -> anyhow::Result<bool> {
-        self.unit_proxy
-            .active_state()
-            .await
-            .map(|state| state == ActiveState::Active)
-            .map_err(|error| {
-                anyhow!(
-                    "ActiveState of systemd unit [{}] cannot be retrieved: {}",
-                    self.file,
-                    error
-                )
-            })
+    /// Returns a coarse-grained state of the service unit.
+    pub async fn service_state(&self) -> anyhow::Result<ServiceState> {
+        let active_state = self.unit_proxy.active_state().await?;
+
+        let service_state = match active_state {
+            ActiveState::Failed => ServiceState::Failed,
+            ActiveState::Active => {
+                let sub_state = self.unit_proxy.sub_state().await?;
+                // The service sub state `exited` is not explicitly
+                // documented but can be found in the source code of
+                // systemd:
+                // https://github.com/systemd/systemd/blob/v249/src/basic/unit-def.h#L133
+                if sub_state == "exited" {
+                    ServiceState::Succeeded
+                } else {
+                    ServiceState::Running
+                }
+            }
+            _ => ServiceState::Running,
+        };
+
+        Ok(service_state)
     }
 
     /// Checks if the result is not set to success.

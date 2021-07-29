@@ -404,6 +404,20 @@ trait Unit {
     #[dbus_proxy(property)]
     fn active_state(&self) -> zbus::Result<ActiveState>;
 
+    /// SubState encodes states of the same state machine that
+    /// ActiveState covers, but knows more fine-grained states that are
+    /// unit-type-specific. Where ActiveState only covers six high-level
+    /// states, SubState covers possibly many more low-level
+    /// unit-type-specific states that are mapped to the six high-level
+    /// states. Note that multiple low-level states might map to the
+    /// same high-level state, but not vice versa. Not all high-level
+    /// states have low-level counterparts on all unit types. At this
+    /// point the low-level states are not documented here, and are more
+    /// likely to be extended later on than the common high-level
+    /// states.
+    #[dbus_proxy(property)]
+    fn sub_state(&self) -> zbus::Result<String>;
+
     /// Unique ID for a runtime cycle of a unit
     #[dbus_proxy(property, name = "InvocationID")]
     fn invocation_id(&self) -> zbus::Result<InvocationId>;

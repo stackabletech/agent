@@ -11,17 +11,14 @@ use kubelet::{
 use log::{debug, info, trace, warn};
 use tokio::time::Duration;
 
-use super::{installing::Installing, starting::Starting, terminated::Terminated};
+use super::terminated::Terminated;
 use crate::provider::{
-    kubernetes::{
-        accessor::{restart_policy, RestartPolicy},
-        status::patch_container_status,
-    },
-    PodHandle, PodState, ProviderState,
+    kubernetes::status::patch_container_status, systemdmanager::service::ServiceState, PodHandle,
+    PodState, ProviderState,
 };
 
 #[derive(Debug, TransitionTo)]
-#[transition_to(Installing, Starting, Terminated)]
+#[transition_to(Terminated)]
 pub struct Running {
     pub transition_time: Time,
 }
@@ -66,7 +63,7 @@ impl State<PodState> for Running {
         // Interruption of this loop is triggered externally by the Krustlet code when
         //   - the pod which this state machine refers to gets deleted
         //   - Krustlet shuts down
-        while !running_containers.is_empty() && !container_failed {
+        while !running_containers.is_empty() {
             tokio::time::sleep(Duration::from_secs(10)).await;
             trace!(
                 "Checking if service {} is still running.",
@@ -79,23 +76,15 @@ impl State<PodState> for Running {
             for (container_key, container_handle) in running_containers.iter() {
                 let systemd_service = &container_handle.systemd_service;
 
-                match systemd_service.is_running().await {
-                    Ok(true) => {}
-                    Ok(false) => match systemd_service.failed().await {
-                        Ok(true) => failed_containers
-                            .push((container_key.to_owned(), container_handle.to_owned())),
-                        Ok(false) => succeeded_containers
-                            .push((container_key.to_owned(), container_handle.to_owned())),
-                        Err(dbus_error) => warn!(
-                            "Error querying Failed property for Unit [{}] of service [{}]: [{}]",
-                            systemd_service.file(),
-                            pod_state.service_name,
-                            dbus_error
-                        ),
-                    },
+                match systemd_service.service_state().await {
+                    Ok(ServiceState::Running) => {}
+                    Ok(ServiceState::Succeeded) => succeeded_containers
+                        .push((container_key.to_owned(), container_handle.to_owned())),
+                    Ok(ServiceState::Failed) => failed_containers
+                        .push((container_key.to_owned(), container_handle.to_owned())),
                     Err(dbus_error) => {
                         warn!(
-                            "Error querying ActiveState for Unit [{}] of service [{}]: [{}].",
+                            "Error querying state for unit [{}] of service [{}]: [{}].",
                             systemd_service.file(),
                             pod_state.service_name,
                             dbus_error
@@ -132,6 +121,7 @@ impl State<PodState> for Running {
                 )
                 .await;
                 running_containers.remove(container_key);
+                container_failed = true;
             }
 
             for container_handle in running_containers.values() {
@@ -141,20 +131,14 @@ impl State<PodState> for Running {
                     pod_state.service_name
                 );
             }
-
-            container_failed = !failed_containers.is_empty();
         }
 
-        if container_failed {
-            if restart_policy(&pod) == RestartPolicy::Never {
-                Transition::next(self, Terminated { successful: false })
-            } else {
-                debug!("Restart policy is set to restart, starting...");
-                Transition::next(self, Starting {})
-            }
-        } else {
-            Transition::next(self, Terminated { successful: true })
-        }
+        Transition::next(
+            self,
+            Terminated {
+                successful: !container_failed,
+            },
+        )
     }
 
     async fn status(&self, pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {

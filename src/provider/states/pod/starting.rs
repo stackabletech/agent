@@ -4,7 +4,7 @@ use crate::provider::{
         accessor::{restart_policy, RestartPolicy},
         status::patch_container_status,
     },
-    systemdmanager::service::SystemdService,
+    systemdmanager::service::{ServiceState, SystemdService},
     PodHandle, PodState, ProviderState,
 };
 
@@ -73,7 +73,7 @@ async fn start_service_units(
     for (container_key, container_handle) in pod_handle.unwrap_or_default() {
         let systemd_service = &container_handle.systemd_service;
 
-        if systemd_service.is_running().await? {
+        if systemd_service.service_state().await? == ServiceState::Running {
             debug!(
                 "Unit [{}] for service [{}] is already running. Skip startup.",
                 systemd_service.file(),
@@ -125,7 +125,7 @@ async fn await_startup(systemd_service: &SystemdService, duration: Duration) -> 
             systemd_service.file()
         );
 
-        if systemd_service.is_running().await? {
+        if systemd_service.service_state().await? == ServiceState::Running {
             debug!(
                 "Service [{}] still running after [{}] seconds",
                 systemd_service.file(),

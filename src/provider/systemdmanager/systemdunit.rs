@@ -40,6 +40,24 @@ lazy_static! {
         Regex::new("^[a-zA-Z_][a-zA-Z0-9_-]{0,30}$").unwrap();
 }
 
+/// Boolean arguments used in unit files
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[strum(serialize_all = "kebab-case")]
+pub enum Boolean {
+    Yes,
+    No,
+}
+
+impl From<bool> for Boolean {
+    fn from(value: bool) -> Self {
+        if value {
+            Boolean::Yes
+        } else {
+            Boolean::No
+        }
+    }
+}
+
 /// Configures whether the service shall be restarted when the service
 /// process exits, is killed, or a timeout is reached.
 ///
@@ -281,6 +299,11 @@ impl SystemDUnit {
 
         unit.set_restart_option(RestartOption::from(restart_policy(&pod)));
 
+        // systemd should not remove the unit on its own when it
+        // terminated successfully, so that the agent can check the
+        // outcome and patch the contaner status accordingly.
+        unit.set_remain_after_exit_option(Boolean::Yes);
+
         if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
             if !user_mode {
                 unit.set_property(Section::Service, "User", user_name);
@@ -292,8 +315,16 @@ impl SystemDUnit {
         Ok(unit)
     }
 
+    /// Configures whether the service shall be restarted when the
+    /// service process exits, is killed, or a timeout is reached.
     fn set_restart_option(&mut self, setting: RestartOption) {
         self.set_property(Section::Service, "Restart", &setting.to_string());
+    }
+
+    /// Causes systemd to consider the unit to be active if the start
+    /// action exited successfully.
+    fn set_remain_after_exit_option(&mut self, setting: Boolean) {
+        self.set_property(Section::Service, "RemainAfterExit", &setting.to_string());
     }
 
     fn get_user_name_from_pod_security_context(pod: &Pod) -> Result<Option<&str>, StackableError> {
@@ -574,6 +605,7 @@ mod test {
         "stackable.service",
         indoc! {"
             [Service]
+            RemainAfterExit=yes
             Restart=always
             TimeoutStopSec=30
             User=pod-user"}
@@ -613,6 +645,7 @@ mod test {
             Environment="LOG_DIR=/var/log/default-stackable"
             Environment="LOG_LEVEL=INFO"
             ExecStart=start.sh arg /etc/default-stackable
+            RemainAfterExit=yes
             Restart=always
             StandardError=journal
             StandardOutput=journal
@@ -647,6 +680,7 @@ mod test {
 
             [Service]
             ExecStart=start.sh
+            RemainAfterExit=yes
             Restart=always
             StandardError=journal
             StandardOutput=journal
@@ -668,6 +702,7 @@ mod test {
         "stackable.service",
         indoc! {"
             [Service]
+            RemainAfterExit=yes
             Restart=always
             TimeoutStopSec=10"}
     )]
@@ -684,6 +719,7 @@ mod test {
         "stackable.service",
         indoc! {"
             [Service]
+            RemainAfterExit=yes
             Restart=on-failure
             TimeoutStopSec=30"
         }
