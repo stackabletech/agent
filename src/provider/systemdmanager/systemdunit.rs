@@ -628,9 +628,13 @@ mod test {
                   runAsUserName: pod-user",
         "stackable.service",
         indoc! {"
+            [Unit]
+            StartLimitIntervalSec=0
+
             [Service]
             RemainAfterExit=yes
             Restart=always
+            RestartSec=2
             TimeoutStopSec=30
             User=pod-user"}
     )]
@@ -664,6 +668,7 @@ mod test {
         indoc! {r#"
             [Unit]
             Description=default-stackable-test-container
+            StartLimitIntervalSec=0
 
             [Service]
             Environment="LOG_DIR=/var/log/default-stackable"
@@ -671,6 +676,7 @@ mod test {
             ExecStart=start.sh arg /etc/default-stackable
             RemainAfterExit=yes
             Restart=always
+            RestartSec=2
             StandardError=journal
             StandardOutput=journal
             TimeoutStopSec=30
@@ -701,11 +707,13 @@ mod test {
         indoc! {r#"
             [Unit]
             Description=default-stackable-test-container
+            StartLimitIntervalSec=0
 
             [Service]
             ExecStart=start.sh
             RemainAfterExit=yes
             Restart=always
+            RestartSec=2
             StandardError=journal
             StandardOutput=journal
             TimeoutStopSec=30
@@ -725,9 +733,13 @@ mod test {
               containers: []",
         "stackable.service",
         indoc! {"
+            [Unit]
+            StartLimitIntervalSec=0
+
             [Service]
             RemainAfterExit=yes
             Restart=always
+            RestartSec=2
             TimeoutStopSec=10"}
     )]
     #[case::set_restart_policy(
@@ -742,9 +754,13 @@ mod test {
               restartPolicy: OnFailure",
         "stackable.service",
         indoc! {"
+            [Unit]
+            StartLimitIntervalSec=0
+
             [Service]
             RemainAfterExit=yes
             Restart=on-failure
+            RestartSec=2
             TimeoutStopSec=30"
         }
     )]
