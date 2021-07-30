@@ -303,6 +303,10 @@ impl SystemDUnit {
         // a moderate value so that tests are not slowed down too much.
         unit.set_restart_sec_option(2);
 
+        // Adhere to the given restart policy and do not limit the
+        // number of restarts.
+        unit.set_start_limit_interval_sec_option(0);
+
         // Setting RemainAfterExit to "yes" is necessary to reliably
         // determine the state of the service unit object, see
         // manager::SystemdManager::service_state.
@@ -330,6 +334,15 @@ impl SystemDUnit {
     /// 100ms.
     fn set_restart_sec_option(&mut self, seconds: u32) {
         self.set_property(Section::Service, "RestartSec", &seconds.to_string());
+    }
+
+    /// Configures unit start rate limiting. Units which are started too
+    /// often within the given time span are not permitted to start any
+    /// more. The allowed number of restarts can be set with
+    /// "StartLimitBurst". May be set to 0 to disable any kind of rate
+    /// limiting.
+    fn set_start_limit_interval_sec_option(&mut self, seconds: u32) {
+        self.set_property(Section::Unit, "StartLimitIntervalSec", &seconds.to_string());
     }
 
     /// Causes systemd to consider the unit to be active if the start
