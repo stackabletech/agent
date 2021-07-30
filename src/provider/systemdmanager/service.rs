@@ -5,9 +5,8 @@ use super::systemd1_api::{
 use crate::provider::systemdmanager::systemd1_api::ServiceResult;
 use anyhow::anyhow;
 
-/// ServiceState represents a coarse-grained state of the service unit.
-#[derive(Clone, Debug, Eq, PartialEq)]
 /// Represents the state of a service unit object.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ServiceState {
     /// The service was not started yet.
     Created,

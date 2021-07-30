@@ -1,14 +1,10 @@
 use super::running::Running;
 use crate::provider::{
-    kubernetes::{
-        accessor::{restart_policy, RestartPolicy},
-        status::patch_container_status,
-    },
-    systemdmanager::service::{ServiceState, SystemdService},
-    PodHandle, PodState, ProviderState,
+    kubernetes::status::patch_container_status, systemdmanager::service::ServiceState, PodHandle,
+    PodState, ProviderState,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use kube::{
     api::{Patch, PatchParams},
     Api, Client,
@@ -17,8 +13,6 @@ use kubelet::pod::{Pod, PodKey};
 use kubelet::{container::Status, pod::state::prelude::*};
 use log::{debug, error, info};
 use serde_json::json;
-use std::time::Instant;
-use tokio::time::{self, Duration};
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Running)]
@@ -50,9 +44,7 @@ impl State<PodState> for Starting {
 
 /// Starts the service units for the containers of the given pod.
 ///
-/// The units are started and enabled if they are not already running.
-/// The startup is considered successful if the unit is still running
-/// after 10 seconds.
+/// The units are started and enabled if they were not already started.
 async fn start_service_units(
     shared: SharedState<ProviderState>,
     pod_state: &PodState,
@@ -72,32 +64,19 @@ async fn start_service_units(
 
     for (container_key, container_handle) in pod_handle.unwrap_or_default() {
         let systemd_service = &container_handle.systemd_service;
+        let service_unit = &container_handle.service_unit;
 
-        if systemd_service.service_state().await? == ServiceState::Started {
-            debug!(
-                "Unit [{}] for service [{}] is already running. Skip startup.",
-                systemd_service.file(),
-                &pod_state.service_name
-            );
-        } else {
-            let service_unit = &container_handle.service_unit;
-
+        if systemd_service.service_state().await? == ServiceState::Created {
             info!("Starting systemd unit [{}]", service_unit);
             systemd_manager.start(service_unit).await?;
 
             info!("Enabling systemd unit [{}]", service_unit);
             systemd_manager.enable(service_unit).await?;
-
-            if restart_policy(pod) == RestartPolicy::Always {
-                // TODO: does this need to be configurable, or ar we happy with a hard coded value
-                //  for now. I've briefly looked at the podspec and couldn't identify a good field
-                //  to use for this - also, currently this starts containers (= systemd units) in
-                //  order and waits 10 seconds for every unit, so a service with five containers
-                //  would take 50 seconds until it reported running - which is totally fine in case
-                //  the units actually depend on each other, but a case could be made for waiting
-                //  once at the end
-                await_startup(systemd_service, Duration::from_secs(10)).await?;
-            }
+        } else {
+            debug!(
+                "Unit [{}] for service [{}] was already started. Skipping startup.",
+                service_unit, &pod_state.service_name
+            );
         }
 
         add_annotation(
@@ -109,35 +88,6 @@ async fn start_service_units(
         .await?;
 
         patch_container_status(&client, pod, &container_key, &Status::running()).await;
-    }
-
-    Ok(())
-}
-
-/// Checks if the given service unit is still running after the given duration.
-async fn await_startup(systemd_service: &SystemdService, duration: Duration) -> Result<()> {
-    let start_time = Instant::now();
-    while start_time.elapsed() < duration {
-        time::sleep(Duration::from_secs(1)).await;
-
-        debug!(
-            "Checking if unit [{}] is still up and running.",
-            systemd_service.file()
-        );
-
-        if systemd_service.service_state().await? == ServiceState::Started {
-            debug!(
-                "Service [{}] still running after [{}] seconds",
-                systemd_service.file(),
-                start_time.elapsed().as_secs()
-            );
-        } else {
-            return Err(anyhow!(
-                "Unit [{}] stopped unexpectedly during startup after [{}] seconds.",
-                systemd_service.file(),
-                start_time.elapsed().as_secs()
-            ));
-        }
     }
 
     Ok(())
