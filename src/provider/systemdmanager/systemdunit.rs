@@ -299,6 +299,10 @@ impl SystemDUnit {
 
         unit.set_restart_option(RestartOption::from(restart_policy(&pod)));
 
+        // Relieve the machine a little bit on restart loops but choose
+        // a moderate value so that tests are not slowed down too much.
+        unit.set_restart_sec_option(2);
+
         // Setting RemainAfterExit to "yes" is necessary to reliably
         // determine the state of the service unit object, see
         // manager::SystemdManager::service_state.
@@ -319,6 +323,13 @@ impl SystemDUnit {
     /// service process exits, is killed, or a timeout is reached.
     fn set_restart_option(&mut self, setting: RestartOption) {
         self.set_property(Section::Service, "Restart", &setting.to_string());
+    }
+
+    /// Configures the time to sleep in seconds before restarting a
+    /// service (as configured with [set_restart_option]). Defaults to
+    /// 100ms.
+    fn set_restart_sec_option(&mut self, seconds: u32) {
+        self.set_property(Section::Service, "RestartSec", &seconds.to_string());
     }
 
     /// Causes systemd to consider the unit to be active if the start
