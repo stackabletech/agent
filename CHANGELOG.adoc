@@ -23,6 +23,13 @@
   but not any longer with versions prior to v1.19 ({267}).
 * Error message improved which is logged if a systemd unit file cannot
   be created ({276}).
+* Handling of service restarts moved from the Stackable agent to
+  systemd.
+
+=== Removed
+* Check removed if a service starts up correctly within 10 seconds.
+  systemd manages restarts now and the Stackable agent cannot detect if
+  a service is in a restart loop.
 
 == 0.5.0 - 2021-07-26
 
