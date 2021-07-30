@@ -35,7 +35,7 @@ deny = [
 ]
 
 exceptions = [
-    { name = "systemd", allow = ["LGPL-2.1-or-later"] },
+    { name = "systemd", allow = ["LGPL-2.1"] },
 ]
 
 
