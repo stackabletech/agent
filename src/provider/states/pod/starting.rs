@@ -73,7 +73,7 @@ async fn start_service_units(
     for (container_key, container_handle) in pod_handle.unwrap_or_default() {
         let systemd_service = &container_handle.systemd_service;
 
-        if systemd_service.service_state().await? == ServiceState::Running {
+        if systemd_service.service_state().await? == ServiceState::Started {
             debug!(
                 "Unit [{}] for service [{}] is already running. Skip startup.",
                 systemd_service.file(),
@@ -125,7 +125,7 @@ async fn await_startup(systemd_service: &SystemdService, duration: Duration) -> 
             systemd_service.file()
         );
 
-        if systemd_service.service_state().await? == ServiceState::Running {
+        if systemd_service.service_state().await? == ServiceState::Started {
             debug!(
                 "Service [{}] still running after [{}] seconds",
                 systemd_service.file(),

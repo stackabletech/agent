@@ -1,4 +1,7 @@
 //! Binding to the D-Bus interface of systemd
+//!
+//! Further documentation can be found in the
+//! [manual](https://www.freedesktop.org/software/systemd/man/org.freedesktop.systemd1).
 use fmt::Display;
 use inflector::cases::kebabcase;
 use serde::{de::Visitor, Deserialize, Serialize};
@@ -368,6 +371,11 @@ pub enum ActiveState {
 
 impl_tryfrom_ownedvalue_for_enum!(ActiveState);
 
+/// Sub state of a service unit object which is set if the service
+/// terminated successfully but is still active due to the
+/// RemainAfterExit setting.
+pub const SUB_STATE_SERVICE_EXITED: &str = "exited";
+
 /// Unique ID for a runtime cycle of a unit
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvocationId(Vec<u8>);
@@ -415,6 +423,9 @@ trait Unit {
     /// point the low-level states are not documented here, and are more
     /// likely to be extended later on than the common high-level
     /// states.
+    ///
+    /// Possible sub states can be found in the source code of systemd:
+    /// https://github.com/systemd/systemd/blob/v249/src/basic/unit-def.h
     #[dbus_proxy(property)]
     fn sub_state(&self) -> zbus::Result<String>;
 

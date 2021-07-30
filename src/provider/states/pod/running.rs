@@ -77,7 +77,15 @@ impl State<PodState> for Running {
                 let systemd_service = &container_handle.systemd_service;
 
                 match systemd_service.service_state().await {
-                    Ok(ServiceState::Running) => {}
+                    Ok(ServiceState::Created) => {
+                        warn!(
+                            "The unit [{}] of service [{}] was not started. \
+                            This should not happen. Ignoring this state for now.",
+                            systemd_service.file(),
+                            pod_state.service_name
+                        );
+                    }
+                    Ok(ServiceState::Started) => {}
                     Ok(ServiceState::Succeeded) => succeeded_containers
                         .push((container_key.to_owned(), container_handle.to_owned())),
                     Ok(ServiceState::Failed) => failed_containers

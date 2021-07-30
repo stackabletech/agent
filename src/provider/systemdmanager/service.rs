@@ -1,14 +1,18 @@
 //! Exposes methods from the systemd unit and service interfaces.
-use super::systemd1_api::{ActiveState, AsyncManagerProxy, AsyncServiceProxy, AsyncUnitProxy};
+use super::systemd1_api::{
+    ActiveState, AsyncManagerProxy, AsyncServiceProxy, AsyncUnitProxy, SUB_STATE_SERVICE_EXITED,
+};
 use crate::provider::systemdmanager::systemd1_api::ServiceResult;
 use anyhow::anyhow;
 
 /// ServiceState represents a coarse-grained state of the service unit.
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Represents the state of a service unit object.
 pub enum ServiceState {
-    /// The service has not finished yet. Either it is currently running
-    /// or it is scheduled to run.
-    Running,
+    /// The service was not started yet.
+    Created,
+    /// The service was started and is currently running or restarting.
+    Started,
     /// The service terminated successfully and will not be restarted.
     Succeeded,
     /// The service terminated unsuccessfully and will not be restarted.
@@ -61,25 +65,50 @@ impl SystemdService {
         self.file.clone()
     }
 
-    /// Returns a coarse-grained state of the service unit.
+    /// Returns a coarse-grained state of the service unit object.
+    ///
+    /// It is assumed that RemainAfterExit is set to "yes" in the given
+    /// unit. Otherwise it would not be possible to distinguish between
+    /// "inactive and never run" and "inactive and terminated
+    /// successfully".
     pub async fn service_state(&self) -> anyhow::Result<ServiceState> {
         let active_state = self.unit_proxy.active_state().await?;
 
         let service_state = match active_state {
-            ActiveState::Failed => ServiceState::Failed,
+            ActiveState::Inactive => {
+                // ActiveState "inactive" means in general that the
+                // previous run was successful or no previous run has
+                // taken place yet. If RemainAfterExit is set to "yes"
+                // then a successfully terminated service stays in
+                // ActiveState "active" and only a service which was not
+                // started before is in ActiveState "inactive". It is
+                // assumed here that RemainAfterExit is enabled.
+                ServiceState::Created
+            }
             ActiveState::Active => {
                 let sub_state = self.unit_proxy.sub_state().await?;
-                // The service sub state `exited` is not explicitly
-                // documented but can be found in the source code of
-                // systemd:
-                // https://github.com/systemd/systemd/blob/v249/src/basic/unit-def.h#L133
-                if sub_state == "exited" {
+                if sub_state == SUB_STATE_SERVICE_EXITED {
+                    // The service terminated successfully (otherwise
+                    // ActiveState would be set to "failed") and will
+                    // not be restarted (otherwise ActiveState would be
+                    // set to "activating") and RemainAfterExit is set
+                    // to "yes" (otherwise ActiveState would be set to
+                    // "inactive"). It is assumed here that
+                    // RemainAfterExit is enabled.
                     ServiceState::Succeeded
                 } else {
-                    ServiceState::Running
+                    ServiceState::Started
                 }
             }
-            _ => ServiceState::Running,
+            ActiveState::Failed => {
+                // The service terminated unsuccessfully and will not be
+                // restarted (otherwise ActiveState would be set to
+                // "activating").
+                ServiceState::Failed
+            }
+            ActiveState::Reloading => ServiceState::Started,
+            ActiveState::Activating => ServiceState::Started,
+            ActiveState::Deactivating => ServiceState::Started,
         };
 
         Ok(service_state)

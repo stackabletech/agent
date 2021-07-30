@@ -299,9 +299,9 @@ impl SystemDUnit {
 
         unit.set_restart_option(RestartOption::from(restart_policy(&pod)));
 
-        // systemd should not remove the unit on its own when it
-        // terminated successfully, so that the agent can check the
-        // outcome and patch the contaner status accordingly.
+        // Setting RemainAfterExit to "yes" is necessary to reliably
+        // determine the state of the service unit object, see
+        // manager::SystemdManager::service_state.
         unit.set_remain_after_exit_option(Boolean::Yes);
 
         if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
