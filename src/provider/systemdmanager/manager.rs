@@ -239,7 +239,7 @@ impl SystemdManager {
         let unit_file = self.units_directory.join(&unit);
         if unit_file.exists() {
             debug!("Removing unit [{}] from systemd", unit);
-            self.delete_unit_file(&unit)?;
+            self.delete_unit_file(unit)?;
         }
 
         if daemon_reload {

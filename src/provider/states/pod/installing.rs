@@ -100,6 +100,6 @@ impl State<PodState> for Installing {
     }
 
     async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
-        Ok(make_status(Phase::Pending, &"Installing"))
+        Ok(make_status(Phase::Pending, "Installing"))
     }
 }

@@ -61,7 +61,7 @@ impl SystemDUnit {
         pod_state: &PodState,
     ) -> Result<Self, StackableError> {
         // Create template data to be used when rendering template strings
-        let template_data = if let Ok(data) = CreatingConfig::create_render_data(&pod_state) {
+        let template_data = if let Ok(data) = CreatingConfig::create_render_data(pod_state) {
             data
         } else {
             error!("Unable to parse directories for command template as UTF8");
@@ -340,8 +340,8 @@ impl SystemDUnit {
                 .map(|env_var| {
                     // Replace variables in value
                     CreatingConfig::render_config_template(
-                        &template_data,
-                        &env_var.value.as_deref().unwrap_or_default(),
+                        template_data,
+                        env_var.value.as_deref().unwrap_or_default(),
                     )
                     .map(|value| (env_var.name.clone(), value))
                 })
@@ -454,9 +454,7 @@ impl SystemDUnit {
         // Replace variables in command array
         let command_render_result = command
             .iter()
-            .map(|command_part| {
-                CreatingConfig::render_config_template(&template_data, command_part)
-            })
+            .map(|command_part| CreatingConfig::render_config_template(template_data, command_part))
             .collect::<Result<Vec<String>, StackableError>>()?;
 
         trace!(
