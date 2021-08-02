@@ -51,7 +51,7 @@ impl State<PodState> for Running {
             (
                 provider_state.client.clone(),
                 provider_state.systemd_manager.clone(),
-                handles.get(&pod_key).map(PodHandle::to_owned),
+                handles.get(pod_key).map(PodHandle::to_owned),
             )
         };
 
@@ -80,9 +80,9 @@ impl State<PodState> for Running {
             for (container_key, container_handle) in running_containers.iter() {
                 let service_unit = &container_handle.service_unit;
 
-                match systemd_manager.is_running(&service_unit).await {
+                match systemd_manager.is_running(service_unit).await {
                     Ok(true) => {}
-                    Ok(false) => match systemd_manager.failed(&service_unit).await {
+                    Ok(false) => match systemd_manager.failed(service_unit).await {
                         Ok(true) => failed_containers
                             .push((container_key.to_owned(), container_handle.to_owned())),
                         Ok(false) => succeeded_containers

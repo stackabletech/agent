@@ -78,7 +78,7 @@ impl State<PodState> for CreatingService {
             let mut unit = match SystemDUnit::new(
                 &unit_template,
                 &service_prefix,
-                &container,
+                container,
                 user_mode,
                 pod_state,
             ) {
@@ -145,7 +145,7 @@ impl State<PodState> for CreatingService {
     }
 
     async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
-        Ok(make_status(Phase::Pending, &"CreatingService"))
+        Ok(make_status(Phase::Pending, "CreatingService"))
     }
 }
 

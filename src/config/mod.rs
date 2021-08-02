@@ -255,7 +255,7 @@ impl AgentConfig {
         error_list: &mut Vec<AgentConfigError>,
     ) -> Result<T, anyhow::Error> {
         T::from_str(
-            &AgentConfig::get_exactly_one_string(&parsed_values, option).unwrap_or_else(|_| {
+            &AgentConfig::get_exactly_one_string(parsed_values, option).unwrap_or_else(|_| {
                 panic!(
                     "No value present for parameter {} even though it should have a default value!",
                     option.name
@@ -327,9 +327,9 @@ impl AgentConfig {
             // We have not yet specified a documentation string for all options, as an interim
             // solution we use the help string for the docs, if no proper doc has been written yet.
             if option.documentation.is_empty() {
-                doc_string.push_str(&option.help);
+                doc_string.push_str(option.help);
             } else {
-                doc_string.push_str(&option.documentation);
+                doc_string.push_str(option.documentation);
             }
         }
         doc_string
