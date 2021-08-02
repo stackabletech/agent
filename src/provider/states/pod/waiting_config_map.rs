@@ -37,6 +37,6 @@ impl State<PodState> for WaitingConfigMap {
     }
 
     async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
-        Ok(make_status(Phase::Pending, &"WaitingConfigMap"))
+        Ok(make_status(Phase::Pending, "WaitingConfigMap"))
     }
 }
