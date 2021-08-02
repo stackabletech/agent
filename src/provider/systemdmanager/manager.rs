@@ -41,15 +41,15 @@ impl SystemdManager {
     /// user session or manage services system-wide.
     pub async fn new(user_mode: bool, max_pods: u16) -> Result<Self, StackableError> {
         // Connect to session or system bus depending on the value of [user_mode]
-        let connection = if user_mode {
-            Connection::new_session().await.map_err(|e| RuntimeError {
+        let mut connection = if user_mode {
+            Connection::session().await.map_err(|e| RuntimeError {
                 msg: format!(
                     "Could not create a connection to the systemd session bus: {}",
                     e
                 ),
             })?
         } else {
-            Connection::new_system().await.map_err(|e| RuntimeError {
+            Connection::system().await.map_err(|e| RuntimeError {
                 msg: format!(
                     "Could not create a connection to the systemd system-wide bus: {}",
                     e
@@ -60,14 +60,16 @@ impl SystemdManager {
         // The maximum number of queued DBus messages must be higher
         // than the number of containers which can be started and
         // stopped simultaneously.
-        let connection = connection.set_max_queued(max_pods as usize * 2);
+        connection.set_max_queued(max_pods as usize * 2);
 
-        let proxy = AsyncManagerProxy::new(&connection).map_err(|e| RuntimeError {
-            msg: format!(
-                "Proxy for org.freedesktop.systemd1.Manager could not be created: {}",
-                e
-            ),
-        })?;
+        let proxy = AsyncManagerProxy::new(&connection)
+            .await
+            .map_err(|e| RuntimeError {
+                msg: format!(
+                    "Proxy for org.freedesktop.systemd1.Manager could not be created: {}",
+                    e
+                ),
+            })?;
 
         // Depending on whether we are supposed to run in user space or system-wide
         // we'll pick the default directory to initialize the systemd manager with
@@ -339,7 +341,7 @@ impl SystemdManager {
     {
         let signals = self
             .proxy
-            .receive_signal(ManagerSignals::JobRemoved.into())
+            .receive_signal(ManagerSignals::JobRemoved)
             .await?
             .map(|message| message.body::<JobRemovedSignal>().unwrap());
 
@@ -390,7 +392,14 @@ impl SystemdManager {
     /// Checks if the result of the given service unit is not set to success.
     pub async fn failed(&self, unit: &str) -> anyhow::Result<bool> {
         let unit_proxy = self.proxy.load_unit(unit).await?;
-        let service_proxy = AsyncServiceProxy::from(unit_proxy);
+
+        let service_proxy = AsyncServiceProxy::builder(unit_proxy.connection())
+            .path(unit_proxy.path())
+            .unwrap() // safe because the path is taken from an existing proxy
+            .build()
+            .await
+            .unwrap(); // safe because destination, path, and interface are set
+
         service_proxy
             .result()
             .await
