@@ -2834,6 +2834,7 @@ dependencies = [
  "handlebars",
  "hostname",
  "indoc",
+ "json-patch",
  "k8s-openapi",
  "krator",
  "kube",

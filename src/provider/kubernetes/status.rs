@@ -1,7 +1,11 @@
 //! Functions for patching the pod status
 
+use anyhow::anyhow;
 use k8s_openapi::api::core::v1::Pod as KubePod;
-use kube::{Api, Client};
+use kube::{
+    api::{Patch, PatchParams},
+    Api, Client,
+};
 use kubelet::{
     container::{ContainerKey, Status},
     pod::Pod,
@@ -29,4 +33,40 @@ pub async fn patch_container_status(
             error
         );
     }
+}
+
+/// Patches the restart count of a container.
+pub async fn patch_restart_count(
+    client: &Client,
+    pod: &Pod,
+    container_key: &ContainerKey,
+    restart_count: u32,
+) -> anyhow::Result<()> {
+    let api: Api<KubePod> = Api::namespaced(client.clone(), pod.namespace());
+
+    let index = pod
+        .container_status_index(container_key)
+        .ok_or_else(|| anyhow!("Container not found"))?;
+
+    let container_type = if container_key.is_init() {
+        "initContainer"
+    } else {
+        "container"
+    };
+
+    let patch = json_patch::Patch(vec![json_patch::PatchOperation::Replace(
+        json_patch::ReplaceOperation {
+            path: format!("/status/{}Statuses/{}/restartCount", container_type, index),
+            value: restart_count.into(),
+        },
+    )]);
+
+    api.patch_status(
+        pod.name(),
+        &PatchParams::default(),
+        &Patch::<()>::Json(patch),
+    )
+    .await?;
+
+    Ok(())
 }

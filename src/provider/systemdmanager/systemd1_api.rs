@@ -507,6 +507,10 @@ trait Service {
     /// state (see ['ActiveState::Failed`]).
     #[dbus_proxy(property)]
     fn result(&self) -> zbus::Result<ServiceResult>;
+
+    /// Number of restarts
+    #[dbus_proxy(property, name = "NRestarts")]
+    fn nrestarts(&self) -> zbus::Result<u32>;
 }
 
 /// A systemd job object

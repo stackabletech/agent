@@ -13,8 +13,9 @@ use tokio::time::Duration;
 
 use super::terminated::Terminated;
 use crate::provider::{
-    kubernetes::status::patch_container_status, systemdmanager::service::ServiceState, PodHandle,
-    PodState, ProviderState,
+    kubernetes::status::{patch_container_status, patch_restart_count},
+    systemdmanager::service::ServiceState,
+    PodHandle, PodState, ProviderState,
 };
 
 #[derive(Debug, TransitionTo)]
@@ -132,12 +133,26 @@ impl State<PodState> for Running {
                 container_failed = true;
             }
 
-            for container_handle in running_containers.values() {
+            for (container_key, container_handle) in running_containers.iter() {
                 trace!(
                     "Unit [{}] of service [{}] still running ...",
                     container_handle.service_unit,
                     pod_state.service_name
                 );
+
+                match container_handle.systemd_service.restart_count().await {
+                    Ok(restart_count) => {
+                        if let Err(error) =
+                            patch_restart_count(&client, &pod, container_key, restart_count).await
+                        {
+                            warn!("Could not patch restart count: {}", error);
+                        }
+                    }
+                    Err(error) => warn!(
+                        "Could retrieve restart count from unit [{}]: {}",
+                        container_handle.service_unit, error
+                    ),
+                }
             }
         }
 

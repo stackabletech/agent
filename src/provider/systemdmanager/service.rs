@@ -2,7 +2,6 @@
 use super::systemd1_api::{
     ActiveState, AsyncManagerProxy, AsyncServiceProxy, AsyncUnitProxy, SUB_STATE_SERVICE_EXITED,
 };
-use crate::provider::systemdmanager::systemd1_api::ServiceResult;
 use anyhow::anyhow;
 
 /// Represents the state of a service unit object.
@@ -67,9 +66,9 @@ impl SystemdService {
     /// Returns a coarse-grained state of the service unit object.
     ///
     /// It is assumed that RemainAfterExit is set to "yes" in the given
-    /// unit. Otherwise it would not be possible to distinguish between
-    /// "inactive and never run" and "inactive and terminated
-    /// successfully".
+    /// unit if the service can terminate. Otherwise it would not be
+    /// possible to distinguish between "inactive and never run" and
+    /// "inactive and terminated successfully".
     pub async fn service_state(&self) -> anyhow::Result<ServiceState> {
         let active_state = self.unit_proxy.active_state().await?;
 
@@ -113,19 +112,11 @@ impl SystemdService {
         Ok(service_state)
     }
 
-    /// Checks if the result is not set to success.
-    pub async fn failed(&self) -> anyhow::Result<bool> {
+    pub async fn restart_count(&self) -> anyhow::Result<u32> {
         self.service_proxy
-            .result()
+            .nrestarts()
             .await
-            .map(|state| state != ServiceResult::Success)
-            .map_err(|error| {
-                anyhow!(
-                    "Result of systemd unit [{}] cannot be retrieved: {}",
-                    self.file,
-                    error
-                )
-            })
+            .map_err(|e| anyhow!("Error receiving NRestarts of unit [{}]. {}", self.file, e))
     }
 
     /// Retrieves the current invocation ID.

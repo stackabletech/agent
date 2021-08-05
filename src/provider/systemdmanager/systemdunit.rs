@@ -297,7 +297,8 @@ impl SystemDUnit {
 
         unit.set_property(Section::Service, "TimeoutStopSec", &termination_timeout);
 
-        unit.set_restart_option(RestartOption::from(restart_policy(&pod)));
+        let restart_option = RestartOption::from(restart_policy(pod));
+        unit.set_restart_option(&restart_option);
 
         // Relieve the machine a little bit on restart loops but choose
         // a moderate value so that tests are not slowed down too much.
@@ -307,10 +308,17 @@ impl SystemDUnit {
         // number of restarts.
         unit.set_start_limit_interval_sec_option(0);
 
-        // Setting RemainAfterExit to "yes" is necessary to reliably
-        // determine the state of the service unit object, see
-        // manager::SystemdManager::service_state.
-        unit.set_remain_after_exit_option(Boolean::Yes);
+        // If the service can terminate successfully then
+        // RemainAfterExit must be set to "yes" so that the state of the
+        // service unit object can be reliably determined after
+        // termination, see manager::SystemdManager::service_state.
+        //
+        // If Restart is set to "always" then the service cannot
+        // terminate and there is no need to determine the state after
+        // termination. Furthermore RemainAfterExit must not be set
+        // because otherwise the Restart option would be ignored when
+        // the service returns a successful return code.
+        unit.set_remain_after_exit_option((restart_option != RestartOption::Always).into());
 
         if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
             if !user_mode {
@@ -325,7 +333,7 @@ impl SystemDUnit {
 
     /// Configures whether the service shall be restarted when the
     /// service process exits, is killed, or a timeout is reached.
-    fn set_restart_option(&mut self, setting: RestartOption) {
+    fn set_restart_option(&mut self, setting: &RestartOption) {
         self.set_property(Section::Service, "Restart", &setting.to_string());
     }
 
@@ -632,7 +640,7 @@ mod test {
             StartLimitIntervalSec=0
 
             [Service]
-            RemainAfterExit=yes
+            RemainAfterExit=no
             Restart=always
             RestartSec=2
             TimeoutStopSec=30
@@ -674,7 +682,7 @@ mod test {
             Environment="LOG_DIR=/var/log/default-stackable"
             Environment="LOG_LEVEL=INFO"
             ExecStart=start.sh arg /etc/default-stackable
-            RemainAfterExit=yes
+            RemainAfterExit=no
             Restart=always
             RestartSec=2
             StandardError=journal
@@ -711,7 +719,7 @@ mod test {
 
             [Service]
             ExecStart=start.sh
-            RemainAfterExit=yes
+            RemainAfterExit=no
             Restart=always
             RestartSec=2
             StandardError=journal
@@ -737,7 +745,7 @@ mod test {
             StartLimitIntervalSec=0
 
             [Service]
-            RemainAfterExit=yes
+            RemainAfterExit=no
             Restart=always
             RestartSec=2
             TimeoutStopSec=10"}
