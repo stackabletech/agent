@@ -347,7 +347,7 @@ impl State<PodState> for CreatingConfig {
         // error cases in the above match statement would have moved the pod to the waiting for
         // configmap state already
 
-        let template_data = if let Ok(data) = CreatingConfig::create_render_data(&pod_state) {
+        let template_data = if let Ok(data) = CreatingConfig::create_render_data(pod_state) {
             data
         } else {
             error!("Unable to parse directories for command template as UTF8");

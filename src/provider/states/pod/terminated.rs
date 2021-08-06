@@ -27,7 +27,7 @@ impl State<PodState> for Terminated {
             let mut handles = provider_state.handles.write().await;
             (
                 provider_state.systemd_manager.clone(),
-                handles.remove(&pod_key),
+                handles.remove(pod_key),
             )
         };
 

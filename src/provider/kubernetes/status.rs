@@ -20,7 +20,7 @@ pub async fn patch_container_status(
     let api: Api<KubePod> = Api::namespaced(client.clone(), pod.namespace());
 
     if let Err(error) =
-        kubelet::container::patch_container_status(&api, &pod, container_key, &status).await
+        kubelet::container::patch_container_status(&api, pod, container_key, status).await
     {
         warn!(
             "Status of container [{}] in pod [{}] could not be patched. {}",

@@ -69,7 +69,7 @@ async fn start_service_units(
         (
             provider_state.client.clone(),
             provider_state.systemd_manager.clone(),
-            handles.get(&pod_key).map(PodHandle::to_owned),
+            handles.get(pod_key).map(PodHandle::to_owned),
         )
     };
 
@@ -102,7 +102,7 @@ async fn start_service_units(
 
         let maybe_invocation_id = systemd_manager.get_invocation_id(service_unit).await.ok();
         if let Some(invocation_id) = &maybe_invocation_id {
-            store_invocation_id(shared.clone(), pod_key, &container_key, &invocation_id).await?;
+            store_invocation_id(shared.clone(), pod_key, &container_key, invocation_id).await?;
         }
         add_annotation(
             &client,
@@ -112,7 +112,7 @@ async fn start_service_units(
         )
         .await?;
 
-        patch_container_status(&client, &pod, &container_key, &Status::running()).await;
+        patch_container_status(&client, pod, &container_key, &Status::running()).await;
     }
 
     Ok(())
@@ -165,7 +165,7 @@ async fn store_invocation_id(
 
     let provider_state = shared.write().await;
     let mut handles = provider_state.handles.write().await;
-    handles.set_invocation_id(&pod_key, &container_key, invocation_id)
+    handles.set_invocation_id(pod_key, container_key, invocation_id)
 }
 
 /// Adds an annotation to the given pod.
