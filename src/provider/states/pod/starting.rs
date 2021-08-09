@@ -4,7 +4,7 @@ use crate::provider::{
         accessor::{restart_policy, RestartPolicy},
         status::patch_container_status,
     },
-    systemdmanager::manager::SystemdManager,
+    systemdmanager::service::SystemdService,
     PodHandle, PodState, ProviderState,
 };
 
@@ -13,10 +13,7 @@ use kube::{
     api::{Patch, PatchParams},
     Api, Client,
 };
-use kubelet::{
-    container::ContainerKey,
-    pod::{Pod, PodKey},
-};
+use kubelet::pod::{Pod, PodKey};
 use kubelet::{container::Status, pod::state::prelude::*};
 use log::{debug, error, info};
 use serde_json::json;
@@ -74,14 +71,17 @@ async fn start_service_units(
     };
 
     for (container_key, container_handle) in pod_handle.unwrap_or_default() {
-        let service_unit = &container_handle.service_unit;
+        let systemd_service = &container_handle.systemd_service;
 
-        if systemd_manager.is_running(service_unit).await? {
+        if systemd_service.is_running().await? {
             debug!(
                 "Unit [{}] for service [{}] is already running. Skip startup.",
-                service_unit, &pod_state.service_name
+                systemd_service.file(),
+                &pod_state.service_name
             );
         } else {
+            let service_unit = &container_handle.service_unit;
+
             info!("Starting systemd unit [{}]", service_unit);
             systemd_manager.start(service_unit).await?;
 
@@ -96,19 +96,15 @@ async fn start_service_units(
                 //  would take 50 seconds until it reported running - which is totally fine in case
                 //  the units actually depend on each other, but a case could be made for waiting
                 //  once at the end
-                await_startup(&systemd_manager, service_unit, Duration::from_secs(10)).await?;
+                await_startup(systemd_service, Duration::from_secs(10)).await?;
             }
         }
 
-        let maybe_invocation_id = systemd_manager.get_invocation_id(service_unit).await.ok();
-        if let Some(invocation_id) = &maybe_invocation_id {
-            store_invocation_id(shared.clone(), pod_key, &container_key, invocation_id).await?;
-        }
         add_annotation(
             &client,
             pod,
             "featureLogs",
-            &maybe_invocation_id.is_some().to_string(),
+            &systemd_service.invocation_id().await.is_ok().to_string(),
         )
         .await?;
 
@@ -119,53 +115,32 @@ async fn start_service_units(
 }
 
 /// Checks if the given service unit is still running after the given duration.
-async fn await_startup(
-    systemd_manager: &SystemdManager,
-    service_unit: &str,
-    duration: Duration,
-) -> Result<()> {
+async fn await_startup(systemd_service: &SystemdService, duration: Duration) -> Result<()> {
     let start_time = Instant::now();
     while start_time.elapsed() < duration {
         time::sleep(Duration::from_secs(1)).await;
 
         debug!(
             "Checking if unit [{}] is still up and running.",
-            service_unit
+            systemd_service.file()
         );
 
-        if systemd_manager.is_running(service_unit).await? {
+        if systemd_service.is_running().await? {
             debug!(
                 "Service [{}] still running after [{}] seconds",
-                service_unit,
+                systemd_service.file(),
                 start_time.elapsed().as_secs()
             );
         } else {
             return Err(anyhow!(
                 "Unit [{}] stopped unexpectedly during startup after [{}] seconds.",
-                service_unit,
+                systemd_service.file(),
                 start_time.elapsed().as_secs()
             ));
         }
     }
 
     Ok(())
-}
-
-/// Stores the given invocation ID into the corresponding container handle.
-async fn store_invocation_id(
-    shared: SharedState<ProviderState>,
-    pod_key: &PodKey,
-    container_key: &ContainerKey,
-    invocation_id: &str,
-) -> Result<()> {
-    debug!(
-        "Set invocation ID [{}] for pod [{:?}] and container [{}].",
-        invocation_id, pod_key, container_key
-    );
-
-    let provider_state = shared.write().await;
-    let mut handles = provider_state.handles.write().await;
-    handles.set_invocation_id(pod_key, container_key, invocation_id)
 }
 
 /// Adds an annotation to the given pod.

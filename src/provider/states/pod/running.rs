@@ -45,12 +45,11 @@ impl State<PodState> for Running {
         let pod = pod.latest();
         let pod_key = &PodKey::from(&pod);
 
-        let (client, systemd_manager, pod_handle) = {
+        let (client, pod_handle) = {
             let provider_state = shared.read().await;
             let handles = provider_state.handles.read().await;
             (
                 provider_state.client.clone(),
-                provider_state.systemd_manager.clone(),
                 handles.get(pod_key).map(PodHandle::to_owned),
             )
         };
@@ -78,24 +77,28 @@ impl State<PodState> for Running {
             let mut failed_containers = Vec::new();
 
             for (container_key, container_handle) in running_containers.iter() {
-                let service_unit = &container_handle.service_unit;
+                let systemd_service = &container_handle.systemd_service;
 
-                match systemd_manager.is_running(service_unit).await {
+                match systemd_service.is_running().await {
                     Ok(true) => {}
-                    Ok(false) => match systemd_manager.failed(service_unit).await {
+                    Ok(false) => match systemd_service.failed().await {
                         Ok(true) => failed_containers
                             .push((container_key.to_owned(), container_handle.to_owned())),
                         Ok(false) => succeeded_containers
                             .push((container_key.to_owned(), container_handle.to_owned())),
                         Err(dbus_error) => warn!(
                             "Error querying Failed property for Unit [{}] of service [{}]: [{}]",
-                            service_unit, pod_state.service_name, dbus_error
+                            systemd_service.file(),
+                            pod_state.service_name,
+                            dbus_error
                         ),
                     },
                     Err(dbus_error) => {
                         warn!(
                             "Error querying ActiveState for Unit [{}] of service [{}]: [{}].",
-                            service_unit, pod_state.service_name, dbus_error
+                            systemd_service.file(),
+                            pod_state.service_name,
+                            dbus_error
                         );
                     }
                 }

@@ -8,7 +8,7 @@ use std::{
     str::FromStr,
 };
 use strum::{AsRefStr, Display, EnumString, EnumVariantNames, IntoStaticStr, VariantNames};
-use zbus::{dbus_proxy, export::names::MemberName};
+use zbus::{dbus_proxy, names::MemberName};
 use zvariant::{derive::Type, OwnedObjectPath, OwnedValue, Signature, Type};
 
 /// Implements [`Serialize`] for an enum.
@@ -206,8 +206,7 @@ impl_type_for_enum!(StopMode);
 )]
 trait Manager {
     /// Loads the unit from disk if possible and returns it.
-    #[dbus_proxy(object = "Unit")]
-    fn load_unit(&self, name: &str);
+    fn load_unit(&self, name: &str) -> zbus::Result<OwnedObjectPath>;
 
     /// Enqueues a start job and possibly depending jobs and returns the
     /// newly created job.

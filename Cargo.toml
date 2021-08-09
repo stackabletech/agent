@@ -44,8 +44,8 @@ tar = "0.4"
 thiserror = "1.0"
 tokio = { version = "1.10", features = ["macros", "rt-multi-thread", "time"] }
 url = "2.2"
-zbus = "2.0.0-beta.6"
-zvariant = "2.8.0"
+zbus = { git = "https://gitlab.freedesktop.org/dbus/zbus", rev = "0a8a4268be0f844ab4bca429f27766347dc3af58" } # version 2.0.0-beta.6 + merge request !354 (fixes a race condition)
+zvariant = { git = "https://gitlab.freedesktop.org/dbus/zbus", rev = "0a8a4268be0f844ab4bca429f27766347dc3af58" } # version 2.8.0 which is compatible with the zbus version
 
 [dev-dependencies]
 indoc = "1.0"

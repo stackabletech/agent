@@ -3818,8 +3818,7 @@ dependencies = [
 [[package]]
 name = "zbus"
 version = "2.0.0-beta.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a83ae2a824814235320b6539f12b7678e15d347d66235e1230338d11c1fb07e"
+source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=0a8a4268be0f844ab4bca429f27766347dc3af58#0a8a4268be0f844ab4bca429f27766347dc3af58"
 dependencies = [
  "async-broadcast",
  "async-channel",
@@ -3852,8 +3851,7 @@ dependencies = [
 [[package]]
 name = "zbus_macros"
 version = "2.0.0-beta.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2518b2ea6ac01672b131ce4d1fe45f840732d6266660277499b9e81a153bd723"
+source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=0a8a4268be0f844ab4bca429f27766347dc3af58#0a8a4268be0f844ab4bca429f27766347dc3af58"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -3865,8 +3863,7 @@ dependencies = [
 [[package]]
 name = "zbus_names"
 version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4882f6e16e1a55ab9ee5c2031692fc8708d03f46000383a11a5f1c8cb69e7c8b"
+source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=0a8a4268be0f844ab4bca429f27766347dc3af58#0a8a4268be0f844ab4bca429f27766347dc3af58"
 dependencies = [
  "serde",
  "static_assertions",
@@ -3876,8 +3873,7 @@ dependencies = [
 [[package]]
 name = "zvariant"
 version = "2.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa4b785b8b32b0f8433b4474e6bb4ea77b37c1960e84d7598e01dd199b2b23ef"
+source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=0a8a4268be0f844ab4bca429f27766347dc3af58#0a8a4268be0f844ab4bca429f27766347dc3af58"
 dependencies = [
  "byteorder",
  "enumflags2",
@@ -3889,8 +3885,7 @@ dependencies = [
 [[package]]
 name = "zvariant_derive"
 version = "2.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b42af4ee88fb928781391216c34be77ec7cdb3546042b2947ce38d86aa5f37dd"
+source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=0a8a4268be0f844ab4bca429f27766347dc3af58#0a8a4268be0f844ab4bca429f27766347dc3af58"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",

@@ -1,13 +1,14 @@
-//! A module to allow managing systemd units - mostly services currently
+//! Exposes methods of the systemd manager interface.
 //!
 //! The module offers the ability to create, remove, start, stop, enable and
 //! disable systemd units.
 //!
+use super::service::SystemdService;
 use super::systemd1_api::{
-    ActiveState, AsyncJobProxy, AsyncManagerProxy, AsyncServiceProxy, JobRemovedResult,
-    JobRemovedSignal, ManagerSignals, StartMode, StopMode,
+    AsyncJobProxy, AsyncManagerProxy, JobRemovedResult, JobRemovedSignal, ManagerSignals,
+    StartMode, StopMode,
 };
-use crate::provider::systemdmanager::{systemd1_api::ServiceResult, systemdunit::SystemDUnit};
+use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::StackableError;
 use crate::provider::StackableError::RuntimeError;
 use anyhow::anyhow;
@@ -378,48 +379,6 @@ impl SystemdManager {
         }
     }
 
-    /// Checks if the ActiveState of the given unit is set to active.
-    pub async fn is_running(&self, unit: &str) -> anyhow::Result<bool> {
-        self.proxy
-            .load_unit(unit)
-            .await?
-            .active_state()
-            .await
-            .map(|state| state == ActiveState::Active)
-            .map_err(|e| anyhow!("Error receiving ActiveState of unit [{}]. {}", unit, e))
-    }
-
-    /// Checks if the result of the given service unit is not set to success.
-    pub async fn failed(&self, unit: &str) -> anyhow::Result<bool> {
-        let unit_proxy = self.proxy.load_unit(unit).await?;
-
-        let service_proxy = AsyncServiceProxy::builder(unit_proxy.connection())
-            .path(unit_proxy.path())
-            .unwrap() // safe because the path is taken from an existing proxy
-            .build()
-            .await
-            .unwrap(); // safe because destination, path, and interface are set
-
-        service_proxy
-            .result()
-            .await
-            .map(|state| state != ServiceResult::Success)
-            .map_err(|e| anyhow!("Error receiving Result of unit [{}]. {}", unit, e))
-    }
-
-    /// Retrieves the invocation ID for the given unit.
-    ///
-    /// The invocation ID was introduced in systemd version 232.
-    pub async fn get_invocation_id(&self, unit: &str) -> anyhow::Result<String> {
-        self.proxy
-            .load_unit(unit)
-            .await?
-            .invocation_id()
-            .await
-            .map(|invocation_id| invocation_id.to_string())
-            .map_err(|e| anyhow!("Error receiving InvocationID of unit [{}]. {}", unit, e))
-    }
-
     // Symlink a unit file into the systemd unit folder
     // This is not public on purpose, as [create] should be the normal way to link unit files
     // when using this crate
@@ -427,6 +386,10 @@ impl SystemdManager {
         debug!("Linking [{}]", unit);
         self.proxy.link_unit_files(&[unit], false, force).await?;
         Ok(())
+    }
+
+    pub async fn create_systemd_service(&self, unit: &str) -> anyhow::Result<SystemdService> {
+        SystemdService::new(unit, &self.proxy).await
     }
 
     // Check if the unit name is valid and append .service if needed
