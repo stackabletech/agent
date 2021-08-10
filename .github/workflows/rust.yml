@@ -97,7 +97,7 @@ jobs:
           - licenses
           - sources
     steps:
-      - uses: actions/checkout@v2
-      - uses: EmbarkStudios/cargo-deny-action@v1
+      - uses: actions/checkout@v2.3.4
+      - uses: EmbarkStudios/cargo-deny-action@v1.2.6
         with:
           command: check ${{ matrix.checks }}
