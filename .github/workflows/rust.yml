@@ -86,11 +86,18 @@ jobs:
         if: ${{ !steps.check_permissions.outputs.has-permission }}
         run: cargo clippy --all-targets -- -D warnings
 
-  security_audit:
-    name: Run security audit
+  cargo-deny:
+    name: Run cargo deny
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        checks:
+          - advisories
+          - bans
+          - licenses
+          - sources
     steps:
       - uses: actions/checkout@v2.3.4
-      - uses: actions-rs/audit-check@v1.2.0
+      - uses: EmbarkStudios/cargo-deny-action@v1.2.6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          command: check ${{ matrix.checks }}
