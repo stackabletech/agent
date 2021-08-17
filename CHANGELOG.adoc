@@ -1,5 +1,7 @@
 = Changelog
 
+:263: https://github.com/stackabletech/agent/pull/263[#263]
+
 == 0.6.0 - unreleased
 
 :262: https://github.com/stackabletech/agent/pull/262[#262]
@@ -24,12 +26,12 @@
 * Error message improved which is logged if a systemd unit file cannot
   be created ({276}).
 * Handling of service restarts moved from the Stackable agent to
-  systemd.
+  systemd ({263}).
 
 === Removed
 * Check removed if a service starts up correctly within 10 seconds.
   systemd manages restarts now and the Stackable agent cannot detect if
-  a service is in a restart loop.
+  a service is in a restart loop ({263}).
 
 == 0.5.0 - 2021-07-26
 
