@@ -126,13 +126,30 @@ impl State<PodState> for CreatingService {
                 }
             }
 
+            let systemd_service = match systemd_manager
+                .create_systemd_service(&unit.get_name())
+                .await
+            {
+                Ok(systemd_service) => systemd_service,
+                Err(error) => {
+                    error!(
+                        "Proxy for the systemd service [{}] could not be created: {}",
+                        service_name, error
+                    );
+                    return Transition::Complete(Err(error));
+                }
+            };
+
             {
                 let provider_state = shared.write().await;
                 let mut handles = provider_state.handles.write().await;
                 handles.insert_container_handle(
                     &PodKey::from(&pod),
                     &ContainerKey::App(String::from(container.name())),
-                    &ContainerHandle::new(&unit.get_name()),
+                    &ContainerHandle {
+                        service_unit: unit.get_name(),
+                        systemd_service,
+                    },
                 )
             };
 

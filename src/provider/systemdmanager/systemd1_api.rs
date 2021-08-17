@@ -8,7 +8,7 @@ use std::{
     str::FromStr,
 };
 use strum::{AsRefStr, Display, EnumString, EnumVariantNames, IntoStaticStr, VariantNames};
-use zbus::dbus_proxy;
+use zbus::{dbus_proxy, names::MemberName};
 use zvariant::{derive::Type, OwnedObjectPath, OwnedValue, Signature, Type};
 
 /// Implements [`Serialize`] for an enum.
@@ -184,7 +184,7 @@ impl_type_for_enum!(StopMode);
 ///
 /// ```
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
-/// let connection = zbus::Connection::new_system().unwrap();
+/// let connection = zbus::Connection::system().unwrap();
 /// let manager = ManagerProxy::new(&connection).unwrap();
 /// let unit = manager.load_unit("dbus.service").unwrap();
 /// ```
@@ -194,8 +194,8 @@ impl_type_for_enum!(StopMode);
 /// ```
 /// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
 /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
-/// let connection = zbus::azync::Connection::new_system().await.unwrap();
-/// let manager = AsyncManagerProxy::new(&connection).unwrap();
+/// let connection = zbus::azync::Connection::system().await.unwrap();
+/// let manager = AsyncManagerProxy::new(&connection).await.unwrap();
 /// let unit = manager.load_unit("dbus.service").await.unwrap();
 /// # });
 /// ```
@@ -206,8 +206,7 @@ impl_type_for_enum!(StopMode);
 )]
 trait Manager {
     /// Loads the unit from disk if possible and returns it.
-    #[dbus_proxy(object = "Unit")]
-    fn load_unit(&self, name: &str);
+    fn load_unit(&self, name: &str) -> zbus::Result<OwnedObjectPath>;
 
     /// Enqueues a start job and possibly depending jobs and returns the
     /// newly created job.
@@ -274,10 +273,10 @@ trait Manager {
 /// use futures_util::stream::StreamExt;
 ///
 /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
-/// let connection = zbus::azync::Connection::new_system().await.unwrap();
-/// let manager = AsyncManagerProxy::new(&connection).unwrap();
+/// let connection = zbus::azync::Connection::system().await.unwrap();
+/// let manager = AsyncManagerProxy::new(&connection).await.unwrap();
 /// let signals = manager
-///     .receive_signal(ManagerSignals::JobRemoved.into()).await.unwrap()
+///     .receive_signal(ManagerSignals::JobRemoved).await.unwrap()
 ///     .map(|message| message.body::<JobRemovedSignal>().unwrap());
 /// # });
 /// ```
@@ -285,6 +284,12 @@ trait Manager {
 pub enum ManagerSignals {
     /// Sent out each time a job is dequeued
     JobRemoved,
+}
+
+impl From<ManagerSignals> for MemberName<'_> {
+    fn from(manager_signal: ManagerSignals) -> Self {
+        MemberName::from_str_unchecked(manager_signal.into())
+    }
 }
 
 /// Result in the `JobRemoved` signal.
@@ -448,7 +453,23 @@ impl_tryfrom_ownedvalue_for_enum!(ServiceResult);
 /// A systemd service unit object
 ///
 /// A [`ServiceUnitProxy`] can be created from a [`UnitProxy`] with
-/// [`ServiceProxy::from`].
+/// the following code:
+///
+/// ```
+/// # use stackable_agent::provider::systemdmanager::systemd1_api::*;
+///
+/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+/// # let connection = zbus::azync::Connection::system().await.unwrap();
+/// # let unit_proxy = AsyncUnitProxy::new(&connection).await.unwrap();
+///
+/// let service_proxy = AsyncServiceProxy::builder(unit_proxy.connection())
+///     .path(unit_proxy.path())
+///     .unwrap() // safe because the path is taken from an existing proxy
+///     .build()
+///     .await
+///     .unwrap(); // safe because destination, path, and interface are set
+/// # });
+/// ```
 ///
 /// Currently not all methods of the systemd object are exposed.
 #[dbus_proxy(
@@ -461,26 +482,6 @@ trait Service {
     /// state (see ['ActiveState::Failed`]).
     #[dbus_proxy(property)]
     fn result(&self) -> zbus::Result<ServiceResult>;
-}
-
-impl<'c> From<UnitProxy<'c>> for ServiceProxy<'c> {
-    fn from(unit_proxy: UnitProxy<'c>) -> Self {
-        ServiceProxy::builder(unit_proxy.connection())
-            .path(unit_proxy.path().to_owned())
-            .unwrap() // safe because the path is taken from an existing proxy
-            .build()
-            .unwrap() // safe because build() never returns an error
-    }
-}
-
-impl<'c> From<AsyncUnitProxy<'c>> for AsyncServiceProxy<'c> {
-    fn from(unit_proxy: AsyncUnitProxy<'c>) -> Self {
-        AsyncServiceProxy::builder(unit_proxy.connection())
-            .path(unit_proxy.path().to_owned())
-            .unwrap() // safe because the path is taken from an existing proxy
-            .build()
-            .unwrap() // safe because build() never returns an error
-    }
 }
 
 /// A systemd job object
@@ -551,6 +552,12 @@ mod test {
     fn convert_manager_signals_into_static_str() {
         let static_str: &'static str = ManagerSignals::JobRemoved.into();
         assert_eq!("JobRemoved", static_str);
+    }
+
+    #[test]
+    fn convert_manager_signals_into_member_name() {
+        let member_name: MemberName = ManagerSignals::JobRemoved.into();
+        assert_eq!("JobRemoved", member_name.as_str());
     }
 
     #[test]

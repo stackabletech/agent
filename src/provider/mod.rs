@@ -32,6 +32,7 @@ use std::collections::HashMap;
 use systemdmanager::journal_reader;
 
 use self::states::pod::{initializing::Initializing, terminated::Terminated};
+use self::systemdmanager::service::SystemdService;
 
 pub struct StackableProvider {
     shared: ProviderState,
@@ -98,29 +99,6 @@ impl PodHandleMap {
             .insert(container_key.to_owned(), container_handle.to_owned());
     }
 
-    /// Sets the invocation ID for the given pod and container key.
-    ///
-    /// If there is no corresponding container handle then an error is
-    /// returned.
-    pub fn set_invocation_id(
-        &mut self,
-        pod_key: &PodKey,
-        container_key: &ContainerKey,
-        invocation_id: &str,
-    ) -> anyhow::Result<()> {
-        if let Some(mut container_handle) = self.container_handle_mut(pod_key, container_key) {
-            container_handle.invocation_id = Some(String::from(invocation_id));
-            Ok(())
-        } else {
-            Err(anyhow!(
-                "Invocation ID could not be stored. Container handle for
-                pod [{:?}] and container [{}] not found",
-                pod_key,
-                container_key
-            ))
-        }
-    }
-
     /// Returns a reference to the container handle with the given pod and
     /// container key or [`None`] if not found.
     pub fn container_handle(
@@ -131,18 +109,6 @@ impl PodHandleMap {
         self.handles
             .get(pod_key)
             .and_then(|pod_handle| pod_handle.get(container_key))
-    }
-
-    /// Returns a mutable reference to the container handle with the given
-    /// pod and container key or [`None`] if not found.
-    fn container_handle_mut(
-        &mut self,
-        pod_key: &PodKey,
-        container_key: &ContainerKey,
-    ) -> Option<&mut ContainerHandle> {
-        self.handles
-            .get_mut(pod_key)
-            .and_then(|pod_handle| pod_handle.get_mut(container_key))
     }
 }
 
@@ -156,19 +122,8 @@ pub struct ContainerHandle {
     /// Can be used as reference in [`crate::provider::systemdmanager::manager`].
     pub service_unit: String,
 
-    /// Contains the systemd invocation ID which identifies the
-    /// corresponding entries in the journal.
-    pub invocation_id: Option<String>,
-}
-
-impl ContainerHandle {
-    /// Creates an instance with the given service unit name.
-    pub fn new(service_unit: &str) -> Self {
-        ContainerHandle {
-            service_unit: String::from(service_unit),
-            invocation_id: None,
-        }
-    }
+    /// Proxy for the systemd service
+    pub systemd_service: SystemdService,
 }
 
 impl StackableProvider {
@@ -341,7 +296,7 @@ impl Provider for StackableProvider {
             )
         })?;
 
-        if let Some(invocation_id) = container_handle.invocation_id {
+        if let Ok(invocation_id) = container_handle.systemd_service.invocation_id().await {
             task::spawn_blocking(move || {
                 let result = Runtime::new()
                     .unwrap()
