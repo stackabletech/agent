@@ -3,9 +3,12 @@
 //! This module contains additional operations which are not present in
 //! `std::fs` and `std::os::$platform`.
 
+use std::io;
+use std::path::{Component, Path, PathBuf};
+
 use anyhow::{anyhow, Result};
-use nix::unistd;
-use std::path::Path;
+use nix::{libc::O_TMPFILE, unistd};
+use tokio::fs::OpenOptions;
 
 /// User identifier
 pub struct Uid(unistd::Uid);
@@ -61,4 +64,76 @@ where
         }
     }
     Ok(())
+}
+
+/// Checks if the given directory exists and is writable by the current
+/// process.
+///
+/// The check is performed by creating an unnamed temporary file in the
+/// given directory. The file will be automatically removed by the
+/// operating system when the last handle is closed.
+pub async fn check_dir_is_writable(directory: &Path) -> io::Result<()> {
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(O_TMPFILE)
+        .open(directory)
+        .await
+        .map(|_| ())
+}
+
+/// Normalizes a path.
+///
+/// In contrast to [`std::fs::canonicalize`] the path does not need to
+/// exist.
+///
+/// # Examples
+///
+/// ```rust
+/// # use stackable_agent::fsext::*;
+/// use std::path::Path;
+///
+/// assert_eq!(Path::new("foo/bar"), normalize_path(Path::new("foo//bar")));
+/// assert_eq!(Path::new("foo/bar"), normalize_path(Path::new("foo/./bar")));
+/// assert_eq!(Path::new("foo/bar"), normalize_path(Path::new("foo/bar/.")));
+/// assert_eq!(Path::new("foo/../bar"), normalize_path(Path::new("foo/../bar")));
+/// assert_eq!(Path::new("foo/bar/.."), normalize_path(Path::new("foo/bar/..")));
+/// assert_eq!(Path::new("/foo"), normalize_path(Path::new("/foo")));
+/// assert_eq!(Path::new("./foo"), normalize_path(Path::new("./foo")));
+/// assert_eq!(Path::new("foo"), normalize_path(Path::new("foo/")));
+/// assert_eq!(Path::new("foo"), normalize_path(Path::new("foo")));
+/// assert_eq!(Path::new("/"), normalize_path(Path::new("/")));
+/// assert_eq!(Path::new("."), normalize_path(Path::new(".")));
+/// assert_eq!(Path::new(".."), normalize_path(Path::new("..")));
+/// assert_eq!(Path::new(""), normalize_path(Path::new("")));
+/// ```
+pub fn normalize_path(path: &Path) -> PathBuf {
+    path.components().collect()
+}
+
+/// Returns true if the given path could reference a file.
+///
+/// In contrast to [`std::path::Path::is_file`] the file does not need
+/// to exist.
+///
+/// Use normalized paths to avoid confusing results.
+///
+/// # Examples
+///
+/// ```rust
+/// # use stackable_agent::fsext::*;
+/// use std::path::Path;
+///
+/// assert!(is_valid_file_path(Path::new("foo/bar")));
+/// assert!(is_valid_file_path(Path::new("foo/bar/")));
+/// assert!(is_valid_file_path(Path::new("foo/bar/.")));
+///
+/// assert!(!is_valid_file_path(Path::new("foo/bar/..")));
+/// assert!(!is_valid_file_path(Path::new("/")));
+/// assert!(!is_valid_file_path(Path::new(".")));
+/// assert!(!is_valid_file_path(Path::new("..")));
+/// assert!(!is_valid_file_path(Path::new("")));
+/// ```
+pub fn is_valid_file_path(path: &Path) -> bool {
+    matches!(path.components().last(), Some(Component::Normal(_)))
 }
