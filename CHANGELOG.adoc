@@ -1,10 +1,9 @@
 = Changelog
 
-:263: https://github.com/stackabletech/agent/pull/263[#263]
-
 == 0.6.0 - unreleased
 
 :262: https://github.com/stackabletech/agent/pull/262[#262]
+:263: https://github.com/stackabletech/agent/pull/263[#263]
 :267: https://github.com/stackabletech/agent/pull/267[#267]
 :270: https://github.com/stackabletech/agent/pull/270[#270]
 :273: https://github.com/stackabletech/agent/pull/273[#273]
