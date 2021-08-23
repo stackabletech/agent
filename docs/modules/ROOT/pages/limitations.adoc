@@ -2,5 +2,6 @@
 
 The Stackable Agent has limitations, some of which are documented here.
 
+* Kubernetes v1.19+ is required.
 * The maximum number of pods supported by the agent is currently hardcoded to 110.
   This restriction can be lifted if the need arises.
