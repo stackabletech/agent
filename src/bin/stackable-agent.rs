@@ -9,6 +9,29 @@ use stackable_config::ConfigBuilder;
 use stackable_agent::config::AgentConfig;
 use stackable_agent::provider::StackableProvider;
 
+mod built_info {
+    // The file has been placed there by the build script.
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
+pub fn print_startup_string(
+    pkg_version: &str,
+    git_version: Option<&str>,
+    target: &str,
+    built_time: &str,
+    rustc_version: &str,
+) {
+    let git_information = match git_version {
+        None => "".to_string(),
+        Some(git) => format!(" (Git information: {})", git),
+    };
+    info!("Starting the Stackable Agent");
+    info!(
+        "This is version {}{}, built for {} by {} at {}",
+        pkg_version, git_information, target, rustc_version, built_time
+    )
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize the logger
@@ -17,6 +40,15 @@ async fn main() -> anyhow::Result<()> {
     let agent_config: AgentConfig =
         ConfigBuilder::build(env::args_os().collect::<Vec<OsString>>(), "CONFIG_FILE")
             .expect("Error initializing Configuration!");
+
+    // Make sure to only print diagnostic information once we are actually trying to start
+    print_startup_string(
+        built_info::PKG_VERSION,
+        built_info::GIT_VERSION,
+        built_info::TARGET,
+        built_info::BUILT_TIME_UTC,
+        built_info::RUSTC_VERSION,
+    );
 
     // Currently the only way to _properly_ configure the Krustlet is via these environment exports,
     // as their config object only offers methods that parse from command line flags (or combinations
