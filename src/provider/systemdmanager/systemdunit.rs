@@ -227,7 +227,15 @@ impl SystemDUnit {
         }
 
         // This one is mandatory, as otherwise enabling the unit fails
-        unit.set_property(Section::Install, "WantedBy", "multi-user.target");
+        unit.set_property(
+            Section::Install,
+            "WantedBy",
+            if user_mode {
+                "default.target"
+            } else {
+                "multi-user.target"
+            },
+        );
 
         Ok(unit)
     }
@@ -727,7 +735,7 @@ mod test {
             TimeoutStopSec=30
 
             [Install]
-            WantedBy=multi-user.target"#}
+            WantedBy=default.target"#}
     )]
     #[case::set_termination_timeout(
         BusType::System,

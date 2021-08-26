@@ -32,6 +32,9 @@
   systemd manages restarts now and the Stackable agent cannot detect if
   a service is in a restart loop ({263}).
 
+=== Fixed
+* Systemd services in session mode are restarted after a reboot ({263}).
+
 == 0.5.0 - 2021-07-26
 
 :224: https://github.com/stackabletech/agent/pull/224[#224]
