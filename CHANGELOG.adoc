@@ -4,6 +4,7 @@
 
 :262: https://github.com/stackabletech/agent/pull/262[#262]
 :267: https://github.com/stackabletech/agent/pull/267[#267]
+:270: https://github.com/stackabletech/agent/pull/270[#270]
 
 === Changed
 * Lazy validation of repository URLs changed to eager validation
@@ -11,6 +12,7 @@
 * `certificates.k8s.io/v1` used instead of `certificates.k8s.io/v1beta1`
   so that the Stackable Agent is now compatible with Kubernetes v1.22
   but not any longer with versions prior to v1.19 ({267}).
+* Prints self-diagnostic information on startup ({270})
 
 == 0.5.0 - 2021-07-26
 

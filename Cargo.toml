@@ -5,6 +5,7 @@ edition = "2018"
 license = "Apache-2.0"
 name = "stackable-agent"
 version = "0.6.0-nightly"
+build = "build.rs"
 
 [dependencies]
 # We are currently referencing the Krustlet directly from a Stackable fork of the official repository.
@@ -51,6 +52,9 @@ zvariant = { git = "https://gitlab.freedesktop.org/dbus/zbus", rev = "0a8a4268be
 indoc = "1.0"
 rstest = "0.11"
 serde_yaml = "0.8"
+
+[build-dependencies]
+built = { version =  "0.5", features = ["chrono", "git2"] }
 
 [profile.release]
 opt-level = "s"
