@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use kubelet::config::{Config, ServerConfig};
 use kubelet::Kubelet;
 use log::{error, info};
-use tokio::fs::File;
+use tokio::fs::{create_dir_all, File};
 
 use stackable_agent::config::AgentConfig;
 use stackable_agent::fsext::check_dir_is_writable;
@@ -56,6 +56,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     check_optional_files(&agent_config).await;
+    create_missing_directories(&agent_config).await;
     check_configured_directories(&agent_config).await;
 
     // Currently the only way to _properly_ configure the Krustlet is via these environment exports,
@@ -165,6 +166,33 @@ async fn check_optional_files(config: &AgentConfig) {
                 );
             }
         }
+    }
+}
+
+/// Creates the directories where write access is required and which do
+/// not exist yet.
+///
+/// If a directory could not be created then an error is logged.
+async fn create_missing_directories(config: &AgentConfig) {
+    for (config_option, directory) in directories_where_write_access_is_required(config).await {
+        if directory.components().count() != 0 && !directory.exists() {
+            if let Err(error) = create_dir_all(&directory).await {
+                error!(
+                    "Could not create the directory [{}] which is \
+                    specified in the configuration option [{}]. {}",
+                    directory.to_string_lossy(),
+                    config_option.name,
+                    error
+                );
+            } else {
+                info!(
+                    "Directory [{}] created which is specified in the \
+                    configuration option [{}].",
+                    directory.to_string_lossy(),
+                    config_option.name
+                );
+            }
+        };
     }
 }
 
