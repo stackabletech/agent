@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use std::collections::hash_map::RandomState;
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use log::{debug, error, info, trace};
@@ -13,6 +13,7 @@ use stackable_config::{ConfigOption, Configurable, Configuration};
 use thiserror::Error;
 
 use crate::config::AgentConfigError::{ArgumentParseError, WrongArgumentCount};
+use crate::fsext::{is_valid_file_path, normalize_path};
 
 #[derive(Error, Debug)]
 pub enum AgentConfigError {
@@ -32,8 +33,8 @@ pub struct AgentConfig {
     pub data_directory: PathBuf,
     pub server_ip_address: IpAddr,
     pub server_port: u16,
-    pub server_cert_file: Option<PathBuf>,
-    pub server_key_file: Option<PathBuf>,
+    pub server_cert_file: PathBuf,
+    pub server_key_file: PathBuf,
     pub tags: HashMap<String, String>,
     pub session: bool,
     pub pod_cidr: String,
@@ -181,6 +182,41 @@ impl AgentConfig {
         documentation: include_str!("config_documentation/pod_cidr.adoc"),
         list: false
     };
+
+    /// Returns the directory in which the `server_cert_file` is
+    /// located.
+    ///
+    /// If `server_cert_file` contains only a file name then
+    /// `Path::new("")` is returned.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `server_cert_file` does not contain a file name. An
+    /// [`AgentConfig`] which was created by
+    /// [`Configurable::parse_values`] always contains a valid file
+    /// name.
+    pub fn server_cert_file_dir(&self) -> &Path {
+        self.server_cert_file
+            .parent()
+            .expect("server_cert_file should contain a file")
+    }
+
+    /// Returns the directory in which the `server_key_file` is located.
+    ///
+    /// If `server_key_file` contains only a file name then
+    /// `Path::new("")` is returned.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `server_key_file` does not contain a file name. An
+    /// [`AgentConfig`] which was created by
+    /// [`Configurable::parse_values`] always contains a valid file
+    /// name.
+    pub fn server_key_file_dir(&self) -> &Path {
+        self.server_key_file
+            .parent()
+            .expect("server_key_file should contain a file")
+    }
 
     fn get_options() -> HashSet<ConfigOption> {
         [
@@ -380,35 +416,40 @@ impl Configurable for AgentConfig {
             &parsed_values,
             &AgentConfig::DATA_DIR,
             error_list.as_mut(),
-        );
+        )
+        .map(|path: PathBuf| normalize_path(&path));
 
         // Parse bootstrap file from values
         let final_bootstrap_file = AgentConfig::get_with_default(
             &parsed_values,
             &AgentConfig::BOOTSTRAP_FILE,
             error_list.as_mut(),
-        );
+        )
+        .map(|path: PathBuf| normalize_path(&path));
 
         // Parse log directory
         let final_log_dir = AgentConfig::get_with_default(
             &parsed_values,
             &AgentConfig::LOG_DIR,
             error_list.as_mut(),
-        );
+        )
+        .map(|path: PathBuf| normalize_path(&path));
 
         // Parse config directory
         let final_config_dir = AgentConfig::get_with_default(
             &parsed_values,
             &AgentConfig::CONFIG_DIR,
             error_list.as_mut(),
-        );
+        )
+        .map(|path: PathBuf| normalize_path(&path));
 
         // Parse parcel directory
         let final_package_dir = AgentConfig::get_with_default(
             &parsed_values,
             &AgentConfig::PACKAGE_DIR,
             error_list.as_mut(),
-        );
+        )
+        .map(|path: PathBuf| normalize_path(&path));
 
         // Parse pod cidr
         let final_pod_cidr: Result<String, anyhow::Error> = AgentConfig::get_with_default(
@@ -418,32 +459,38 @@ impl Configurable for AgentConfig {
         );
 
         // Parse cert file
-        let final_server_cert_file = if let Ok(server_cert_file) =
-            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::SERVER_CERT_FILE)
-        {
-            Some(PathBuf::from_str(&server_cert_file).unwrap_or_else(|_| {
-                panic!(
-                    "Error parsing valid server cert file directory from string: {}",
-                    server_cert_file
-                )
-            }))
-        } else {
-            None
-        };
+        let final_server_cert_file = AgentConfig::get_with_default(
+            &parsed_values,
+            &AgentConfig::SERVER_CERT_FILE,
+            error_list.as_mut(),
+        )
+        .map(|path: PathBuf| normalize_path(&path));
+
+        if let Ok(file) = &final_server_cert_file {
+            if !is_valid_file_path(file) {
+                let error = ArgumentParseError {
+                    name: AgentConfig::SERVER_CERT_FILE.name.to_string(),
+                };
+                error_list.push(error);
+            }
+        }
 
         // Parse key file
-        let final_server_key_file = if let Ok(server_key_file) =
-            AgentConfig::get_exactly_one_string(&parsed_values, &AgentConfig::SERVER_KEY_FILE)
-        {
-            Some(PathBuf::from_str(&server_key_file).unwrap_or_else(|_| {
-                panic!(
-                    "Error parsing valid server key file directory from string: {}",
-                    server_key_file
-                )
-            }))
-        } else {
-            None
-        };
+        let final_server_key_file = AgentConfig::get_with_default(
+            &parsed_values,
+            &AgentConfig::SERVER_KEY_FILE,
+            error_list.as_mut(),
+        )
+        .map(|path: PathBuf| normalize_path(&path));
+
+        if let Ok(file) = &final_server_key_file {
+            if !is_valid_file_path(file) {
+                let error = ArgumentParseError {
+                    name: AgentConfig::SERVER_KEY_FILE.name.to_string(),
+                };
+                error_list.push(error);
+            }
+        }
 
         let final_port = AgentConfig::get_with_default(
             &parsed_values,
@@ -501,8 +548,8 @@ impl Configurable for AgentConfig {
             bootstrap_file: final_bootstrap_file.unwrap(),
             server_ip_address: final_ip,
             server_port: final_port.unwrap(),
-            server_cert_file: final_server_cert_file,
-            server_key_file: final_server_key_file,
+            server_cert_file: final_server_cert_file.unwrap(),
+            server_key_file: final_server_key_file.unwrap(),
             tags: final_tags,
             session: final_session,
             pod_cidr: final_pod_cidr.unwrap(),
