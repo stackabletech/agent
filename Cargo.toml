@@ -25,6 +25,7 @@ krator = { git = "https://github.com/stackabletech/krustlet.git", branch = "stac
 kube = { version= "0.48", default-features = false, features = ["derive", "native-tls"] }
 kubelet = { git = "https://github.com/stackabletech/krustlet.git", branch = "stackable_patches_v0.7.0", default-features = true, features= ["derive", "cli"] } # version = "0.7"
 Inflector = "0.11"
+json-patch = "0.2"
 lazy_static = "1.4"
 log = "0.4"
 multimap = "0.8"

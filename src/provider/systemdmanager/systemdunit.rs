@@ -6,6 +6,7 @@ use kubelet::pod::Pod;
 
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::PodValidationError;
+use crate::provider::kubernetes::accessor::{restart_policy, RestartPolicy};
 use crate::provider::states::pod::creating_config::CreatingConfig;
 use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::UnitTypes;
@@ -37,6 +38,97 @@ lazy_static! {
     // see https://systemd.io/USER_NAMES/
     static ref USER_NAME_PATTERN: Regex =
         Regex::new("^[a-zA-Z_][a-zA-Z0-9_-]{0,30}$").unwrap();
+}
+
+/// Boolean arguments used in unit files
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[strum(serialize_all = "kebab-case")]
+pub enum Boolean {
+    Yes,
+    No,
+}
+
+impl From<bool> for Boolean {
+    fn from(value: bool) -> Self {
+        if value {
+            Boolean::Yes
+        } else {
+            Boolean::No
+        }
+    }
+}
+
+/// Configures whether the service shall be restarted when the service
+/// process exits, is killed, or a timeout is reached.
+///
+/// The service process may be the main service process, but it may also
+/// be one of the processes specified with `ExecStartPre=`,
+/// `ExecStartPost=`, `ExecStop=`, `ExecStopPost=`, or `ExecReload=`.
+/// When the death of the process is a result of systemd operation (e.g.
+/// service stop or restart), the service will not be restarted.
+/// Timeouts include missing the watchdog "keep-alive ping" deadline and
+/// a service start, reload, and stop operation timeouts.
+///
+/// As exceptions to the setting, the service will not be restarted if
+/// the exit code or signal is specified in `RestartPreventExitStatus=`
+/// or the service is stopped with `systemctl stop` or an equivalent
+/// operation. Also, the services will always be restarted if the exit
+/// code or signal is specified in `RestartForceExitStatus=`.
+///
+/// Note that service restart is subject to unit start rate limiting
+/// configured with `StartLimitIntervalSec=` and `StartLimitBurst=`. A
+/// restarted service enters the failed state only after the start
+/// limits are reached.
+///
+/// Setting this to "RestartOption::OnFailure" is the recommended choice
+/// for long-running services, in order to increase reliability by
+/// attempting automatic recovery from errors. For services that shall
+/// be able to terminate on their own choice (and avoid immediate
+/// restarting), "RestartOption::OnAbnormal" is an alternative choice.
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[strum(serialize_all = "kebab-case")]
+pub enum RestartOption {
+    /// The service will be restarted regardless of whether it exited
+    /// cleanly or not, got terminated abnormally by a signal, or hit a
+    /// timeout.
+    Always,
+    /// The service will not be restarted.
+    No,
+    /// The service will be restarted when the process is terminated by
+    /// a signal (including on core dump, excluding the signals
+    /// `SIGHUP`, `SIGINT`, `SIGTERM`, or `SIGPIPE`), when an operation
+    /// times out, or when the watchdog timeout is triggered.
+    OnAbnormal,
+    /// The service will be restarted only if the service process exits
+    /// due to an uncaught signal not specified as a clean exit status.
+    OnAbort,
+    /// The service will be restarted when the process exits with a
+    /// non-zero exit code, is terminated by a signal (including on core
+    /// dump, but excluding the signals `SIGHUP`, `SIGINT`, `SIGTERM`,
+    /// or `SIGPIPE`), when an operation (such as service reload) times
+    /// out, and when the configured watchdog timeout is triggered.
+    OnFailure,
+    /// The service will be restarted only when the service process
+    /// exits cleanly. In this context, a clean exit means any of the
+    /// following:
+    /// - exit code of 0;
+    /// - for types other than Type=oneshot, one of the signals
+    ///   `SIGHUP`, `SIGINT`, `SIGTERM`, or `SIGPIPE`;
+    /// - exit statuses and signals specified in SuccessExitStatus=.
+    OnSuccess,
+    /// The service will be restarted only if the watchdog timeout for
+    /// the service expires.
+    OnWatchdog,
+}
+
+impl From<RestartPolicy> for RestartOption {
+    fn from(restart_policy: RestartPolicy) -> Self {
+        match restart_policy {
+            RestartPolicy::Always => RestartOption::Always,
+            RestartPolicy::OnFailure => RestartOption::OnFailure,
+            RestartPolicy::Never => RestartOption::OnAbnormal,
+        }
+    }
 }
 
 /// A struct that represents an individual systemd unit
@@ -135,7 +227,15 @@ impl SystemDUnit {
         }
 
         // This one is mandatory, as otherwise enabling the unit fails
-        unit.set_property(Section::Install, "WantedBy", "multi-user.target");
+        unit.set_property(
+            Section::Install,
+            "WantedBy",
+            if user_mode {
+                "default.target"
+            } else {
+                "multi-user.target"
+            },
+        );
 
         Ok(unit)
     }
@@ -205,13 +305,28 @@ impl SystemDUnit {
 
         unit.set_property(Section::Service, "TimeoutStopSec", &termination_timeout);
 
-        if let Some(stop_timeout) = pod_spec.termination_grace_period_seconds {
-            unit.set_property(
-                Section::Service,
-                "TimeoutStopSec",
-                stop_timeout.to_string().as_str(),
-            );
-        }
+        let restart_option = RestartOption::from(restart_policy(pod));
+        unit.set_restart_option(&restart_option);
+
+        // Relieve the machine a little bit on restart loops but choose
+        // a moderate value so that tests are not slowed down too much.
+        unit.set_restart_sec_option(2);
+
+        // Adhere to the given restart policy and do not limit the
+        // number of restarts.
+        unit.set_start_limit_interval_sec_option(0);
+
+        // If the service can terminate successfully then
+        // RemainAfterExit must be set to "yes" so that the state of the
+        // service unit object can be reliably determined after
+        // termination, see manager::SystemdManager::service_state.
+        //
+        // If Restart is set to "always" then the service cannot
+        // terminate and there is no need to determine the state after
+        // termination. Furthermore RemainAfterExit must not be set
+        // because otherwise the Restart option would be ignored when
+        // the service returns a successful return code.
+        unit.set_remain_after_exit_option((restart_option != RestartOption::Always).into());
 
         if let Some(user_name) = SystemDUnit::get_user_name_from_pod_security_context(pod)? {
             if !user_mode {
@@ -222,6 +337,34 @@ impl SystemDUnit {
         }
 
         Ok(unit)
+    }
+
+    /// Configures whether the service shall be restarted when the
+    /// service process exits, is killed, or a timeout is reached.
+    fn set_restart_option(&mut self, setting: &RestartOption) {
+        self.set_property(Section::Service, "Restart", &setting.to_string());
+    }
+
+    /// Configures the time to sleep in seconds before restarting a
+    /// service (as configured with [set_restart_option]). Defaults to
+    /// 100ms.
+    fn set_restart_sec_option(&mut self, seconds: u32) {
+        self.set_property(Section::Service, "RestartSec", &seconds.to_string());
+    }
+
+    /// Configures unit start rate limiting. Units which are started too
+    /// often within the given time span are not permitted to start any
+    /// more. The allowed number of restarts can be set with
+    /// "StartLimitBurst". May be set to 0 to disable any kind of rate
+    /// limiting.
+    fn set_start_limit_interval_sec_option(&mut self, seconds: u32) {
+        self.set_property(Section::Unit, "StartLimitIntervalSec", &seconds.to_string());
+    }
+
+    /// Causes systemd to consider the unit to be active if the start
+    /// action exited successfully.
+    fn set_remain_after_exit_option(&mut self, setting: Boolean) {
+        self.set_property(Section::Service, "RemainAfterExit", &setting.to_string());
     }
 
     fn get_user_name_from_pod_security_context(pod: &Pod) -> Result<Option<&str>, StackableError> {
@@ -501,7 +644,13 @@ mod test {
                   runAsUserName: pod-user",
         "stackable.service",
         indoc! {"
+            [Unit]
+            StartLimitIntervalSec=0
+
             [Service]
+            RemainAfterExit=no
+            Restart=always
+            RestartSec=2
             TimeoutStopSec=30
             User=pod-user"}
     )]
@@ -535,11 +684,15 @@ mod test {
         indoc! {r#"
             [Unit]
             Description=default-stackable-test-container
+            StartLimitIntervalSec=0
 
             [Service]
             Environment="LOG_DIR=/var/log/default-stackable"
             Environment="LOG_LEVEL=INFO"
             ExecStart=start.sh arg /etc/default-stackable
+            RemainAfterExit=no
+            Restart=always
+            RestartSec=2
             StandardError=journal
             StandardOutput=journal
             TimeoutStopSec=30
@@ -570,15 +723,19 @@ mod test {
         indoc! {r#"
             [Unit]
             Description=default-stackable-test-container
+            StartLimitIntervalSec=0
 
             [Service]
             ExecStart=start.sh
+            RemainAfterExit=no
+            Restart=always
+            RestartSec=2
             StandardError=journal
             StandardOutput=journal
             TimeoutStopSec=30
 
             [Install]
-            WantedBy=multi-user.target"#}
+            WantedBy=default.target"#}
     )]
     #[case::set_termination_timeout(
         BusType::System,
@@ -592,8 +749,36 @@ mod test {
               containers: []",
         "stackable.service",
         indoc! {"
+            [Unit]
+            StartLimitIntervalSec=0
+
             [Service]
+            RemainAfterExit=no
+            Restart=always
+            RestartSec=2
             TimeoutStopSec=10"}
+    )]
+    #[case::set_restart_policy(
+        BusType::System,
+        "
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: stackable
+            spec:
+              containers: []
+              restartPolicy: OnFailure",
+        "stackable.service",
+        indoc! {"
+            [Unit]
+            StartLimitIntervalSec=0
+
+            [Service]
+            RemainAfterExit=yes
+            Restart=on-failure
+            RestartSec=2
+            TimeoutStopSec=30"
+        }
     )]
 
     fn create_unit_from_pod(
