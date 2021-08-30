@@ -1,11 +1,12 @@
 [package]
 authors = ["Sönke Liebau <soenke.liebau@stackable.de>"]
+build = "build.rs"
 description = "The component of the Stackable Platform that manages installation of services on the workers"
 edition = "2018"
 license = "Apache-2.0"
 name = "stackable-agent"
+repository = "https://github.com/stackabletech/agent"
 version = "0.6.0-nightly"
-build = "build.rs"
 
 [dependencies]
 # We are currently referencing the Krustlet directly from a Stackable fork of the official repository.

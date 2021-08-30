@@ -53,6 +53,27 @@ jobs:
           command: fmt
           args: --all -- --check
 
+  doc:
+    name: Run rustdoc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2.3.4
+      - name: Update package index
+        run: sudo apt-get update
+      - name: Install dependencies
+        run: sudo apt-get install libsystemd-dev pkg-config
+      - uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt
+          override: true
+      - uses: Swatinem/rust-cache@v1.3.0
+      - uses: actions-rs/cargo@v1.0.3
+        with:
+          command: doc
+          args: --document-private-items
+
   clippy:
     name: Run clippy
     runs-on: ubuntu-latest
