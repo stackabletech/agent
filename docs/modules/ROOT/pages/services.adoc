@@ -15,7 +15,3 @@ A pod which provides a service should never terminate on its own, so the
           command:
             - <service-command>
       restartPolicy: Always
-
-After a container command is executed the agent waits for 10 seconds
-before the container status is set to running. When all containers are
-running, also the pod phase is switched from `Pending` to `Running`.

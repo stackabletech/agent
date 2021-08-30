@@ -1,7 +1,21 @@
 //! Exposes methods from the systemd unit and service interfaces.
-use super::systemd1_api::{ActiveState, AsyncManagerProxy, AsyncServiceProxy, AsyncUnitProxy};
-use crate::provider::systemdmanager::systemd1_api::ServiceResult;
+use super::systemd1_api::{
+    ActiveState, AsyncManagerProxy, AsyncServiceProxy, AsyncUnitProxy, SUB_STATE_SERVICE_EXITED,
+};
 use anyhow::anyhow;
+
+/// Represents the state of a service unit object.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ServiceState {
+    /// The service was not started yet.
+    Created,
+    /// The service was started and is currently running or restarting.
+    Started,
+    /// The service terminated successfully and will not be restarted.
+    Succeeded,
+    /// The service terminated unsuccessfully and will not be restarted.
+    Failed,
+}
 
 /// Stores proxies of a systemd unit and service
 #[derive(Clone, Debug)]
@@ -49,34 +63,60 @@ impl SystemdService {
         self.file.clone()
     }
 
-    /// Checks if the ActiveState is set to active.
-    pub async fn is_running(&self) -> anyhow::Result<bool> {
-        self.unit_proxy
-            .active_state()
-            .await
-            .map(|state| state == ActiveState::Active)
-            .map_err(|error| {
-                anyhow!(
-                    "ActiveState of systemd unit [{}] cannot be retrieved: {}",
-                    self.file,
-                    error
-                )
-            })
+    /// Returns a coarse-grained state of the service unit object.
+    ///
+    /// It is assumed that RemainAfterExit is set to "yes" in the given
+    /// unit if the service can terminate. Otherwise it would not be
+    /// possible to distinguish between "inactive and never run" and
+    /// "inactive and terminated successfully".
+    pub async fn service_state(&self) -> anyhow::Result<ServiceState> {
+        let active_state = self.unit_proxy.active_state().await?;
+
+        let service_state = match active_state {
+            ActiveState::Inactive => {
+                // ActiveState "inactive" means in general that the
+                // previous run was successful or no previous run has
+                // taken place yet. If RemainAfterExit is set to "yes"
+                // then a successfully terminated service stays in
+                // ActiveState "active" and only a service which was not
+                // started before is in ActiveState "inactive". It is
+                // assumed here that RemainAfterExit is enabled.
+                ServiceState::Created
+            }
+            ActiveState::Active => {
+                let sub_state = self.unit_proxy.sub_state().await?;
+                if sub_state == SUB_STATE_SERVICE_EXITED {
+                    // The service terminated successfully (otherwise
+                    // ActiveState would be set to "failed") and will
+                    // not be restarted (otherwise ActiveState would be
+                    // set to "activating") and RemainAfterExit is set
+                    // to "yes" (otherwise ActiveState would be set to
+                    // "inactive"). It is assumed here that
+                    // RemainAfterExit is enabled.
+                    ServiceState::Succeeded
+                } else {
+                    ServiceState::Started
+                }
+            }
+            ActiveState::Failed => {
+                // The service terminated unsuccessfully and will not be
+                // restarted (otherwise ActiveState would be set to
+                // "activating").
+                ServiceState::Failed
+            }
+            ActiveState::Reloading => ServiceState::Started,
+            ActiveState::Activating => ServiceState::Started,
+            ActiveState::Deactivating => ServiceState::Started,
+        };
+
+        Ok(service_state)
     }
 
-    /// Checks if the result is not set to success.
-    pub async fn failed(&self) -> anyhow::Result<bool> {
+    pub async fn restart_count(&self) -> anyhow::Result<u32> {
         self.service_proxy
-            .result()
+            .nrestarts()
             .await
-            .map(|state| state != ServiceResult::Success)
-            .map_err(|error| {
-                anyhow!(
-                    "Result of systemd unit [{}] cannot be retrieved: {}",
-                    self.file,
-                    error
-                )
-            })
+            .map_err(|e| anyhow!("Error receiving NRestarts of unit [{}]. {}", self.file, e))
     }
 
     /// Retrieves the current invocation ID.

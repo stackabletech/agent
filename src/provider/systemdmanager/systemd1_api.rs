@@ -1,4 +1,7 @@
 //! Binding to the D-Bus interface of systemd
+//!
+//! Further documentation can be found in the
+//! [manual](https://www.freedesktop.org/software/systemd/man/org.freedesktop.systemd1).
 use fmt::Display;
 use inflector::cases::kebabcase;
 use serde::{de::Visitor, Deserialize, Serialize};
@@ -368,6 +371,11 @@ pub enum ActiveState {
 
 impl_tryfrom_ownedvalue_for_enum!(ActiveState);
 
+/// Sub state of a service unit object which is set if the service
+/// terminated successfully but is still active due to the
+/// RemainAfterExit setting.
+pub const SUB_STATE_SERVICE_EXITED: &str = "exited";
+
 /// Unique ID for a runtime cycle of a unit
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvocationId(Vec<u8>);
@@ -403,6 +411,23 @@ trait Unit {
     /// not)
     #[dbus_proxy(property)]
     fn active_state(&self) -> zbus::Result<ActiveState>;
+
+    /// SubState encodes states of the same state machine that
+    /// ActiveState covers, but knows more fine-grained states that are
+    /// unit-type-specific. Where ActiveState only covers six high-level
+    /// states, SubState covers possibly many more low-level
+    /// unit-type-specific states that are mapped to the six high-level
+    /// states. Note that multiple low-level states might map to the
+    /// same high-level state, but not vice versa. Not all high-level
+    /// states have low-level counterparts on all unit types. At this
+    /// point the low-level states are not documented here, and are more
+    /// likely to be extended later on than the common high-level
+    /// states.
+    ///
+    /// Possible sub states can be found in the source code of systemd:
+    /// https://github.com/systemd/systemd/blob/v249/src/basic/unit-def.h
+    #[dbus_proxy(property)]
+    fn sub_state(&self) -> zbus::Result<String>;
 
     /// Unique ID for a runtime cycle of a unit
     #[dbus_proxy(property, name = "InvocationID")]
@@ -482,6 +507,10 @@ trait Service {
     /// state (see ['ActiveState::Failed`]).
     #[dbus_proxy(property)]
     fn result(&self) -> zbus::Result<ServiceResult>;
+
+    /// Number of restarts
+    #[dbus_proxy(property, name = "NRestarts")]
+    fn nrestarts(&self) -> zbus::Result<u32>;
 }
 
 /// A systemd job object

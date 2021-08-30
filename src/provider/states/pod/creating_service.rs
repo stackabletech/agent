@@ -9,7 +9,7 @@ use super::setup_failed::SetupFailed;
 use super::starting::Starting;
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::{ContainerHandle, PodState, ProviderState};
-use anyhow::Error;
+use anyhow::{Context, Error};
 use dirs::home_dir;
 use std::env;
 use std::fs::create_dir_all;
@@ -113,17 +113,14 @@ impl State<PodState> for CreatingService {
             // Create the service
             // As per ADR005 we currently write the unit files directly in the systemd
             // unit directory (by passing None as [unit_file_path]).
-            match systemd_manager.create_unit(&unit, None, true, true).await {
-                Ok(()) => {}
-                Err(e) => {
-                    // TODO: We need to discuss what to do here, in theory we could have loaded
-                    // other services already, do we want to stop those?
-                    error!(
-                        "Failed to create systemd unit for service [{}]",
-                        service_name
-                    );
-                    return Transition::Complete(Err(e));
-                }
+            if let Err(e) = systemd_manager
+                .create_unit(&unit, None, true, true)
+                .await
+                .with_context(|| format!("Unit file [{}] could not be created", unit))
+            {
+                // TODO: We need to discuss what to do here, in theory we could have loaded
+                // other services already, do we want to stop those?
+                return Transition::Complete(Err(e));
             }
 
             let systemd_service = match systemd_manager
