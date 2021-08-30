@@ -87,7 +87,7 @@
 
 [#165]: https://github.com/stackabletech/agent/pull/165
 [#169]: https://github.com/stackabletech/agent/pull/169
-[#173]: https://github.com/stackabletech/agent/pull/176
+[#173]: https://github.com/stackabletech/agent/pull/173
 [#176]: https://github.com/stackabletech/agent/pull/176
 
 ## 0.2.0 - 2021-05-20

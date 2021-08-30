@@ -58,8 +58,7 @@ license-files = [
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-# TODO Switch to "tag" when stackable_config is released
-required-git-spec = "branch"
+required-git-spec = "tag"
 allow-git = [
     "https://gitlab.freedesktop.org/dbus/zbus",
 ]
