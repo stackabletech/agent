@@ -11,7 +11,7 @@ use super::systemd1_api::{
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::StackableError;
 use crate::provider::StackableError::RuntimeError;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use futures_util::{future, stream::StreamExt};
 use log::debug;
 use std::fs;
@@ -190,16 +190,12 @@ impl SystemdManager {
         if !target_file.exists() {
             // Write unit file, no matter where
             // TODO: implement check for content equality
-            let mut unit_file = match File::create(&target_file) {
-                Ok(file) => file,
-                Err(e) => {
-                    debug!(
-                        "Error occurred when creating unit file [{}]: [{}]",
-                        unit_name, e
-                    );
-                    return Err(anyhow::Error::from(e));
-                }
-            };
+            let mut unit_file = File::create(&target_file).with_context(|| {
+                format!(
+                    "File [{}] could not be created",
+                    target_file.to_string_lossy()
+                )
+            })?;
             unit_file.write_all(unit.get_unit_file_content().as_bytes())?;
             unit_file.flush()?;
         }
