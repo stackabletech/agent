@@ -7,6 +7,8 @@
 - Check added on startup if the configured directories exist and are
   writable by the Stackable agent ([#273]).
 - Missing directories are created ([#274]).
+- Annotation `featureRestartCount` added to the pods to indicate if the
+  restart count is set properly ([#289]).
 
 ### Changed
 - Lazy validation of repository URLs changed to eager validation
@@ -35,6 +37,7 @@
 [#273]: https://github.com/stackabletech/agent/pull/273
 [#274]: https://github.com/stackabletech/agent/pull/274
 [#276]: https://github.com/stackabletech/agent/pull/276
+[#289]: https://github.com/stackabletech/agent/pull/289
 
 ## 0.5.0 - 2021-07-26
 

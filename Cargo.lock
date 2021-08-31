@@ -3895,7 +3895,7 @@ dependencies = [
 [[package]]
 name = "zbus"
 version = "2.0.0-beta.6"
-source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=0a8a4268be0f844ab4bca429f27766347dc3af58#0a8a4268be0f844ab4bca429f27766347dc3af58"
+source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=ff08cbbbcd3eead16464012b92e3862d4dcb6f16#ff08cbbbcd3eead16464012b92e3862d4dcb6f16"
 dependencies = [
  "async-broadcast",
  "async-channel",
@@ -3907,6 +3907,7 @@ dependencies = [
  "byteorder",
  "derivative",
  "enumflags2",
+ "event-listener",
  "futures-core",
  "futures-sink",
  "futures-util",
@@ -3914,7 +3915,6 @@ dependencies = [
  "nix 0.21.1",
  "once_cell",
  "rand 0.8.4",
- "scoped-tls",
  "serde",
  "serde_repr",
  "sha1",
@@ -3928,7 +3928,7 @@ dependencies = [
 [[package]]
 name = "zbus_macros"
 version = "2.0.0-beta.6"
-source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=0a8a4268be0f844ab4bca429f27766347dc3af58#0a8a4268be0f844ab4bca429f27766347dc3af58"
+source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=ff08cbbbcd3eead16464012b92e3862d4dcb6f16#ff08cbbbcd3eead16464012b92e3862d4dcb6f16"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -3940,7 +3940,7 @@ dependencies = [
 [[package]]
 name = "zbus_names"
 version = "1.0.0"
-source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=0a8a4268be0f844ab4bca429f27766347dc3af58#0a8a4268be0f844ab4bca429f27766347dc3af58"
+source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=ff08cbbbcd3eead16464012b92e3862d4dcb6f16#ff08cbbbcd3eead16464012b92e3862d4dcb6f16"
 dependencies = [
  "serde",
  "static_assertions",
@@ -3950,10 +3950,11 @@ dependencies = [
 [[package]]
 name = "zvariant"
 version = "2.8.0"
-source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=0a8a4268be0f844ab4bca429f27766347dc3af58#0a8a4268be0f844ab4bca429f27766347dc3af58"
+source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=ff08cbbbcd3eead16464012b92e3862d4dcb6f16#ff08cbbbcd3eead16464012b92e3862d4dcb6f16"
 dependencies = [
  "byteorder",
  "enumflags2",
+ "libc",
  "serde",
  "static_assertions",
  "zvariant_derive",
@@ -3962,7 +3963,7 @@ dependencies = [
 [[package]]
 name = "zvariant_derive"
 version = "2.8.0"
-source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=0a8a4268be0f844ab4bca429f27766347dc3af58#0a8a4268be0f844ab4bca429f27766347dc3af58"
+source = "git+https://gitlab.freedesktop.org/dbus/zbus?rev=ff08cbbbcd3eead16464012b92e3862d4dcb6f16#ff08cbbbcd3eead16464012b92e3862d4dcb6f16"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",

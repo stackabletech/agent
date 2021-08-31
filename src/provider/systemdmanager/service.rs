@@ -112,6 +112,9 @@ impl SystemdService {
         Ok(service_state)
     }
 
+    /// Retrieves the current restart count.
+    ///
+    /// The restart counter was introduced in systemd version 235.
     pub async fn restart_count(&self) -> anyhow::Result<u32> {
         self.service_proxy
             .nrestarts()
