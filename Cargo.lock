@@ -1482,7 +1482,7 @@ dependencies = [
  "mio 0.6.23",
  "miow 0.2.2",
  "notify",
- "oci-distribution",
+ "oci-distribution 0.6.0",
  "prost",
  "prost-types",
  "rcgen",
@@ -1846,6 +1846,25 @@ dependencies = [
 name = "oci-distribution"
 version = "0.6.0"
 source = "git+https://github.com/stackabletech/krustlet.git?tag=0.7.0-stackable.5#ab5b00ac3997d2dc3b257b18bf17e5d264f41a5e"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "hyperx",
+ "lazy_static",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio 1.11.0",
+ "tracing",
+ "www-authenticate",
+]
+
+[[package]]
+name = "oci-distribution"
+version = "0.7.0"
+source = "git+https://github.com/stackabletech/krustlet.git?tag=v1.0.0-alpha.1#8300f1aea133295513affc98e649605fc9e62911"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -2844,7 +2863,7 @@ dependencies = [
  "multimap",
  "nix 0.22.1",
  "notify",
- "oci-distribution",
+ "oci-distribution 0.7.0",
  "regex",
  "reqwest",
  "rstest",
