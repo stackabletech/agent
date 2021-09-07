@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::running::Running;
 use crate::provider::{
     kubernetes::status::patch_container_status, systemdmanager::service::ServiceState, PodHandle,
@@ -79,13 +81,17 @@ async fn start_service_units(
             );
         }
 
-        add_annotation(
-            &client,
-            pod,
+        let mut annotations = HashMap::new();
+        annotations.insert(
             "featureLogs",
-            &systemd_service.invocation_id().await.is_ok().to_string(),
-        )
-        .await?;
+            systemd_service.invocation_id().await.is_ok().to_string(),
+        );
+        annotations.insert(
+            "featureRestartCount",
+            systemd_service.restart_count().await.is_ok().to_string(),
+        );
+
+        add_annotations(&client, pod, &annotations).await?;
 
         patch_container_status(&client, pod, &container_key, &Status::running()).await;
     }
@@ -93,17 +99,20 @@ async fn start_service_units(
     Ok(())
 }
 
-/// Adds an annotation to the given pod.
+/// Adds annotations to the given pod.
 ///
 /// If there is already an annotation with the given key then the value
 /// is replaced.
 /// The function returns when the patch is sent. It does not await the
 /// changes to be visible to the watching clients.
-async fn add_annotation(client: &Client, pod: &Pod, key: &str, value: &str) -> kube::Result<Pod> {
+async fn add_annotations(
+    client: &Client,
+    pod: &Pod,
+    annotations: &HashMap<&str, String>,
+) -> kube::Result<Pod> {
     debug!(
-        "Adding annotation [{}: {}] to pod [{:?}]",
-        key,
-        value,
+        "Adding annotations [{:?}] to pod [{:?}]",
+        annotations,
         PodKey::from(pod)
     );
 
@@ -111,9 +120,7 @@ async fn add_annotation(client: &Client, pod: &Pod, key: &str, value: &str) -> k
 
     let patch = json!({
         "metadata": {
-            "annotations": {
-                key: value
-            }
+            "annotations": annotations
         }
     });
 

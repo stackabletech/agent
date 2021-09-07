@@ -1,0 +1,17 @@
+= Restarts
+
+The restart count is stored in the container status if systemd version
+235 or newer is running on the node which is the case for Debian 10 and
+CentOS 8 but not for CentOS 7. The annotation `featureRestartCount`
+indicates whether or not the restart count is set properly.
+
+    $ kubectl get pod <pod-name>
+    NAME         READY   STATUS    RESTARTS   AGE
+    <pod-name>   1/1     Running   4          10m
+
+    $ kubectl describe pod <pod-name>
+    Name:         <pod-name>
+    Annotations:  featureRestartCount: true
+    Containers:
+      <service-name>:
+        Restart Count:  4
