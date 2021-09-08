@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 - unreleased
+## 0.6.0 - 2021-09-08
 
 ### Added
 - Prints self-diagnostic information on startup ([#270]).
