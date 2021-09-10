@@ -29,7 +29,8 @@ Sep 09 13:51:59 server1 stackable-agent[15457]:     certificatesigningrequests.c
 Remove the current certificate file and restart the agent:
 
 ```
-sudo rm /etc/stackable/stackable-agent/secret/agent.crt && sudo systemctl restart stackable-agent
+sudo rm /etc/stackable/stackable-agent/secret/agent.crt && \
+sudo systemctl restart stackable-agent
 ```
 
 And then observe the CSR is pending, with `kubectl get csr`
