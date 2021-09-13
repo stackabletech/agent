@@ -33,7 +33,7 @@ multimap = "0.8"
 nix = "0.22"
 # Pin notify to the latest version compatible with krustlet 0.7.0.
 # TODO Remove when upgrading krustlet
-notify = "= 5.0.0-pre.10"
+notify = "= 5.0.0-pre.13"
 oci-distribution = { git = "https://github.com/stackabletech/krustlet.git", tag = "0.7.0-stackable.5" } # version = "0.6"
 regex = "1.4"
 reqwest = "0.11"
