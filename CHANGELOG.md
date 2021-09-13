@@ -2,6 +2,11 @@
 
 ## 0.7.0 - unreleased
 
+### Changed
+- Changed the binary location for APT packages from `/opt/stackable-agent/stackable-agent` to `/opt/stackable/stackable-agent/stackable-agent`
+  ([#304]).
+
+[#304]: https://github.com/stackabletech/agent/pull/304
 ## 0.6.0 - 2021-09-08
 
 ### Added

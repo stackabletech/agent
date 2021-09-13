@@ -71,5 +71,5 @@ maintainer-scripts = "packaging/debian/"
 systemd-units = { enable = false }
 assets = [
     ["packaging/config/agent.conf", "etc/stackable/stackable-agent/", "644"],
-    ["target/release/stackable-agent", "opt/stackable-agent/stackable-agent", "755"],
+    ["target/release/stackable-agent", "opt/stackable/stackable-agent/stackable-agent", "755"],
 ]
