@@ -6,7 +6,7 @@ edition = "2018"
 license = "Apache-2.0"
 name = "stackable-agent"
 repository = "https://github.com/stackabletech/agent"
-version = "0.7.0-nightly"
+version = "0.6.1"
 
 [dependencies]
 # We are currently referencing the Krustlet directly from a Stackable fork of the official repository.
