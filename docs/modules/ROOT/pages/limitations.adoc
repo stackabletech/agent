@@ -5,3 +5,58 @@ The Stackable Agent has limitations, some of which are documented here.
 * Kubernetes v1.19+ is required.
 * The maximum number of pods supported by the agent is currently hardcoded to 110.
   This restriction can be lifted if the need arises.
+* SSL certificate is not automatically renewed due to upstream bug https://github.com/krustlet/krustlet/issues/553 (manual activity required described below)
+
+== SSL certificate renewal ==
+
+The agent SSL certificate expiry date can be observed via:
+
+[source,shell]
+----
+openssl x509 -enddate -noout -in /etc/stackable/stackable-agent/secret/agent.crt
+----
+
+See upstream documentation about the certificate system at https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/, and the following steps.
+
+To generate a new certificate, first delete any current CSR:
+
+[source,shell]
+----
+kubectl delete csr/${HOSTNAME}-tls
+----
+
+If you have a CSR already, the agent will fail and log in to the journal (`journalctl -u stackable-agent`):
+
+----
+Sep 09 13:51:59 server1 stackable-agent[15457]: Caused by:
+Sep 09 13:51:59 server1 stackable-agent[15457]:     certificatesigningrequests.certificates.k8s.io "server1-tls" already exists: AlreadyExists
+----
+
+Remove the current certificate file and restart the agent:
+
+[source,shell]
+----   
+sudo rm /etc/stackable/stackable-agent/secret/agent.crt && \
+sudo systemctl restart stackable-agent
+----
+
+And then observe the CSR is pending, with `kubectl get csr`
+
+----
+NAME          AGE   SIGNERNAME                      REQUESTOR    CONDITION
+server1-tls   4s    kubernetes.io/kubelet-serving   kube:admin   Pending
+----
+
+Note the name of the CSR, and then this can be approved with:
+
+[source,shell]
+----   
+kubectl certificate approve server1-tls
+----
+
+If you need a list of pending CSRs for automation purposes, an example method is:
+
+[source,shell]
+---- 
+kubectl get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}'
+----
