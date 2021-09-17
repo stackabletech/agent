@@ -1,8 +1,17 @@
 # Changelog
 
-## 0.7.0 - unreleased
+## [Unreleased]
 
-## 0.6.0 - 2021-09-08
+## [0.6.1] - 2021-09-14
+
+### Changed
+- Changed the binary location for APT packages from
+  `/opt/stackable-agent/stackable-agent` to
+  `/opt/stackable/stackable-agent/stackable-agent` ([#304]).
+
+[#304]: https://github.com/stackabletech/agent/pull/304
+
+## [0.6.0] - 2021-09-08
 
 ### Added
 - Prints self-diagnostic information on startup ([#270]).
@@ -41,7 +50,7 @@
 [#276]: https://github.com/stackabletech/agent/pull/276
 [#289]: https://github.com/stackabletech/agent/pull/289
 
-## 0.5.0 - 2021-07-26
+## [0.5.0] - 2021-07-26
 
 ### Added
 - `hostIP` and `podIP` added to the pod status ([#224]).
@@ -60,7 +69,7 @@
 [#234]: https://github.com/stackabletech/agent/pull/234
 [#235]: https://github.com/stackabletech/agent/pull/235
 
-## 0.4.0 - 2021-06-23
+## [0.4.0] - 2021-06-23
 
 ### Added
 - Annotation `featureLogs` added to the pods to indicate if logs can be
@@ -77,7 +86,7 @@
 [#188]: https://github.com/stackabletech/agent/pull/188
 [#205]: https://github.com/stackabletech/agent/pull/205
 
-## 0.3.0 - 2021-05-27
+## [0.3.0] - 2021-05-27
 
 ### Added
 - Artifacts for merge requests are created ([#169], [#173]).
@@ -95,7 +104,7 @@
 [#173]: https://github.com/stackabletech/agent/pull/173
 [#176]: https://github.com/stackabletech/agent/pull/176
 
-## 0.2.0 - 2021-05-20
+## [0.2.0] - 2021-05-20
 
 ### Added
 - Templating facility added to the `config-directory` parameter
@@ -107,7 +116,7 @@
 [#159]: https://github.com/stackabletech/agent/pull/159
 [#164]: https://github.com/stackabletech/agent/pull/164
 
-## 0.1.0 - 2021-05-17
+## [0.1.0] - 2021-05-17
 
 ### Added
 - Apache license v2.0 set ([#23]).
