@@ -1,8 +1,16 @@
 use std::collections::{BTreeMap, HashMap};
+use std::fmt;
+use std::fmt::{Display, Formatter};
+use std::iter::{self, repeat};
 use std::path::Path;
 
 use kubelet::container::Container;
 use kubelet::pod::Pod;
+use lazy_static::lazy_static;
+use log::{debug, error, info, trace, warn};
+use multimap::MultiMap;
+use regex::Regex;
+use strum::{Display, EnumIter, IntoEnumIterator};
 
 use crate::provider::error::StackableError;
 use crate::provider::error::StackableError::PodValidationError;
@@ -10,18 +18,13 @@ use crate::provider::kubernetes::accessor::{restart_policy, RestartPolicy};
 use crate::provider::states::pod::creating_config::CreatingConfig;
 use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::UnitTypes;
-use lazy_static::lazy_static;
-use log::{debug, error, info, trace, warn};
-use multimap::MultiMap;
-use regex::Regex;
-use std::fmt;
-use std::fmt::{Display, Formatter};
-use std::iter::{self, repeat};
-use strum::{Display, EnumIter, IntoEnumIterator};
 
 /// The default timeout for stopping a service, after this has passed systemd will terminate
 /// the process
 const DEFAULT_TERMINATION_TIMEOUT_SECS: i64 = 30;
+
+/// The slice all service units will be placed in.
+pub const STACKABLE_SLICE: &str = "system-stackable.slice";
 
 /// List of sections in the systemd unit
 ///
@@ -143,15 +146,21 @@ pub struct SystemDUnit {
 //  at some point consider splitting this out and have systemdunit live
 //  inside the systemd crate and the parsing in the agent
 impl SystemDUnit {
-    /// Create a new unit which inherits all common elements from ['common_properties'] and parses
-    /// everything else from the ['container']
     pub fn new(
-        common_properties: &SystemDUnit,
-        name_prefix: &str,
-        container: &Container,
         user_mode: bool,
         pod_state: &PodState,
-    ) -> Result<Self, StackableError> {
+        kubeconfig_path: &Path,
+        pod: &Pod,
+        container: &Container,
+    ) -> Result<SystemDUnit, StackableError> {
+        let common_properties = SystemDUnit::new_from_pod(pod, user_mode)?;
+
+        // Naming schema
+        //  Service name: `namespace-podname`
+        //  SystemdUnit: `namespace-podname-containername`
+        // TODO: add this to the docs in more detail
+        let name_prefix = format!("{}-{}-", pod.namespace(), pod.name());
+
         // Create template data to be used when rendering template strings
         let template_data = if let Ok(data) = CreatingConfig::create_render_data(pod_state) {
             data
@@ -167,15 +176,32 @@ impl SystemDUnit {
 
         let package_root = pod_state.get_service_package_directory();
 
-        SystemDUnit::new_from_container(
-            common_properties,
-            name_prefix,
+        let mut unit = SystemDUnit::new_from_container(
+            &common_properties,
+            &name_prefix,
             container,
             &pod_state.service_name,
             &template_data,
             &package_root,
             user_mode,
-        )
+        )?;
+
+        unit.set_property(Section::Service, "Slice", STACKABLE_SLICE);
+
+        const UNIT_ENV_KEY: &str = "KUBECONFIG";
+        if let Some(kubeconfig_path) = kubeconfig_path.to_str() {
+            unit.add_env_var(UNIT_ENV_KEY, kubeconfig_path);
+        } else {
+            warn!(
+                "The environment variable {} cannot be added to the systemd service [{}] because \
+                the path [{}] is not valid unicode.",
+                UNIT_ENV_KEY,
+                unit.get_name(),
+                kubeconfig_path.to_string_lossy()
+            );
+        };
+
+        Ok(unit)
     }
 
     fn new_from_container(
@@ -346,8 +372,8 @@ impl SystemDUnit {
     }
 
     /// Configures the time to sleep in seconds before restarting a
-    /// service (as configured with [set_restart_option]). Defaults to
-    /// 100ms.
+    /// service (as configured with [`Self::set_restart_option`]).
+    /// Defaults to 100ms.
     fn set_restart_sec_option(&mut self, seconds: u32) {
         self.set_property(Section::Service, "RestartSec", &seconds.to_string());
     }
@@ -618,8 +644,9 @@ impl Display for SystemDUnit {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::provider::test::TestPod;
+    use crate::provider::{repository::package::Package, test::TestPod};
     use indoc::indoc;
+    use kubelet::backoff::ExponentialBackoffStrategy;
     use rstest::rstest;
     use std::path::PathBuf;
 
@@ -638,21 +665,33 @@ mod test {
             metadata:
               name: stackable
             spec:
-              containers: []
+              containers:
+                - name: test-container
+                  command:
+                    - start.sh
               securityContext:
                 windowsOptions:
                   runAsUserName: pod-user",
-        "stackable.service",
-        indoc! {"
+        "default-stackable-test-container.service",
+        indoc! {r#"
             [Unit]
+            Description=default-stackable-test-container
             StartLimitIntervalSec=0
 
             [Service]
+            Environment="KUBECONFIG=~/.kube/config"
+            ExecStart=/run/test-1.0.0/start.sh
             RemainAfterExit=no
             Restart=always
             RestartSec=2
+            Slice=system-stackable.slice
+            StandardError=journal
+            StandardOutput=journal
             TimeoutStopSec=30
-            User=pod-user"}
+            User=pod-user
+
+            [Install]
+            WantedBy=multi-user.target"#}
     )]
     #[case::with_container_on_system_bus(
         BusType::System,
@@ -663,7 +702,7 @@ mod test {
               name: stackable
             spec:
               containers:
-                - name: test-container.service
+                - name: test-container
                   command:
                     - start.sh
                   args:
@@ -687,12 +726,14 @@ mod test {
             StartLimitIntervalSec=0
 
             [Service]
+            Environment="KUBECONFIG=~/.kube/config"
             Environment="LOG_DIR=/var/log/default-stackable"
             Environment="LOG_LEVEL=INFO"
-            ExecStart=start.sh arg /etc/default-stackable
+            ExecStart=/run/test-1.0.0/start.sh arg /etc/default-stackable-b3ca9d08-b97d-45bc-9da1-7b0156712ef1
             RemainAfterExit=no
             Restart=always
             RestartSec=2
+            Slice=system-stackable.slice
             StandardError=journal
             StandardOutput=journal
             TimeoutStopSec=30
@@ -710,7 +751,7 @@ mod test {
               name: stackable
             spec:
               containers:
-                - name: test-container.service
+                - name: test-container
                   command:
                     - start.sh
                   securityContext:
@@ -726,10 +767,12 @@ mod test {
             StartLimitIntervalSec=0
 
             [Service]
-            ExecStart=start.sh
+            Environment="KUBECONFIG=~/.kube/config"
+            ExecStart=/run/test-1.0.0/start.sh
             RemainAfterExit=no
             Restart=always
             RestartSec=2
+            Slice=system-stackable.slice
             StandardError=journal
             StandardOutput=journal
             TimeoutStopSec=30
@@ -745,18 +788,30 @@ mod test {
             metadata:
               name: stackable
             spec:
-              terminationGracePeriodSeconds: 10
-              containers: []",
-        "stackable.service",
-        indoc! {"
+              containers:
+                - name: test-container
+                  command:
+                    - start.sh
+              terminationGracePeriodSeconds: 10",
+        "default-stackable-test-container.service",
+        indoc! {r#"
             [Unit]
+            Description=default-stackable-test-container
             StartLimitIntervalSec=0
 
             [Service]
+            Environment="KUBECONFIG=~/.kube/config"
+            ExecStart=/run/test-1.0.0/start.sh
             RemainAfterExit=no
             Restart=always
             RestartSec=2
-            TimeoutStopSec=10"}
+            Slice=system-stackable.slice
+            StandardError=journal
+            StandardOutput=journal
+            TimeoutStopSec=10
+
+            [Install]
+            WantedBy=multi-user.target"#}
     )]
     #[case::set_restart_policy(
         BusType::System,
@@ -766,55 +821,60 @@ mod test {
             metadata:
               name: stackable
             spec:
-              containers: []
+              containers:
+                - name: test-container
+                  command:
+                    - start.sh
               restartPolicy: OnFailure",
-        "stackable.service",
-        indoc! {"
+        "default-stackable-test-container.service",
+        indoc! {r#"
             [Unit]
+            Description=default-stackable-test-container
             StartLimitIntervalSec=0
 
             [Service]
+            Environment="KUBECONFIG=~/.kube/config"
+            ExecStart=/run/test-1.0.0/start.sh
             RemainAfterExit=yes
             Restart=on-failure
             RestartSec=2
-            TimeoutStopSec=30"
-        }
-    )]
+            Slice=system-stackable.slice
+            StandardError=journal
+            StandardOutput=journal
+            TimeoutStopSec=30
 
+            [Install]
+            WantedBy=multi-user.target"#}
+    )]
     fn create_unit_from_pod(
         #[case] bus_type: BusType,
         #[case] pod: TestPod,
         #[case] expected_unit_file_name: &str,
         #[case] expected_unit_file_content: &str,
     ) {
-        let mut result = SystemDUnit::new_from_pod(&pod, bus_type == BusType::Session);
+        let kubeconfig_path = PathBuf::from("~/.kube/config");
 
-        if let Ok(common_properties) = &result {
-            if let Some(container) = pod.containers().first() {
-                let service_name = format!("{}-{}", pod.namespace(), pod.name());
-                let name_prefix = format!("{}-", service_name);
-                let mut template_data = BTreeMap::new();
-                template_data.insert(
-                    String::from("logroot"),
-                    format!("/var/log/{}", &service_name),
-                );
-                template_data.insert(
-                    String::from("configroot"),
-                    format!("/etc/{}", &service_name),
-                );
-                let package_root = PathBuf::new();
+        let pod_state = PodState {
+            parcel_directory: PathBuf::from("/run"),
+            download_directory: PathBuf::new(),
+            config_directory: PathBuf::from("/etc"),
+            log_directory: PathBuf::from("/var/log"),
+            package_download_backoff_strategy: ExponentialBackoffStrategy::default(),
+            service_name: format!("{}-{}", pod.namespace(), pod.name()),
+            service_uid: String::from("b3ca9d08-b97d-45bc-9da1-7b0156712ef1"),
+            package: Package {
+                product: String::from("test"),
+                version: String::from("1.0.0"),
+            },
+        };
 
-                result = SystemDUnit::new_from_container(
-                    common_properties,
-                    &name_prefix,
-                    container,
-                    &service_name,
-                    &template_data,
-                    &package_root,
-                    bus_type == BusType::Session,
-                );
-            }
-        }
+        let result = SystemDUnit::new(
+            bus_type == BusType::Session,
+            &pod_state,
+            &kubeconfig_path,
+            &pod,
+            pod.containers().first().expect("A container is required."),
+        );
 
         if let Ok(unit) = result {
             assert_eq!(expected_unit_file_name, unit.get_name());

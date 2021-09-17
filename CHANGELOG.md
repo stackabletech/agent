@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- Cleanup stage added where systemd units without corresponding pods are
+  removed on startup ([#312]).
+
+[#312]: https://github.com/stackabletech/agent/pull/312
+
 ## [0.6.1] - 2021-09-14
 
 ### Changed

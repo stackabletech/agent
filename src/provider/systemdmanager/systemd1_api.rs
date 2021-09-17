@@ -407,6 +407,12 @@ impl Display for InvocationId {
     interface = "org.freedesktop.systemd1.Unit"
 )]
 trait Unit {
+    /// `RequiredBy` contains an array which encodes the inverse
+    /// dependencies (where this applies) as configured in the unit file
+    /// or determined automatically.
+    #[dbus_proxy(property)]
+    fn required_by(&self) -> zbus::Result<Vec<String>>;
+
     /// The active state (i.e. whether the unit is currently started or
     /// not)
     #[dbus_proxy(property)]
@@ -425,9 +431,14 @@ trait Unit {
     /// states.
     ///
     /// Possible sub states can be found in the source code of systemd:
-    /// https://github.com/systemd/systemd/blob/v249/src/basic/unit-def.h
+    /// <https://github.com/systemd/systemd/blob/v249/src/basic/unit-def.h>
     #[dbus_proxy(property)]
     fn sub_state(&self) -> zbus::Result<String>;
+
+    /// `FragmentPath` contains the unit file path this unit was read
+    /// from, if there is one (if not, it contains the empty string).
+    #[dbus_proxy(property)]
+    fn fragment_path(&self) -> zbus::Result<String>;
 
     /// Unique ID for a runtime cycle of a unit
     #[dbus_proxy(property, name = "InvocationID")]
