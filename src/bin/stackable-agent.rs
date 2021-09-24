@@ -135,6 +135,8 @@ async fn main() -> anyhow::Result<()> {
     .await
     .expect("Error initializing provider.");
 
+    provider.cleanup(&krustlet_config.node_name).await;
+
     let kubelet = Kubelet::new(provider, kubeconfig, krustlet_config).await?;
     kubelet.start().await
 }

@@ -1,8 +1,10 @@
 use std::path::Path;
 
+use anyhow::Context;
 use kubelet::pod::state::prelude::*;
 use kubelet::pod::Pod;
 use log::{debug, error, info, warn};
+use tokio::fs::create_dir_all;
 
 use super::downloading_backoff::DownloadingBackoff;
 use super::installing::Installing;
@@ -71,6 +73,13 @@ impl State<PodState> for Downloading {
                     &package, &repo
                 );
                 let download_directory = pod_state.download_directory.clone();
+
+                if !(download_directory.is_dir()) {
+                    if let Err(error) = create_download_directory(&download_directory).await {
+                        return Transition::Complete(Err(error));
+                    }
+                };
+
                 let download_result = repo
                     .download_package(&package, download_directory.clone())
                     .await;
@@ -134,4 +143,14 @@ impl State<PodState> for Downloading {
     async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
         Ok(make_status(Phase::Pending, "Downloading"))
     }
+}
+
+async fn create_download_directory(download_directory: &Path) -> anyhow::Result<()> {
+    info!("Creating download directory [{:?}].", download_directory);
+    create_dir_all(&download_directory).await.with_context(|| {
+        format!(
+            "Download directory [{}] could not be created.",
+            download_directory.to_string_lossy()
+        )
+    })
 }
