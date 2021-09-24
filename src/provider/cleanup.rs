@@ -88,8 +88,10 @@ impl StackableProvider {
             }
         }
 
+        let mut unit_removed = false;
+
         for unit_name in &units_in_slice {
-            match units_from_pods.get(unit_name) {
+            let remove_unit = match units_from_pods.get(unit_name) {
                 Some((expected_content, pod_terminating)) => {
                     match self.unit_file_content(unit_name).await {
                         Ok(Some(content)) if &content == expected_content && !pod_terminating => {
@@ -98,6 +100,7 @@ impl StackableProvider {
                                 exists.",
                                 unit_name
                             );
+                            false
                         }
                         Ok(Some(_)) if *pod_terminating => {
                             info!(
@@ -105,7 +108,7 @@ impl StackableProvider {
                                 pod is terminating.",
                                 unit_name
                             );
-                            self.remove_unit(unit_name).await;
+                            true
                         }
                         Ok(Some(content)) => {
                             info!(
@@ -117,7 +120,7 @@ impl StackableProvider {
                                 {}",
                                 unit_name, expected_content, content
                             );
-                            self.remove_unit(unit_name).await;
+                            true
                         }
                         Ok(None) => {
                             info!(
@@ -125,7 +128,7 @@ impl StackableProvider {
                                 not be determined.",
                                 unit_name
                             );
-                            self.remove_unit(unit_name).await;
+                            true
                         }
                         Err(error) => {
                             warn!(
@@ -133,7 +136,7 @@ impl StackableProvider {
                                 could not be retrieved. {}",
                                 unit_name, error
                             );
-                            self.remove_unit(unit_name).await;
+                            true
                         }
                     }
                 }
@@ -143,9 +146,18 @@ impl StackableProvider {
                         exists.",
                         unit_name
                     );
-                    self.remove_unit(unit_name).await;
+                    true
                 }
             };
+
+            if remove_unit {
+                self.remove_unit(unit_name).await;
+                unit_removed = true;
+            }
+        }
+
+        if unit_removed {
+            let _ = systemd_manager.reload().await;
         }
     }
 
