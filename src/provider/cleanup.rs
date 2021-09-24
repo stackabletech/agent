@@ -69,10 +69,16 @@ impl StackableProvider {
             }
         };
 
-        let mut expected_units = HashMap::new();
+        let mut units_from_pods = HashMap::new();
         for pod in pods {
+            let pod_terminating = pod.metadata.deletion_timestamp.is_some();
+
             match self.units_from_pod(&pod).await {
-                Ok(units) => expected_units.extend(units.into_iter()),
+                Ok(units) => {
+                    for (unit_name, content) in units {
+                        units_from_pods.insert(unit_name, (content, pod_terminating));
+                    }
+                }
                 Err(error) => warn!(
                     "Systemd units could not be generated for pod [{}/{}]. {}",
                     pod.namespace().unwrap_or_else(|| String::from("default")),
@@ -83,57 +89,62 @@ impl StackableProvider {
         }
 
         for unit_name in &units_in_slice {
-            let delete = match expected_units.get(unit_name) {
-                Some(expected_content) => match self.unit_file_content(unit_name).await {
-                    Ok(Some(content)) if &content == expected_content => {
-                        info!(
-                            "The systemd unit [{}] will be kept because a corresponding pod \
-                            exists.",
-                            unit_name
-                        );
-                        false
+            match units_from_pods.get(unit_name) {
+                Some((expected_content, pod_terminating)) => {
+                    match self.unit_file_content(unit_name).await {
+                        Ok(Some(content)) if &content == expected_content && !pod_terminating => {
+                            info!(
+                                "The systemd unit [{}] will be kept because a corresponding pod \
+                                exists.",
+                                unit_name
+                            );
+                        }
+                        Ok(Some(_)) if *pod_terminating => {
+                            info!(
+                                "The systemd unit [{}] will be removed because the corresponding \
+                                pod is terminating.",
+                                unit_name
+                            );
+                            self.remove_unit(unit_name).await;
+                        }
+                        Ok(Some(content)) => {
+                            info!(
+                                "The systemd unit [{}] will be removed because it differs from the \
+                                corresponding pod specification.\n\
+                                expected content:\n\
+                                {}\n\n\
+                                actual content:\n\
+                                {}",
+                                unit_name, expected_content, content
+                            );
+                            self.remove_unit(unit_name).await;
+                        }
+                        Ok(None) => {
+                            info!(
+                                "The systemd unit [{}] will be removed because its file path could \
+                                not be determined.",
+                                unit_name
+                            );
+                            self.remove_unit(unit_name).await;
+                        }
+                        Err(error) => {
+                            warn!(
+                                "The systemd unit [{}] will be removed because the file content \
+                                could not be retrieved. {}",
+                                unit_name, error
+                            );
+                            self.remove_unit(unit_name).await;
+                        }
                     }
-                    Ok(Some(content)) => {
-                        info!(
-                            "The systemd unit [{}] will be removed because it differs from the \
-                            corresponding pod specification.\n\
-                            expected content:\n\
-                            {}\n\n\
-                            actual content:\n\
-                            {}",
-                            unit_name, expected_content, content
-                        );
-                        true
-                    }
-                    Ok(None) => {
-                        info!(
-                            "The systemd unit [{}] will be removed because its file path could not \
-                            be determined.",
-                            unit_name
-                        );
-                        true
-                    }
-                    Err(error) => {
-                        warn!(
-                            "The systemd unit [{}] will be removed because the file content could \
-                            not be retrieved. {}",
-                            unit_name, error
-                        );
-                        true
-                    }
-                },
+                }
                 None => {
                     info!(
                         "The systemd unit [{}] will be removed because no corresponding pod \
                         exists.",
                         unit_name
                     );
-                    true
+                    self.remove_unit(unit_name).await;
                 }
-            };
-
-            if delete {
-                self.remove_unit(unit_name).await;
             };
         }
     }
