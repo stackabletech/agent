@@ -1,3 +1,4 @@
+use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
@@ -76,7 +77,7 @@ impl State<PodState> for Installing {
             );
         } else {
             info!("Installing package {}", package);
-            match self.install_package(package) {
+            match self.install_package(package.clone()) {
                 Ok(()) => Transition::next(
                     self,
                     CreatingConfig {
@@ -88,6 +89,26 @@ impl State<PodState> for Installing {
                         "Failed to install package [{}] due to: [{:?}]",
                         &package_name, e
                     );
+                    // Clean up partially unpacked directory, to avoid later iterations
+                    // assuming this install attempt was successfull because the
+                    // target directory exists
+                    let installation_directory = self
+                        .parcel_directory
+                        .join(package.get_directory_name())
+                        .to_string_lossy()
+                        .to_string();
+                    debug!(
+                        "Cleaning up partial installation by deleting directory [{}]",
+                        installation_directory
+                    );
+                    if let Err(error) =
+                        fs::remove_dir_all(self.parcel_directory.join(package.get_directory_name()))
+                    {
+                        error!(
+                            "Failed to clean up directory [{}] due to {}",
+                            installation_directory, error
+                        );
+                    };
                     Transition::next(
                         self,
                         SetupFailed {

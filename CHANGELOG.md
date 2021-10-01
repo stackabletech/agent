@@ -7,16 +7,17 @@
   removed on startup ([#312]).
 
 ### Changed
+- Changed the version reported by the Stackable Agent in `nodeInfo.kubeletVersion` of the `Node` object in Kubernetes
+  from the version of the Krustlet library to the Stackable Agent version ([#315]).
 - Restart agent on all crashes ([#318]).
 
+### Fixed
+- Agent deletes directories from failed install attempts ([#319])
+
 [#312]: https://github.com/stackabletech/agent/pull/312
-[#318]: https://github.com/stackabletech/agent/pull/318
-
-### Changed
-- Changed the version reported by the Stackable Agent in `nodeInfo.kubeletVersion` of the `Node` object in Kubernetes 
-  from the version of the Krustlet library to the Stackable Agent version ([#315]).
-
 [#315]: https://github.com/stackabletech/agent/pull/315
+[#318]: https://github.com/stackabletech/agent/pull/318
+[#319]: https://github.com/stackabletech/agent/pull/319
 
 ## [0.6.1] - 2021-09-14
 
