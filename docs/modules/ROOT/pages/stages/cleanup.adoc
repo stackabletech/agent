@@ -1,0 +1,8 @@
+= Cleanup stage
+
+On startup the systemd units in the `system-stackable` slice are
+compared to the pods assigned to this node. If a systemd unit is as
+expected then it is kept and the Stackable agent will take ownership
+again in a later stage. If there is no corresponding pod or the systemd
+unit differs from the pod specification then it is removed and the
+Stackable agent will create a new systemd unit afterwards.

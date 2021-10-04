@@ -1,19 +1,15 @@
+use std::fs::create_dir_all;
+
+use anyhow::{Context, Error};
+use kubelet::container::ContainerKey;
 use kubelet::pod::state::prelude::*;
-use kubelet::{
-    container::ContainerKey,
-    pod::{Pod, PodKey},
-};
-use log::{debug, error, info, warn};
+use kubelet::pod::{Pod, PodKey};
+use log::{debug, error, info};
 
 use super::setup_failed::SetupFailed;
 use super::starting::Starting;
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::{ContainerHandle, PodState, ProviderState};
-use anyhow::{Context, Error};
-use dirs::home_dir;
-use std::env;
-use std::fs::create_dir_all;
-use std::path::PathBuf;
 
 #[derive(Default, Debug, TransitionTo)]
 #[transition_to(Starting, SetupFailed)]
@@ -29,9 +25,12 @@ impl State<PodState> for CreatingService {
     ) -> Transition<PodState> {
         let pod = pod.latest();
 
-        let systemd_manager = {
+        let (systemd_manager, kubeconfig_path) = {
             let provider_state = shared.read().await;
-            provider_state.systemd_manager.clone()
+            (
+                provider_state.systemd_manager.clone(),
+                provider_state.kubeconfig_path.clone(),
+            )
         };
 
         let service_name: &str = pod_state.service_name.as_ref();
@@ -50,65 +49,20 @@ impl State<PodState> for CreatingService {
             }
         }
 
-        let user_mode = systemd_manager.is_user_mode();
-
-        // Naming schema
-        //  Service name: `namespace-podname`
-        //  SystemdUnit: `namespace-podname-containername`
-        // TODO: add this to the docs in more detail
-        let service_prefix = format!("{}-{}-", pod.namespace(), pod.name());
-
-        // Create a template from those settings that are derived directly from the pod, not
-        // from container objects
-        let unit_template = match SystemDUnit::new_from_pod(&pod, user_mode) {
-            Ok(unit) => unit,
-            Err(pod_error) => {
-                error!(
-                    "Unable to create systemd unit template from pod [{}]: [{}]",
-                    service_name, pod_error
-                );
-                return Transition::Complete(Err(Error::from(pod_error)));
-            }
-        };
-
         // Each pod can map to multiple systemd units/services as each container will get its own
         // systemd unit file/service.
         // Map every container from the pod object to a systemdunit
         for container in &pod.containers() {
-            let mut unit = match SystemDUnit::new(
-                &unit_template,
-                &service_prefix,
-                container,
-                user_mode,
+            let unit = match SystemDUnit::new(
+                systemd_manager.is_user_mode(),
                 pod_state,
+                &kubeconfig_path,
+                &pod,
+                container,
             ) {
                 Ok(unit) => unit,
                 Err(err) => return Transition::Complete(Err(Error::from(err))),
             };
-
-            if let Some(kubeconfig_path) = find_kubeconfig() {
-                const UNIT_ENV_KEY: &str = "KUBECONFIG";
-                if let Some(kubeconfig_path) = kubeconfig_path.to_str() {
-                    unit.add_env_var(UNIT_ENV_KEY, kubeconfig_path);
-                } else {
-                    warn!(
-                        "Environment variable {} cannot be added to \
-                        the systemd service [{}] because the path [{}] \
-                        is not valid unicode.",
-                        UNIT_ENV_KEY,
-                        service_name,
-                        kubeconfig_path.to_string_lossy()
-                    );
-                }
-            } else {
-                warn!(
-                    "Kubeconfig file not found. It will not be added \
-                    to the environment variables of the systemd \
-                    service [{}]. If no kubeconfig is present then the \
-                    Stackable agent should have generated one.",
-                    service_name
-                );
-            }
 
             // Create the service
             // As per ADR005 we currently write the unit files directly in the systemd
@@ -161,13 +115,4 @@ impl State<PodState> for CreatingService {
     async fn status(&self, _pod_state: &mut PodState, _pod: &Pod) -> anyhow::Result<PodStatus> {
         Ok(make_status(Phase::Pending, "CreatingService"))
     }
-}
-
-/// Tries to find the kubeconfig file in the environment variable
-/// `KUBECONFIG` and on the path `$HOME/.kube/config`
-fn find_kubeconfig() -> Option<PathBuf> {
-    let env_var = env::var_os("KUBECONFIG").map(PathBuf::from);
-    let default_path = || home_dir().map(|home| home.join(".kube").join("config"));
-
-    env_var.or_else(default_path).filter(|path| path.exists())
 }

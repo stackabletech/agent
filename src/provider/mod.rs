@@ -1,21 +1,22 @@
+use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::fs;
+use std::env;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use dirs::home_dir;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+use kube::error::ErrorResponse;
 use kube::{Api, Client};
 use kubelet::backoff::ExponentialBackoffStrategy;
+use kubelet::container::{ContainerKey, ContainerMap};
 use kubelet::log::{SendError, Sender};
 use kubelet::node::Builder;
 use kubelet::pod::state::prelude::*;
 use kubelet::pod::{Pod, PodKey};
-use kubelet::{
-    container::{ContainerKey, ContainerMap},
-    provider::Provider,
-};
+use kubelet::provider::Provider;
 use log::{debug, error};
 use tokio::{runtime::Runtime, sync::RwLock, task};
 
@@ -27,12 +28,10 @@ use crate::provider::error::StackableError::{
 use crate::provider::repository::package::Package;
 use crate::provider::states::pod::PodState;
 use crate::provider::systemdmanager::manager::SystemdManager;
-use kube::error::ErrorResponse;
-use std::collections::HashMap;
-use systemdmanager::journal_reader;
 
-use self::states::pod::{initializing::Initializing, terminated::Terminated};
-use self::systemdmanager::service::SystemdService;
+use states::pod::{initializing::Initializing, terminated::Terminated};
+use systemdmanager::journal_reader;
+use systemdmanager::service::SystemdService;
 
 pub struct StackableProvider {
     shared: ProviderState,
@@ -44,6 +43,7 @@ pub struct StackableProvider {
 
 pub const CRDS: &[&str] = &["repositories.stable.stackable.de"];
 
+pub mod cleanup;
 mod error;
 pub mod kubernetes;
 mod repository;
@@ -57,6 +57,7 @@ pub struct ProviderState {
     client: Client,
     systemd_manager: Arc<SystemdManager>,
     server_ip_address: IpAddr,
+    kubeconfig_path: PathBuf,
 }
 
 /// Contains handles for running pods.
@@ -134,11 +135,19 @@ impl StackableProvider {
     ) -> Result<Self, StackableError> {
         let systemd_manager = Arc::new(SystemdManager::new(agent_config.session, max_pods).await?);
 
+        let kubeconfig_path = find_kubeconfig().ok_or_else(|| StackableError::RuntimeError {
+            msg: String::from(
+                "Kubeconfig file not found. If no kubeconfig is present then the Stackable Agent \
+                should have generated one.",
+            ),
+        })?;
+
         let provider_state = ProviderState {
             handles: Default::default(),
             client,
             systemd_manager,
             server_ip_address: agent_config.server_ip_address,
+            kubeconfig_path,
         };
 
         let provider = StackableProvider {
@@ -206,6 +215,15 @@ impl StackableProvider {
     }
 }
 
+/// Tries to find the kubeconfig file in the environment variable `KUBECONFIG` and on the path
+/// `$HOME/.kube/config`
+fn find_kubeconfig() -> Option<PathBuf> {
+    let env_var = env::var_os("KUBECONFIG").map(PathBuf::from);
+    let default_path = || home_dir().map(|home| home.join(".kube").join("config"));
+
+    env_var.or_else(default_path).filter(|path| path.exists())
+}
+
 #[async_trait::async_trait]
 impl Provider for StackableProvider {
     type ProviderState = ProviderState;
@@ -243,16 +261,9 @@ impl Provider for StackableProvider {
         let parcel_directory = self.parcel_directory.clone();
         // TODO: make this configurable
         let download_directory = parcel_directory.join("_download");
-        let config_directory = self.config_directory.clone();
         let log_directory = self.log_directory.clone();
 
         let package = Self::get_package(pod)?;
-        if !(&download_directory.is_dir()) {
-            fs::create_dir_all(&download_directory)?;
-        }
-        if !(&config_directory.is_dir()) {
-            fs::create_dir_all(&config_directory)?;
-        }
 
         Ok(PodState {
             parcel_directory,

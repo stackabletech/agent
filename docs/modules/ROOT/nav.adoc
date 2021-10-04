@@ -5,5 +5,8 @@
 * xref:limitations.adoc[]
 * xref:services.adoc[]
 * xref:jobs.adoc[]
+* Stages
+** xref:stages/overview.adoc[]
+** xref:stages/cleanup.adoc[]
 * Monitoring
 ** xref:monitoring/logs.adoc[]

@@ -1,0 +1,26 @@
+= Overview
+
+When the Stackable Agent starts, it runs through the following stages:
+
+* Check configured directories and files.
+** Check if the optional files can be opened if they exist.
+** Create the directories where write access is required and which do
+   not exist yet.
+** Check the configured directories if they are writable by the current
+   process.
+* Bootstrap the cluster with TLS certificates but only if no existing
+  kubeconfig can be found.
+* Remove all systemd units from a previous run without a corresponding
+  pod (see xref:stages/cleanup.adoc[]).
+* Start the kubelet.
+
+After the kubelet was started, assigned pods run through the following
+stages:
+
+* Download the package from a registered Stackable repository.
+* Unpack the package and install it.
+* Create the configuration files according to the config maps. 
+* Create, start, and enable the systemd units.
+* Monitor the systemd units and patch the pod status accordingly.
+* Stop, disable, and remove the systemd units on termination or when the
+  pod is deleted.

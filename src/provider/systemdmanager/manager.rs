@@ -5,8 +5,8 @@
 //!
 use super::service::SystemdService;
 use super::systemd1_api::{
-    AsyncJobProxy, AsyncManagerProxy, JobRemovedResult, JobRemovedSignal, ManagerSignals,
-    StartMode, StopMode,
+    AsyncJobProxy, AsyncManagerProxy, AsyncUnitProxy, JobRemovedResult, JobRemovedSignal,
+    ManagerSignals, StartMode, StopMode,
 };
 use crate::provider::systemdmanager::systemdunit::SystemDUnit;
 use crate::provider::StackableError;
@@ -386,6 +386,41 @@ impl SystemdManager {
 
     pub async fn create_systemd_service(&self, unit: &str) -> anyhow::Result<SystemdService> {
         SystemdService::new(unit, &self.proxy).await
+    }
+
+    /// Returns the file path of the given unit if there is one.
+    pub async fn fragment_path(&self, unit: &str) -> anyhow::Result<Option<String>> {
+        let unit_proxy = self.create_unit_proxy(unit).await?;
+        let fragment_path = unit_proxy.fragment_path().await?;
+
+        let file_path = if fragment_path.is_empty() {
+            None
+        } else {
+            Some(fragment_path)
+        };
+
+        Ok(file_path)
+    }
+
+    /// Returns the names of the units assigned to the given slice.
+    pub async fn slice_content(&self, slice: &str) -> anyhow::Result<Vec<String>> {
+        let unit_proxy = self.create_unit_proxy(slice).await?;
+        let content = unit_proxy.required_by().await?;
+        Ok(content)
+    }
+
+    async fn create_unit_proxy(&self, unit: &str) -> anyhow::Result<AsyncUnitProxy<'_>> {
+        let unit_object_path = self.proxy.load_unit(unit).await?;
+
+        let unit_proxy = AsyncUnitProxy::builder(self.proxy.connection())
+            .cache_properties(false)
+            .path(unit_object_path)
+            .unwrap() // safe because load_unit always returns a valid path
+            .build()
+            .await
+            .unwrap(); // safe because destination, path, and interface are set
+
+        Ok(unit_proxy)
     }
 
     // Check if the unit name is valid and append .service if needed

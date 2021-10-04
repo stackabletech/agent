@@ -15,7 +15,7 @@ version = "0.7.0-nightly"
 anyhow = "1.0"
 async-trait = "0.1"
 byteorder = "1.4"
-dirs = "3.0"
+dirs = "4.0"
 env_logger = "0.9"
 flate2 = "1.0"
 futures-util = "0.3"
@@ -48,7 +48,7 @@ strum_macros = "0.21"
 systemd = { version = "0.9", default-features = false, features = ["journal"] }
 tar = "0.4"
 thiserror = "1.0"
-tokio = { version = "1.11", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.12", features = ["macros", "rt-multi-thread", "time"] }
 url = "2.2"
 zbus = { git = "https://gitlab.freedesktop.org/dbus/zbus", rev = "ff08cbbbcd3eead16464012b92e3862d4dcb6f16" } # version 2.0.0-beta.6 + merge request !354 (fixes a race condition) + commit 6cdfe48cda5e0bf7b0dd8675be7a84439678afa9 (fixes another race condition)
 zvariant = { git = "https://gitlab.freedesktop.org/dbus/zbus", rev = "ff08cbbbcd3eead16464012b92e3862d4dcb6f16" } # version 2.8.0 which is compatible with the zbus version
@@ -71,5 +71,5 @@ maintainer-scripts = "packaging/debian/"
 systemd-units = { enable = false }
 assets = [
     ["packaging/config/agent.conf", "etc/stackable/stackable-agent/", "644"],
-    ["target/release/stackable-agent", "opt/stackable-agent/stackable-agent", "755"],
+    ["target/release/stackable-agent", "opt/stackable/stackable-agent/stackable-agent", "755"],
 ]
