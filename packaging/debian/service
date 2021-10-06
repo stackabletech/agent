@@ -5,7 +5,7 @@ After=network.target
 [Service]
 User=root
 ExecStart=/opt/stackable/stackable-agent/stackable-agent
-Restart=on-failure
+Restart=always
 RestartSec=1s
 StandardOutput=journal
 StandardError=journal
