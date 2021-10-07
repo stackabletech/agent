@@ -6,7 +6,11 @@
 - Cleanup stage added where systemd units without corresponding pods are
   removed on startup ([#312]).
 
+### Changed
+- Restart agent on all crashes ([#318]).
+
 [#312]: https://github.com/stackabletech/agent/pull/312
+[#318]: https://github.com/stackabletech/agent/pull/318
 
 ### Changed
 - Changed the version reported by the Stackable Agent in `nodeInfo.kubeletVersion` of the `Node` object in Kubernetes 
