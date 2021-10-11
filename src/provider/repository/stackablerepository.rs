@@ -6,17 +6,22 @@ use std::hash::{Hash, Hasher};
 use std::io::{copy, Cursor, Write};
 use std::path::PathBuf;
 
+use crate::provider::error::StackableError;
+use crate::provider::error::StackableError::{PackageDownloadError, PackageNotFound};
+use crate::provider::repository::package::Package;
+use crate::provider::repository::repository_spec::Repository;
 use kube::api::Meta;
+use lazy_static::lazy_static;
 use log::{debug, trace, warn};
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::provider::error::StackableError;
-use crate::provider::error::StackableError::{PackageDownloadError, PackageNotFound};
-use crate::provider::repository::package::Package;
-use crate::provider::repository::repository_spec::Repository;
+lazy_static! {
+    static ref DEFAULT_ALLOWED_CONTENT_TYPES: Vec<&'static str> =
+        vec!["application/gzip", "application/tgz", "application/x-gzip"];
+}
 
 #[derive(Debug, Clone)]
 pub struct StackableRepoProvider {
@@ -116,6 +121,7 @@ impl StackableRepoProvider {
         let download_link = Url::parse(&stackable_package.link)?;
 
         let client = Client::builder()
+            .danger_accept_invalid_certs(true)
             .build()
             .map_err(|error| PackageDownloadError {
                 package: package.clone(),
@@ -137,7 +143,13 @@ impl StackableRepoProvider {
             Ok(response) if response.status().is_success() => {
                 // The request was successful, but just to be safe we'll still check the content_type
                 if let Some(content_type) = response.headers().get(CONTENT_TYPE) {
-                    if content_type == "application/gzip" {
+                    let content_type = content_type.to_str().map_err(|error| PackageDownloadError {
+                        package: package.clone(),
+                        download_link: download_link.clone(),
+                        errormessage: format!("Got content_type with non-ascii characters from webserver: [{}]", error),
+                    })?;
+
+                    if DEFAULT_ALLOWED_CONTENT_TYPES.contains(&content_type) {
                         Ok(response)
                     } else {
                         // If we get a known wrong content type we'll abort
