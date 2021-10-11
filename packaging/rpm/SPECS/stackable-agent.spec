@@ -52,8 +52,10 @@ rm -rf %{buildroot}
 
 %files
 %defattr(-,root,root,-)
+%{_bindir}
 %{_bindir}/*
 %{_servicedir}/%{name}.service
+%dir %{_confdir}
 %config %{_confdir}/agent.conf
 %dir %attr(700, root, root)  %{_confdir}/secret
 %dir %{_vardir}
