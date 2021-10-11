@@ -62,7 +62,7 @@ mkdir -p target/rpm/SOURCES/${PACKAGE_NAME}-VERSION/opt/stackable/${PACKAGE_NAME
 mkdir -p target/rpm/SOURCES/${PACKAGE_NAME}-VERSION/etc/stackable/${PACKAGE_NAME}
 cp packaging/config/agent.conf target/rpm/SOURCES/${PACKAGE_NAME}-VERSION/etc/stackable/${PACKAGE_NAME}
 mkdir target/rpm/SOURCES/${PACKAGE_NAME}-VERSION/etc/stackable/${PACKAGE_NAME}/secret
-mkdir target/rpm/SOURCES/${PACKAGE_NAME}-VERSION/var/lib/stackable/${PACKAGE_NAME}
+mkdir -p target/rpm/SOURCES/${PACKAGE_NAME}-VERSION/var/lib/stackable/${PACKAGE_NAME}
 
 # The packaging source directory does not contain the version yet, as this will need to be replaced for every
 # execution. Instead the directory name contains the marker "VERSION" which we now replace with the actual version.
