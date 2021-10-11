@@ -57,3 +57,5 @@ rm -rf %{buildroot}
 %config %{_confdir}/agent.conf
 %dir %attr(700, root, root)  %{_confdir}/secret
 %dir %{_vardir}
+%dir /var/log/stackable/servicelogs
+%dir /opt/stackable/packages
