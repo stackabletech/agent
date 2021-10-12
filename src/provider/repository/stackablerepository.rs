@@ -18,6 +18,10 @@ use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+// These are the default content_types that we have seen in the wild
+// of these only 'application/gzip' is valid according to
+// https://www.iana.org/assignments/media-types/media-types.xhtml but our own
+// Nexus uses the other two, so we cannot really complain
 lazy_static! {
     static ref DEFAULT_ALLOWED_CONTENT_TYPES: Vec<&'static str> =
         vec!["application/gzip", "application/tgz", "application/x-gzip"];
@@ -141,7 +145,8 @@ impl StackableRepoProvider {
             .await
         {
             Ok(response) if response.status().is_success() => {
-                // The request was successful, but just to be safe we'll still check the content_type
+                // The request was successful, but just to be safe we'll still check the content_type, 
+                // since the webserver is free to ignore the requested content_type
                 if let Some(content_type) = response.headers().get(CONTENT_TYPE) {
                     let content_type = content_type.to_str().map_err(|error| PackageDownloadError {
                         package: package.clone(),
