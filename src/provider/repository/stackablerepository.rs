@@ -125,7 +125,6 @@ impl StackableRepoProvider {
         let download_link = Url::parse(&stackable_package.link)?;
 
         let client = Client::builder()
-            .danger_accept_invalid_certs(true)
             .build()
             .map_err(|error| PackageDownloadError {
                 package: package.clone(),
