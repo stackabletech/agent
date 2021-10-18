@@ -10,16 +10,16 @@
 - Changed the version reported by the Stackable Agent in `nodeInfo.kubeletVersion` of the `Node` object in Kubernetes
   from the version of the Krustlet library to the Stackable Agent version ([#315]).
 - Restart agent on all crashes ([#318]).
-- Agent will now request content_type "application/gzip" in package downloads and reject responses with content_type 
-  that is not one of either "application/gzip", "application/tgz" or "application/x-gzip" ([#319])
+- Agent will now request content type "application/gzip" in package downloads and reject responses with content type
+  that is not one of either "application/gzip", "application/tgz" or "application/x-gzip" ([#326])
 
 ### Fixed
-- Agent deletes directories from failed install attempts ([#319])
+- Agent deletes directories from failed install attempts ([#326])
 
 [#312]: https://github.com/stackabletech/agent/pull/312
 [#315]: https://github.com/stackabletech/agent/pull/315
 [#318]: https://github.com/stackabletech/agent/pull/318
-[#319]: https://github.com/stackabletech/agent/pull/319
+[#326]: https://github.com/stackabletech/agent/pull/326
 
 ## [0.6.1] - 2021-09-14
 
