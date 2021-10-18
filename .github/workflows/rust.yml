@@ -15,7 +15,7 @@ jobs:
     name: Run tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2.3.4
+      - uses: actions/checkout@v2.3.5
       - name: Update package index
         run: sudo apt-get update
       - name: Install dependencies
@@ -37,7 +37,7 @@ jobs:
     name: Run rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2.3.4
+      - uses: actions/checkout@v2.3.5
       - name: Update package index
         run: sudo apt-get update
       - name: Install dependencies
@@ -57,7 +57,7 @@ jobs:
     name: Run rustdoc
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2.3.4
+      - uses: actions/checkout@v2.3.5
       - name: Update package index
         run: sudo apt-get update
       - name: Install dependencies
@@ -78,7 +78,7 @@ jobs:
     name: Run clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2.3.4
+      - uses: actions/checkout@v2.3.5
       - name: Update package index
         run: sudo apt-get update
       - name: Install dependencies
@@ -118,7 +118,7 @@ jobs:
           - licenses
           - sources
     steps:
-      - uses: actions/checkout@v2.3.4
+      - uses: actions/checkout@v2.3.5
       - uses: EmbarkStudios/cargo-deny-action@v1.2.6
         with:
           command: check ${{ matrix.checks }}
