@@ -1,6 +1,6 @@
 use std::fs;
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use flate2::read::GzDecoder;
 use kubelet::pod::state::prelude::*;
@@ -26,15 +26,15 @@ impl Installing {
     fn package_installed<T: Into<Package>>(&self, package: T) -> bool {
         let package = package.into();
 
-        let package_file_name = self.parcel_directory.join(package.get_directory_name());
+        let target_directory = self.get_target_directory(&package);
         debug!(
             "Checking if package {:?} has already been installed to {:?}",
-            package, package_file_name
+            package, target_directory
         );
-        Path::new(&package_file_name).exists()
+        target_directory.exists()
     }
 
-    fn get_target_directory(&self, package: Package) -> PathBuf {
+    fn get_target_directory(&self, package: &Package) -> PathBuf {
         self.parcel_directory.join(package.get_directory_name())
     }
 
@@ -46,13 +46,13 @@ impl Installing {
         let tar = GzDecoder::new(tar_gz);
         let mut archive = Archive::new(tar);
 
-        let target_directory = self.get_target_directory(package.clone());
+        let target_directory = self.get_target_directory(&package);
 
         info!(
             "Installing package: {:?} from {:?} into {:?}",
             package, archive_path, target_directory
         );
-        archive.unpack(self.parcel_directory.join(package.get_directory_name()))?;
+        archive.unpack(target_directory)?;
         Ok(())
     }
 }
@@ -89,24 +89,18 @@ impl State<PodState> for Installing {
                         "Failed to install package [{}] due to: [{:?}]",
                         &package_name, e
                     );
-                    // Clean up partially unpacked directory, to avoid later iterations
-                    // assuming this install attempt was successfull because the
-                    // target directory exists
-                    let installation_directory = self
-                        .parcel_directory
-                        .join(package.get_directory_name())
-                        .to_string_lossy()
-                        .to_string();
+                    // Clean up partially unpacked directory to avoid later iterations assuming
+                    // this install attempt was successful because the target directory exists.
+                    let installation_directory = self.get_target_directory(&package);
                     debug!(
                         "Cleaning up partial installation by deleting directory [{}]",
-                        installation_directory
+                        installation_directory.to_string_lossy()
                     );
-                    if let Err(error) =
-                        fs::remove_dir_all(self.parcel_directory.join(package.get_directory_name()))
-                    {
+                    if let Err(error) = fs::remove_dir_all(&installation_directory) {
                         error!(
                             "Failed to clean up directory [{}] due to {}",
-                            installation_directory, error
+                            installation_directory.to_string_lossy(),
+                            error
                         );
                     };
                     Transition::next(
