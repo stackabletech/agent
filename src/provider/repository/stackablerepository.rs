@@ -11,7 +11,6 @@ use crate::provider::error::StackableError::{PackageDownloadError, PackageNotFou
 use crate::provider::repository::package::Package;
 use crate::provider::repository::repository_spec::Repository;
 use kube::api::Meta;
-use lazy_static::lazy_static;
 use log::{debug, trace, warn};
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use reqwest::{Client, StatusCode};
@@ -22,10 +21,8 @@ use url::Url;
 // of these only 'application/gzip' is valid according to
 // https://www.iana.org/assignments/media-types/media-types.xhtml but our own
 // Nexus uses the other two, so we cannot really complain
-lazy_static! {
-    static ref DEFAULT_ALLOWED_CONTENT_TYPES: Vec<&'static str> =
-        vec!["application/gzip", "application/tgz", "application/x-gzip"];
-}
+const DEFAULT_ALLOWED_CONTENT_TYPES: &[&str] =
+    &["application/gzip", "application/tgz", "application/x-gzip"];
 
 #[derive(Debug, Clone)]
 pub struct StackableRepoProvider {
