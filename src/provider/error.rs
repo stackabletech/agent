@@ -3,6 +3,7 @@ use k8s_openapi::url;
 use thiserror::Error;
 
 use crate::provider::repository::package::Package;
+use reqwest::Url;
 use std::ffi::OsString;
 
 #[derive(Error, Debug)]
@@ -21,6 +22,12 @@ pub enum StackableError {
     KubeError {
         #[from]
         source: kube::Error,
+    },
+    #[error("An error has ocurred when trying to download [{package}] from [{download_link}]: {errormessage}")]
+    PackageDownloadError {
+        package: Package,
+        download_link: Url,
+        errormessage: String,
     },
     #[error(transparent)]
     TemplateRenderError(#[from] RenderError),
