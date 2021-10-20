@@ -21,8 +21,12 @@ use url::Url;
 // of these only 'application/gzip' is valid according to
 // https://www.iana.org/assignments/media-types/media-types.xhtml but our own
 // Nexus uses the other two, so we cannot really complain
-const DEFAULT_ALLOWED_CONTENT_TYPES: &[&str] =
-    &["application/gzip", "application/tgz", "application/x-gzip"];
+const DEFAULT_ALLOWED_CONTENT_TYPES: &[&str] = &[
+    "application/gzip",
+    "application/tgz",
+    "application/x-gzip",
+    "application/x-tgz",
+];
 
 #[derive(Debug, Clone)]
 pub struct StackableRepoProvider {
