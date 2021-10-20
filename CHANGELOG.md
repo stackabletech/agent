@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+- Agent now also accepts "application/x-tgz" as content_type when downloading packages ([#337])
+
+[#337]: https://github.com/stackabletech/agent/pull/337
 
 ### Added
 - Cleanup stage added where systemd units without corresponding pods are
