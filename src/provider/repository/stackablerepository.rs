@@ -3,18 +3,30 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
-use std::io::{copy, Cursor};
+use std::io::{copy, Cursor, Write};
 use std::path::PathBuf;
 
+use crate::provider::error::StackableError;
+use crate::provider::error::StackableError::{PackageDownloadError, PackageNotFound};
+use crate::provider::repository::package::Package;
+use crate::provider::repository::repository_spec::Repository;
 use kube::api::Meta;
-use log::{debug, trace};
+use log::{debug, trace, warn};
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
+use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::provider::error::StackableError;
-use crate::provider::error::StackableError::PackageNotFound;
-use crate::provider::repository::package::Package;
-use crate::provider::repository::repository_spec::Repository;
+// These are the default content_types that we have seen in the wild
+// of these only 'application/gzip' is valid according to
+// https://www.iana.org/assignments/media-types/media-types.xhtml but our own
+// Nexus uses the other two, so we cannot really complain
+const DEFAULT_ALLOWED_CONTENT_TYPES: &[&str] = &[
+    "application/gzip",
+    "application/tgz",
+    "application/x-gzip",
+    "application/x-tgz",
+];
 
 #[derive(Debug, Clone)]
 pub struct StackableRepoProvider {
@@ -112,12 +124,83 @@ impl StackableRepoProvider {
 
         let stackable_package = self.get_package(package.clone()).await?;
         let download_link = Url::parse(&stackable_package.link)?;
-        let response = reqwest::get(download_link).await?;
 
+        let client = Client::builder()
+            .build()
+            .map_err(|error| PackageDownloadError {
+                package: package.clone(),
+                download_link: download_link.clone(),
+                errormessage: format!("Unable to create http client: [{}]", error),
+            })?;
+
+        // We set the ACCEPT header field on our request which states that the only content type
+        // we are willing to accept is 'application/gzip'
+        // If the webserver is unable to provide this content type to us it _SHOULD_ respond with a
+        // 406 response code, but it seems we can't rely on that.
+        // For more details see: https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.1
+        let response = match client
+            .get(download_link.clone())
+            .header(ACCEPT, "application/gzip")
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => {
+                // The request was successful, but just to be safe we'll still check the content_type, 
+                // since the webserver is free to ignore the requested content_type
+                if let Some(content_type) = response.headers().get(CONTENT_TYPE) {
+                    let content_type = content_type.to_str().map_err(|error| PackageDownloadError {
+                        package: package.clone(),
+                        download_link: download_link.clone(),
+                        errormessage: format!("Got content_type with non-ascii characters from webserver: [{}]", error),
+                    })?;
+
+                    if DEFAULT_ALLOWED_CONTENT_TYPES.contains(&content_type) {
+                        Ok(response)
+                    } else {
+                        // If we get a known wrong content type we'll abort
+                        Err(PackageDownloadError {
+                            package: package.clone(),
+                            download_link,
+                            errormessage: format!(
+                                "Got wrong 'content_type' header [{:?}] in response from webserver.",
+                                content_type
+                            ),
+                        })
+                    }
+                } else {
+                    // If we get no content_type (not sure if this is even legal) we'll soldier on and hope for the best
+                    debug!("Response had no 'content_type' header set, we'll give the sender the benefit of the doubt and try processing this anyway.");
+                    Ok(response)
+                }
+            }
+            Ok(response) if response.status() == StatusCode::NOT_ACCEPTABLE =>
+                Err(PackageDownloadError {
+                    package: package.clone(),
+                    download_link,
+                    errormessage: "Got response code 406 from webserver - Unable to negotiate content type, this is probably due to content encoding settings on the webserver.".to_string(),
+                }),
+            Ok(response) => Err(PackageDownloadError {
+                package: package.clone(),
+                download_link,
+                errormessage: format!(
+                    "Got non-success response [{}] from webserver!",
+                    response.status()
+                ),
+            }),
+            Err(error) => Err(PackageDownloadError {
+                package: package.clone(),
+                download_link,
+                errormessage: format!("{}", error),
+            }),
+        }?;
+
+        // All error cases return above, so we can safely assume that this is a valid download at
+        // this point
         let mut content = Cursor::new(response.bytes().await?);
 
         let mut out = File::create(target_path.join(package.get_file_name()))?;
         copy(&mut content, &mut out)?;
+        out.flush()?;
         Ok(())
     }
 
@@ -126,10 +209,26 @@ impl StackableRepoProvider {
 
         debug!("Retrieving repository metadata from {}", self.metadata_url);
 
-        let repo_data = reqwest::get(self.metadata_url.clone())
-            .await?
-            .json::<RepoData>()
-            .await?;
+        let repo_data = match reqwest::get(self.metadata_url.clone()).await {
+            Ok(repo_data) => repo_data,
+            Err(error) => {
+                warn!(
+                    "Failed to retrieve metadata from {} due to {:?}",
+                    self.metadata_url, error
+                );
+                return Err(error.into());
+            }
+        };
+        let repo_data = match repo_data.json::<RepoData>().await {
+            Ok(parsed_data) => parsed_data,
+            Err(error) => {
+                warn!(
+                    "Error parsing metadata from repository {}: {:?}",
+                    self.name, error
+                );
+                return Err(error.into());
+            }
+        };
 
         debug!("Got repository metadata: {:?}", repo_data);
 

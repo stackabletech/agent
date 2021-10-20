@@ -1,12 +1,26 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 - Cleanup stage added where systemd units without corresponding pods are
   removed on startup ([#312]).
 
+### Changed
+- Changed the version reported by the Stackable Agent in `nodeInfo.kubeletVersion` of the `Node` object in Kubernetes
+  from the version of the Krustlet library to the Stackable Agent version ([#315]).
+- Restart agent on all crashes ([#318]).
+- Agent will now request content type "application/gzip" in package downloads and reject responses with content type
+  that is not one of either "application/gzip", "application/tgz" or "application/x-gzip" ([#326])
+- Agent now also accepts "application/x-tgz" as content_type when downloading packages ([#337])
+
+### Fixed
+- Agent deletes directories from failed install attempts ([#326])
+
 [#312]: https://github.com/stackabletech/agent/pull/312
+[#315]: https://github.com/stackabletech/agent/pull/315
+[#318]: https://github.com/stackabletech/agent/pull/318
+[#326]: https://github.com/stackabletech/agent/pull/326
+[#337]: https://github.com/stackabletech/agent/pull/337
 
 ## [0.6.1] - 2021-09-14
 

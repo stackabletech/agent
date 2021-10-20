@@ -50,6 +50,11 @@ mod repository;
 mod states;
 pub mod systemdmanager;
 
+mod built_info {
+    // The file has been placed there by the build script.
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 /// Provider-level state shared between all pods
 #[derive(Clone)]
 pub struct ProviderState {
@@ -240,6 +245,7 @@ impl Provider for StackableProvider {
     async fn node(&self, builder: &mut Builder) -> anyhow::Result<()> {
         builder.set_architecture(Self::ARCH);
         builder.set_pod_cidr(&self.pod_cidr);
+        builder.set_kubelet_version(built_info::PKG_VERSION);
         builder.add_taint("NoSchedule", "kubernetes.io/arch", Self::ARCH);
         builder.add_taint("NoExecute", "kubernetes.io/arch", Self::ARCH);
         Ok(())

@@ -33,11 +33,6 @@ cp -a * %{buildroot}
 
 %post
 systemctl daemon-reload
-mkdir -p /opt/stackable/packages
-mkdir -p %{_vardir}
-mkdir -p /var/log/stackable/servicelogs
-mkdir -p %{_confdir}
-mkdir -m 700 %{_confdir}/secret
 
 %preun
 if [ $1 == 0 ]; then #uninstall
@@ -57,6 +52,12 @@ rm -rf %{buildroot}
 
 %files
 %defattr(-,root,root,-)
+%{_bindir}
 %{_bindir}/*
 %{_servicedir}/%{name}.service
-%{_confdir}/agent.conf
+%dir %{_confdir}
+%config %{_confdir}/agent.conf
+%dir %attr(700, root, root)  %{_confdir}/secret
+%dir %{_vardir}
+%dir /var/log/stackable/servicelogs
+%dir /opt/stackable/packages

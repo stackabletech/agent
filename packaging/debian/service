@@ -5,7 +5,8 @@ After=network.target
 [Service]
 User=root
 ExecStart=/opt/stackable/stackable-agent/stackable-agent
-Restart=on-abort
+Restart=always
+RestartSec=1s
 StandardOutput=journal
 StandardError=journal
 Environment="CONFIG_FILE=/etc/stackable/stackable-agent/agent.conf"
