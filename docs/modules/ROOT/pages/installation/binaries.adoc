@@ -16,20 +16,31 @@ Add these repositories to your OS, such as as suggested below, and then install 
 
 === Configuring the Stackable OS package repository
 
-You will need to configure the Stackable OS package repository on the worker nodes. We’ll also take the opportunity to install OpenJDK Java 11 as well as this will be required by the Stackable services we will be running.
+You will need to configure the Stackable OS package repository on the worker nodes.
 
 ==== Debian and Ubuntu
-    apt-get install gnupg openjdk-11-jdk curl
+    apt-get install gnupg curl
     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 16dd12f5c7a6d76a
     echo "deb https://repo.stackable.tech/repository/deb-release buster main" > /etc/apt/sources.list.d/stackable.list
 
 ==== Red Hat and CentOS
-    /usr/bin/yum -y install gnupg2 java-11-openjdk curl
+    /usr/bin/yum -y install gnupg2 curl
     /usr/bin/curl -s "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xce45c7a0a3e41385acd4358916dd12f5c7a6d76a" > /etc/pki/rpm-gpg/RPM-GPG-KEY-stackable
     /usr/bin/rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-stackable
     echo "[stackable]
-    name=Stackable ${REPO_TYPE} repo
-    baseurl=${REPO_URL}
+    name=Stackable dev repo
+    baseurl=https://repo.stackable.tech/repository/rpm-dev/el\$releasever/
     enabled=1
     gpgcheck=0" > /etc/yum.repos.d/stackable.repo
     /usr/bin/yum clean all
+
+=== Installation of the Stackable agent
+
+You will then need to install the Stackable agent and it's prerequite packages
+
+==== Debian and Ubuntu
+    apt-get install openjdk-11-jdk stackable-agent
+
+==== Red Hat and CentOS
+    /usr/bin/yum -y install java-11-openjdk stackable-agent
+
