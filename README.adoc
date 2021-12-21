@@ -1,3 +1,7 @@
+= DEPRECATED
+
+We have changed our efforts to use the upstream Kubernetes Kubelet instead, and as such the Stackable Agent is no longer maintained.
+
 = Stackable Agent
 
 The Stackable Agent is an alternative to the Kubernetes Kubelet that executes Pods not in containers but using systemd as its backend.
